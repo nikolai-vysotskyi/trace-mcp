@@ -6277,3 +6277,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Late night pass, 2026-10-22 (TRA-2601): mention sweep clean, SQL procedure extraction & Go/Dart indexing insights
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **Graphify-Labs/graphify T-SQL procedure & security redaction updates**:
+  - Open PR #4649 (`fix(sql)`): addresses tree-sitter-sql grammar failures on T-SQL bracket identifiers (`[dbo].[Orders] -> dbo.Orders`, `[a]]b] -> a]b`) and lack of `create_procedure` AST nodes. Scans masked procedure bodies (comments and string literals blanked) for `reads_from` (`FROM`/`JOIN`) and `writes_to` (`INSERT`, `UPDATE`, `DELETE`, `MERGE`, `SELECT ... INTO`), resolving aliases (`UPDATE o ... FROM dbo.Orders o`) while filtering CTEs, `@variables`, and `#temp` tables. Discloses limitation where unanchored tables across multiple files create disconnected stub nodes.
+  - Open PR #4647 (`fix(security)`): closes redaction gaps across rationale labels in `_safe_extract` (empty-user URLs `redis://:pw@host`, `@`/`/` inside passwords, PEM bodies after `BEGIN`, tokens prefixed by `_` e.g. `AKIA..._prod`, `token_ghp_...`, Slack `xoxe-` tokens, and unredacted Common Lisp docstrings).
+- **colbymchenry/codegraph Go dot-import resolution & Dart typedef linkage**:
+  - Merged PR #2764 (`fix(go)`): resolves bare types in dot-imported Go files (`import . "pkg"`) through `goBareTypeDir`, prioritizing the file's own package, then project dot-imports, and preventing arbitrary cross-package namesake resolution when imported from external packages (e.g. `onsi/gomega`).
+  - Merged PR #2763 (`fix(dart)`): links Dart `typedef` declarations to the types they alias, fixing legacy typedef naming where `typedef Widget OuterBuilder(...)` was previously named `Widget` due to missing `name` AST fields, which misattributed calls and references.
+  - Merged PR #2762 (`fix(vbnet)`): resolves bare member / namespace call linkage and parameterless overloads.
+  - Merged PR #2760 & PR #2759 (`chore/fix(go)`): stdlib method table generation and struct/interface embedding method counting.
+  - Open PR #2758 (`test(explore)`): tests deduplication thresholds for explore runs.
+
+**Competitor intelligence & architectural observations:**
+- **DeusData/codebase-memory-mcp**:
+  - Open PR #2757: preserves literal input and static asset boundaries to prevent token pruning from corrupting embedded payloads.
+  - Open PR #2755: parallelizes cppcheck with isolated whole-program analysis.
+  - Open PR #2754: ensures bare C references never bind struct fields in the pipeline.
+- **abhigyanpatwari/GitNexus**:
+  - Open PR #3670: refactors language drivers to colocate import resolution rules.
+  - Automated dependency bump wave across GitHub actions and web dependencies (PRs #3671–#3680).
+
+**Competitor pulse (as of 2026-10-21 22:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,960★ (+1), 1,593 forks (-1)
+- oraios/serena: 30,579★ (+6), 2,080 forks (+1)
+- DeusData/codebase-memory-mcp: 47,113★ (+8), 3,867 forks (+2)
+- tirth8205/code-review-graph: 32,308★ (+2), 2,952 forks (-1)
+- colbymchenry/codegraph: 74,619★ (+11), 4,829 forks (-1)
+- abhigyanpatwari/GitNexus: 47,998★ (+2), 5,196 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,795★ (+1), 372 forks (=)
+- continuedev/continue: 36,289★ (+3), 5,501 forks (-1)
+- Aider-AI/aider: 49,687★ (+2), 5,091 forks (-1)
+- Graphify-Labs/graphify: 131,529★ (+222), 12,628 forks (+17)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
