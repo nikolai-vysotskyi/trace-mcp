@@ -68,6 +68,15 @@ describe('DecisionStore', () => {
       expect(store.addDecision(baseInput).id).not.toBe(first.id);
     });
 
+    it('refreshes repeated unanchored auto decisions without merging manual decisions', () => {
+      const auto = { ...baseInput, source: 'auto' as const };
+      const first = store.addDecision(auto);
+      expect(store.addDecision(auto).id).toBe(first.id);
+      expect(store.addDecision({ ...auto, source: 'mined' }).id).toBe(first.id);
+      expect(store.addDecision({ ...auto, source: 'manual' }).id).not.toBe(first.id);
+      expect(store.addDecision({ ...auto, file_path: 'src/auth.ts' }).id).not.toBe(first.id);
+    });
+
     it('finds only exact-title unanchored supersession candidates', () => {
       const first = store.addDecision(baseInput);
       store.addDecision({ ...baseInput, title: 'Another choice' });
@@ -85,6 +94,23 @@ describe('DecisionStore', () => {
       ];
       const count = store.addDecisions(inputs);
       expect(count).toBe(3);
+    });
+  });
+
+  describe('duplicate pruning', () => {
+    it('reports active duplicate groups and invalidates only older rows', () => {
+      const first = store.addDecision(baseInput);
+      const newest = store.addDecision({ ...baseInput, content: 'Revised choice' });
+      const anchored = store.addDecision({ ...baseInput, file_path: 'src/auth.ts' });
+      store.invalidateDecision(anchored.id);
+      const groups = store.findDuplicateDecisions();
+      expect(groups).toEqual([
+        expect.objectContaining({ keepId: newest.id, duplicateIds: [first.id] }),
+      ]);
+      expect(store.pruneDuplicateDecisions()).toBe(1);
+      expect(store.findDuplicateDecisions()).toEqual([]);
+      expect(store.getDecision(first.id)?.valid_until).not.toBeNull();
+      expect(store.getDecision(newest.id)?.valid_until).toBeNull();
     });
   });
 
