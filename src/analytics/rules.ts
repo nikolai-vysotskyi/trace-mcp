@@ -485,6 +485,73 @@ const possibleDuplicateSemanticSearch: Rule = {
   },
 };
 
+// 11. identical-error-retry — identical failing tool calls repeated in a session
+const identicalErrorRetry: Rule = {
+  id: 'identical-error-retry',
+  detect(calls) {
+    type Group = {
+      sessionId: string;
+      toolShortName: string;
+      inputSnippet: string;
+      calls: ToolCallRow[];
+      tokens: number;
+    };
+
+    const groups = new Map<string, Group>();
+
+    for (const c of calls) {
+      if (c.is_error !== 1) continue;
+      if (!c.input_snippet || !c.input_snippet.trim()) continue;
+
+      const key = `${c.session_id}::${c.tool_short_name}::${c.input_snippet}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          sessionId: c.session_id,
+          toolShortName: c.tool_short_name,
+          inputSnippet: c.input_snippet,
+          calls: [],
+          tokens: 0,
+        };
+        groups.set(key, group);
+      }
+      group.calls.push(c);
+      group.tokens += c.output_tokens_estimate;
+    }
+
+    const qualifying = [...groups.values()]
+      .filter((g) => g.calls.length >= 5)
+      .sort((a, b) => b.tokens - a.tokens || b.calls.length - a.calls.length);
+
+    if (qualifying.length === 0) return null;
+
+    const occurrences = qualifying.reduce((s, g) => s + g.calls.length, 0);
+    const currentTokens = qualifying.reduce((s, g) => s + g.tokens, 0);
+    // Bounded token accounting: the first error attempt is legitimate; retries are wasteful.
+    const firstAttemptTokens = qualifying.reduce(
+      (s, g) => s + g.calls[0].output_tokens_estimate,
+      0,
+    );
+    const potentialTokens = Math.max(0, Math.min(currentTokens, firstAttemptTokens));
+
+    return {
+      rule: 'identical-error-retry',
+      severity: occurrences >= 50 ? 'high' : 'medium',
+      occurrences,
+      details: qualifying
+        .slice(0, 5)
+        .map(
+          (g) =>
+            `${g.toolShortName} "${g.inputSnippet.replace(/\s+/g, ' ').trim().slice(0, 100)}" (${g.calls.length}x failed, ~${g.tokens} tokens)`,
+        ),
+      currentTokens,
+      potentialTokens,
+      recommendation:
+        'Tool calls failed repeatedly with identical input. Check error messages and fix the underlying issue before retrying instead of repeating failing commands.',
+    };
+  },
+};
+
 const ALL_RULES: Rule[] = [
   repeatedFileRead,
   bashGrep,
@@ -496,6 +563,7 @@ const ALL_RULES: Rule[] = [
   agentForIndexed,
   semanticDegradedNoProvider,
   possibleDuplicateSemanticSearch,
+  identicalErrorRetry,
 ];
 
 export function analyzeOptimizations(toolCalls: ToolCallRow[], period: string): OptimizationReport {
