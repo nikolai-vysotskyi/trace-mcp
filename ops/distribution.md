@@ -6146,3 +6146,78 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Evening pass, 2026-10-21 (TRA-2595): mention sweep (ryanduguid/australian-accounting), competitor surge & agent skill setup triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **1 new repo outside seen list**: `ryanduguid/australian-accounting` (2★).
+  - Matched file: `tools/glama-badge-server/allowed.txt`.
+  - Repository contains an accounting engine for ATO benchmarks, which embeds `tools/glama-badge-server` (a Rust HTTP adapter for flat Glama score badges).
+  - Its `allowed.txt` is a static snapshot of 2,947 public Glama MCP server identities (`servers/nikolai-vysotskyi/trace-mcp` is listed because Glama indexed us).
+  - Classified as a utility allowlist snapshot, not an active directory or integration target; recorded in `ops/mentions-seen.txt`.
+- After classification, sweep is clean (0 new unclassified hits). External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph PR #2741 (`feat: add a codegraph-setup agent skill`)**:
+  - Adds an Agent Skills (`agentskills.io`) package at `skills/codegraph-setup/SKILL.md` allowing agents in Claude Code, Codex CLI, Gemini CLI and opencode to execute automated project setup: `claude mcp add --scope local`, `.git/info/exclude` registration to keep working directory clean, `codegraph init --yes`, status checks, and uninit.
+  - Documents how rivals are shifting from manual user installation commands to self-installing agent skills.
+- **DeusData/codebase-memory-mcp PR #2752 (`fix(routes): read Go 1.22 ServeMux method and host patterns`)**:
+  - Fixes AST and pipeline route extraction for Go 1.22's enhanced HTTP ServeMux syntax (`POST /path`, `GET /path/{id}`, `host.com/path`), which previously failed to emit Route nodes and HANDLES edges because patterns did not start with `/`.
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - Merged 6 additional PRs (#2740, #2742, #2743, #2744, #2745, #2746) during the afternoon/evening of 2026-10-21:
+    - PR #2746 (`fix(go)`): unexported interface method is satisfied only from its own package.
+    - PR #2745 (`fix(go)`): a call through a func-typed struct field reaches the functions assigned to it.
+    - PR #2744 (`fix(sync)`): a name imported through a barrel links when an edit gives the barrel its re-export.
+    - PR #2743 (`fix(extraction)`): a function in an initializer is referenced once, by what the initializer declares.
+    - PR #2742 (`fix(js,ts)`): a callee that names nothing records no reference, and a wrapped callee is the plain call.
+    - PR #2740 (`fix(js,ts)`): an import from the app's root maps through the app's own tsconfig paths.
+  - Open PRs: PR #2741 (agent setup skill), PR #2747 (symlinked config in installer).
+- **DeusData/codebase-memory-mcp**:
+  - PR #2752 (`fix(routes)`): Go 1.22 ServeMux method/host grammar parsing (`cbm_service_pattern_mux_split`).
+  - PR #2737 (`fix`): watch explicit MCP index targets.
+- **abhigyanpatwari/GitNexus**:
+  - Massive multi-language typing sprint for benchmark issue #3498:
+    - PR #3666 (`fix(swift,dart)`): type chained receivers through hoisted return types.
+    - PR #3665 (`fix(rust)`): see through Box, Rc and Arc on struct field types.
+    - PR #3664 (`fix(csharp)`): bind nullable field types for receiver resolution.
+    - PR #3663 (`test(bench)`): type JS, Ruby and PHP receiver shapes; mark C dispatch N/A.
+- **Graphify-Labs/graphify**:
+  - High-velocity namespace and static call resolution:
+    - PR #4636 (`fix(js)`): resolve ns.fn() calls through namespace imports (#4619).
+    - PR #4634 (`fix(extract)`): require binding does not shadow required class.
+    - PR #4632 (`fix(php)`): never resolve plain function call to class method.
+    - PR #4631 (`fix(php)`): resolve static-call scope by PHP name rules.
+    - PR #4630 (`fix(js)`): resolve split export { .. } from clauses and barrel default as X component re-export.
+
+**Competitor pulse (as of 2026-10-21 14:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,954★ (+8), 1,594 forks (-24)
+- oraios/serena: 30,565★ (+16), 2,078 forks (-1)
+- DeusData/codebase-memory-mcp: 47,090★ (+15), 3,862 forks (-3)
+- tirth8205/code-review-graph: 32,302★ (+15), 2,954 forks (-20)
+- colbymchenry/codegraph: 74,589★ (+15), 4,829 forks (+2)
+- abhigyanpatwari/GitNexus: 47,993★ (+8), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,794★ (=), 372 forks (=)
+- continuedev/continue: 36,281★ (+1), 5,503 forks (-1)
+- Aider-AI/aider: 49,683★ (+5), 5,092 forks (+1)
+- Graphify-Labs/graphify: 131,045★ (+248), 12,593 forks (+23)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.

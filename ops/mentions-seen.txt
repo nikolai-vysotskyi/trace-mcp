@@ -324,3 +324,8 @@ JMartynov/mcp-fingerprints
 # Genuine third-party automated capability & security dossier catalog (tashan.sh by SeroLabs):
 # web/capability/pkg-trace-mcp.html auto-indexes trace-mcp (score 71/100, rank 95%) from npm and official registry:
 FlyingWHR/tashan
+
+# ── Swept 2026-10-21 evening pass (TRA-2595) ──
+# Glama badge transformer allowlist snapshot:
+# tools/glama-badge-server/allowed.txt lists servers/nikolai-vysotskyi/trace-mcp among 2,947 public Glama MCP identities:
+ryanduguid/australian-accounting
