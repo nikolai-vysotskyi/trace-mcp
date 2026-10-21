@@ -890,7 +890,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
   <a href="#vs-comparisons">VS Comparisons (21)</a>
   <a href="#benchmarks">Benchmarks (3)</a>
   <a href="#guides">Guides (5)</a>
-  <a href="#frameworks">Frameworks (2)</a>
+  <a href="#frameworks">Frameworks (7)</a>
   <a href="#reference">Reference (4)</a>
   <a href="#concepts">Concepts (7)</a>
 </nav>
@@ -1187,6 +1187,51 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 </div>
 <h3 class="article-card-title"><a href="/language-matrix.html">Language capability matrix: what 81 languages extract</a></h3>
 <p class="article-card-desc">What each of the 81 languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/laravel-mcp.html">Laravel MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Laravel. Indexes routes, Eloquent relationships, controllers, migrations, and events for precise AI agent code context.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/vue-mcp.html">Vue MCP Server: Code Graph &amp; Component Context for AI</a></h3>
+<p class="article-card-desc">Code graph MCP server for Vue.js. Indexes Single File Components, script setup symbols, props, emits, and composables for AI coding assistants.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/nuxt-mcp.html">Nuxt MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Nuxt 3 and 4. Indexes file-based routes, Nitro API endpoints, auto-imports, and composables for AI coding agents.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/django-mcp.html">Django MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Django. Indexes models, URL patterns, views, admin registrations, and signals for fast, token-efficient AI context.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/spring-mcp.html">Spring MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Spring Boot. Indexes controllers, routes, dependency injection beans, and JPA entity relations across Java and Kotlin.</p>
 </div>
 </div>
 
@@ -6205,17 +6250,29 @@ reference](tools-reference.md).
 
 ---
 
+## Framework guides
+
+Dedicated architectural deep-dives for specific framework ecosystems:
+
+- [Laravel MCP](laravel-mcp.md) &mdash; Routes, Eloquent models, FormRequests, Livewire, and Filament.
+- [Vue MCP](vue-mcp.md) &mdash; Single File Components, `<script setup>`, template render trees, and composables.
+- [Nuxt MCP](nuxt-mcp.md) &mdash; File-based routing, Nitro API endpoints, auto-imports, and `useFetch` bindings.
+- [Django MCP](django-mcp.md) &mdash; Models, URL patterns, class-based views, admin registrations, and signals.
+- [Spring MCP](spring-mcp.md) &mdash; REST controllers, dependency injection beans, and JPA entity relationships.
+
+---
+
 ## Backend frameworks
 
 | Framework | What's extracted |
 |---|---|
-| **Laravel** | Routes, controllers, Eloquent relations, migrations, FormRequests, events/listeners, middleware, broadcasting |
+| [**Laravel**](laravel-mcp.md) | Routes, controllers, Eloquent relations, migrations, FormRequests, events/listeners, middleware, broadcasting |
 | **Laravel Livewire** | Components, properties, actions, events, views, child components |
 | **Laravel Nova** | Resources, fields, actions, filters, lenses, metrics |
 | **Filament** | Resources, relation managers, panels, widgets |
 | **Spatie Laravel Data** | Data objects, transformations |
 | **Laravel Pennant** | Feature flag definitions |
-| **Django** | Models, URL patterns, views (CBV + FBV), admin registrations, signals, forms |
+| [**Django**](django-mcp.md) | Models, URL patterns, views (CBV + FBV), admin registrations, signals, forms |
 | **Django REST Framework** | Serializers, ViewSets, API endpoints |
 | **FastAPI** | Route definitions, path/query parameters, request models |
 | **Flask** | Routes, blueprints, request handlers |
@@ -6225,7 +6282,7 @@ reference](tools-reference.md).
 | **Hono** | Routes, middleware |
 | **Next.js** | API routes, pages, `getServerSideProps`, `getStaticProps` |
 | **Rails** | Routes, controllers, models, migrations, associations |
-| **Spring** | Beans, controllers, services, JPA entities |
+| [**Spring**](spring-mcp.md) | Beans, controllers, services, JPA entities |
 | **tRPC** | Routers, procedures, type definitions |
 
 ---
@@ -6234,8 +6291,8 @@ reference](tools-reference.md).
 
 | Framework | What's extracted |
 |---|---|
-| **Vue** | Components (Options + Composition API), `defineProps`, `defineEmits`, composables, render trees |
-| **Nuxt** | File-based routing, auto-imports, `useFetch` / `useAsyncData`, server API routes, layouts, middleware |
+| [**Vue**](vue-mcp.md) | Components (Options + Composition API), `defineProps`, `defineEmits`, composables, render trees |
+| [**Nuxt**](nuxt-mcp.md) | File-based routing, auto-imports, `useFetch` / `useAsyncData`, server API routes, layouts, middleware |
 | **React** | Components (functional + class), hooks, props |
 | **React Native** | Native components, navigation patterns, screens, deep links, platform variants |
 | **Blade** | `@extends`, `@include`, `@component`, `<x-*>` directives, template inheritance |
@@ -9424,3 +9481,368 @@ to want. Anthropic does not publish the Claude Code weekly limit in tokens, so
 any percentage would need a denominator we invented — the exact move that
 produced the number TRA-880 had to retract. Tokens and a floor price are what we
 can source.
+
+---
+
+# Laravel MCP server: code graph for AI agents
+
+Source: https://trace-mcp.com/laravel-mcp.html
+
+
+
+**TL;DR.** When an AI agent needs to modify a Laravel controller or service, which models, FormRequests, and migrations are affected? trace-mcp indexes your existing Laravel repository into a local static code graph. AI coding agents query route-to-controller bindings, Eloquent model associations, and validation rules through MCP without dumping entire directories into the prompt.
+
+---
+
+## What trace-mcp extracts in Laravel
+
+Laravel relies on convention, facades, and dynamic magic that raw text search cannot connect. The `laravel` plugin extracts:
+
+- **Routes & Controllers:** Route definitions (`Route::get`, `post`, `resource`, `apiResource`), controller action targets, invokable controllers, and group prefixes.
+- **Modern & Classic Bootstrap:** Route bindings from `bootstrap/app.php` (`withRouting`) and classic `RouteServiceProvider` / `Kernel.php`.
+- **Eloquent Models & Associations:** `belongsTo`, `hasMany`, `hasOne`, `belongsToMany`, scopes, and migration schema definitions.
+- **FormRequests:** Validation bindings linking request validation classes to controller action parameters.
+- **Events & Listeners:** `Event::listen` definitions, subscriber classes, event dispatching, and queueable listener bindings.
+- **Broadcasting & Middleware:** Channel authorizations (`routes/channels.php`), broadcast events, and global/route middleware stacks.
+- **Ecosystem Packages:** First-class indexing for Laravel Livewire, Filament, Nova, Spatie Laravel Data, and Laravel Pennant.
+
+---
+
+## Installation & Quickstart
+
+Install trace-mcp globally, run initialization, and connect your Laravel repository:
+
+```bash
+npm i -g trace-mcp && trace init && trace add
+```
+
+### Example question to your agent
+
+> "Which Eloquent models, migrations, and FormRequests are affected if I modify the payment transaction status transitions, and what controllers route to it?"
+
+The agent calls `trace-mcp` tools like `get_symbol`, `get_call_graph`, or `get_change_impact` to inspect the exact subgraph without reading irrelevant controllers or models.
+
+---
+
+## Without graph vs with trace-mcp
+
+Measurements below reflect corpus-level benchmarks from our [PR review context benchmark](pr-context-benchmark.md) across {{ site.data.pr_context_bench.pr_count }} pull requests.
+
+| Capability | Without graph | With trace-mcp |
+|---|---|---|
+| **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
+| **Eloquent relations** | Guesses via grep | Exact relational graph edges |
+| **Route to Controller mapping** | Relies on exact text search | Resolves closures, namespaces, groups |
+| **FormRequest validation** | Must load request file manually | Automatic caller-to-request edge |
+| **Livewire & Filament context** | Misses view-to-component linkage | Explicit component and action edges |
+| **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
+
+---
+
+## Frequently asked questions
+
+### Does trace-mcp support Laravel 11 and 12/13 with `bootstrap/app.php`?
+Yes. trace-mcp extracts routing, middleware, and exception configurations from modern `bootstrap/app.php` definitions (`withRouting`, `withMiddleware`) as well as classic `app/Http/Kernel.php` and `RouteServiceProvider` setups.
+
+### How does trace-mcp resolve Eloquent relationships?
+The indexer inspects Eloquent model method calls like `hasMany`, `belongsTo`, `belongsToMany`, and `hasOne`, linking related models across files and cross-referencing migration schemas.
+
+### Does trace-mcp understand Livewire and Filament in Laravel?
+Yes. Dedicated sub-plugins index Livewire component classes, properties, actions, and Blade views, as well as Filament resources, relation managers, panels, and widgets.
+
+---
+
+## Next steps
+
+Explore the full [Tools reference](tools-reference.md) for available query tools, see the [Language capability matrix](language-matrix.md) for PHP AST details, view [Comparisons](comparisons.md) against other tools, or browse all [Supported frameworks](supported-frameworks.md).
+
+---
+
+# Vue MCP server: code graph for AI agents
+
+Source: https://trace-mcp.com/vue-mcp.html
+
+
+
+**TL;DR.** Which parent views render a specific Vue component, and what props or emits link them? trace-mcp indexes your existing Vue.js repository into a local static code graph. AI coding agents navigate Single File Component (SFC) render trees, `<script setup>` bindings, and composables through MCP without loading unrelated components into context.
+
+---
+
+## What trace-mcp extracts in Vue
+
+Vue Single File Components (SFCs) bundle template, script, and styling together. The `vue` plugin extracts:
+
+- **Single File Components (SFC):** Full AST parsing for `.vue` files, extracting template references, scripts, and component declarations.
+- **Composition & Options API:** Complete support for `<script setup>`, `defineProps`, `defineEmits`, `defineExpose`, and Options API options (`methods`, `computed`, `props`).
+- **Template Tag Resolution:** Automatic bidirectional mapping between kebab-case `<custom-card>` and PascalCase `CustomCard.vue` component files.
+- **Component Render Trees:** Parent-child edges connecting components to subcomponents instantiated in their templates.
+- **Composable Usage:** Edges tracking imports and invocations of reusable composables (`use*`) across views and components.
+- **TypeScript Integration:** Type-aware analysis linking exported interfaces and types to component props.
+
+---
+
+## Installation & Quickstart
+
+Install trace-mcp globally, run initialization, and connect your Vue repository:
+
+```bash
+npm i -g trace-mcp && trace init && trace add
+```
+
+### Example question to your agent
+
+> "Which components render `UserProfile.vue`, what props do they pass, and what events are emitted back to parent views?"
+
+The agent queries `trace-mcp` tools to trace the component hierarchy and props interface without dumping entire Vue SFC files into context.
+
+---
+
+## Without graph vs with trace-mcp
+
+Measurements below reflect corpus-level benchmarks from our [PR review context benchmark](pr-context-benchmark.md) across {{ site.data.pr_context_bench.pr_count }} pull requests.
+
+| Capability | Without graph | With trace-mcp |
+|---|---|---|
+| **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
+| **Component hierarchy** | Must read every parent SFC | Direct parent-child render tree edges |
+| **Props & Emits validation** | Read prop declarations | Typed symbol signatures from AST |
+| **Tag casing resolution** | Misses kebab-case matches | Automatic kebab ↔ PascalCase resolution |
+| **Composable dependency** | Greps for function names | Graph edges from composable to consumer |
+| **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
+
+---
+
+## Frequently asked questions
+
+### Does trace-mcp support `script setup` and TypeScript in Vue SFCs?
+Yes. trace-mcp uses full AST parsing for Vue Single File Components, extracting `defineProps`, `defineEmits`, composables, and TypeScript types directly from `<script setup>` blocks.
+
+### How does trace-mcp resolve PascalCase vs kebab-case component tags?
+The Vue resolver handles component naming bidirectional resolution, mapping template tags like `<user-avatar />` to `UserAvatar.vue` and building parent-child component render tree edges.
+
+### Can trace-mcp track shared composables across components?
+Yes. trace-mcp traces composables (such as `useAuth` or `useCart`) from definition to usage, connecting state management and utility imports across components.
+
+---
+
+## Next steps
+
+Explore the full [Tools reference](tools-reference.md) for available query tools, see the [Language capability matrix](language-matrix.md) for Vue SFC parser details, view [Comparisons](comparisons.md) against other tools, or browse all [Supported frameworks](supported-frameworks.md).
+
+---
+
+# Nuxt MCP server: code graph for AI agents
+
+Source: https://trace-mcp.com/nuxt-mcp.html
+
+
+
+**TL;DR.** Which Nitro server API routes and shared composables does a Nuxt page depend on? trace-mcp indexes your existing Nuxt 3/4 repository into a local static code graph. AI coding agents resolve un-imported composables, file-based `pages/` routes, and string-literal `useFetch` targets through MCP instead of manually reconstructing framework conventions.
+
+---
+
+## What trace-mcp extracts in Nuxt
+
+Nuxt projects combine Vue frontend architecture with Nitro server routes. The `nuxt` plugin extracts:
+
+- **File-Based Routing:** Full route tree extraction from `pages/` (and Nuxt 4 `app/pages/`), handling dynamic parameters (`[id]`), catch-alls (`[...slug]`), and nested routes.
+- **Nitro Server API Routes:** Endpoint mapping from `server/api/` (e.g., `server/api/users.get.ts` → `GET /api/users`), middleware, and server utilities.
+- **Auto-Imports:** Resolution of implicit globals in `composables/`, `utils/`, and `server/utils/` without requiring explicit import statements in `.vue` files.
+- **Data Fetching Connections:** Extraction of static URL string literals in `useFetch` and `useAsyncData` calls, linking frontend pages to matching server API route handlers.
+- **Layouts & Middleware:** Mapping between page front-matter / `definePageMeta` declarations and files in `layouts/` and `middleware/`.
+- **Nuxt 3 & Nuxt 4 Compatibility:** Full detection of Nuxt 4 compatibility mode, `app/` folder hierarchies, and configuration settings.
+
+---
+
+## Installation & Quickstart
+
+Install trace-mcp globally, run initialization, and connect your Nuxt repository:
+
+```bash
+npm i -g trace-mcp && trace init && trace add
+```
+
+### Example question to your agent
+
+> "Which Nitro API routes in `server/api/` are called by `pages/checkout/[id].vue`, and what shared composables does that page rely on?"
+
+The agent uses `trace-mcp` tools to trace the full request path from frontend Vue component to backend Nitro handler in a single step.
+
+---
+
+## Without graph vs with trace-mcp
+
+Measurements below reflect corpus-level benchmarks from our [PR review context benchmark](pr-context-benchmark.md) across {{ site.data.pr_context_bench.pr_count }} pull requests.
+
+| Capability | Without graph | With trace-mcp |
+|---|---|---|
+| **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
+| **Auto-import resolution** | Locate composable definitions | Auto-imports mapped to definitions |
+| **Data fetching paths** | Match URL literals to server routes | Direct edge from literal string paths to `/api/*` |
+| **File-based routing** | Manual path reconstruction | Complete URI route table extracted |
+| **Nuxt 4 app/ layout** | Inspect files across split app/ and root directories | Detects Nuxt 4 compatibility layout |
+| **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
+
+---
+
+## Frequently asked questions
+
+### How does trace-mcp handle Nuxt auto-imports without import statements?
+trace-mcp indexes symbols in `composables/`, `utils/`, and `server/utils/`, automatically linking un-imported functions in Vue components and pages to their definitions.
+
+### Does trace-mcp connect `useFetch` calls to Nitro server API routes?
+Yes. The Nuxt plugin extracts string literal URL paths from `useFetch` and `useAsyncData` calls, connecting frontend data fetching to matching `server/api/` endpoint handlers in the graph.
+
+### Does trace-mcp support Nuxt 4 `app/` directory structures?
+Yes. trace-mcp recognizes Nuxt 4 compatibility mode, indexing pages, layouts, and components located under `app/pages/` as well as classic root `pages/`.
+
+---
+
+## Next steps
+
+Explore the full [Tools reference](tools-reference.md) for available query tools, see the [Language capability matrix](language-matrix.md) for TypeScript and Vue parsing details, view [Comparisons](comparisons.md) against other tools, or browse all [Supported frameworks](supported-frameworks.md).
+
+---
+
+# Django MCP server: code graph for AI agents
+
+Source: https://trace-mcp.com/django-mcp.html
+
+
+
+**TL;DR.** Which views, admin registrations, and signal receivers depend on a modified Django model? trace-mcp indexes your existing Django repository into a local static code graph. AI coding agents query URL patterns, CBV/FBV definitions, model relationships, and `@receiver` signal bindings directly through MCP instead of running broad text searches across apps.
+
+---
+
+## What trace-mcp extracts in Django
+
+The `django` plugin indexes Django 2.x through 5.x applications:
+
+- **Models & Relationships:** Subclasses of `models.Model`, `ForeignKey`, `ManyToManyField`, and `OneToOneField` mapping model associations across apps.
+- **URL Routing & Patterns:** Root `urlpatterns`, `path()`, `re_path()`, `include()` modules, and Django REST Framework routers.
+- **Views (CBV & FBV):** Class-based views (`ListView`, `DetailView`, `CreateView`, `ViewSet`) and function-based views, extracting model and template bindings (`django_view_uses_model`, `django_view_template`).
+- **Signal Graph:** `@receiver` decorators and `signal.connect()` calls, mapping sender models to receiver callbacks (`django_signal_receiver`).
+- **Admin Registrations:** `@admin.register()` and `admin.site.register()` mappings (`django_admin_registers`).
+- **Forms & ModelForms:** Form field extraction and `Meta.model` bindings (`django_form_meta_model`).
+
+---
+
+## Installation & Quickstart
+
+Install trace-mcp globally, run initialization, and connect your Django repository:
+
+```bash
+npm i -g trace-mcp && trace init && trace add
+```
+
+### Example question to your agent
+
+> "Which views, admin classes, and signal receivers depend on the `Invoice` model in this Django repository?"
+
+The AI agent invokes `trace-mcp` tools to query relationships, signals, and view bindings directly without searching hundreds of Python files.
+
+---
+
+## Without graph vs with trace-mcp
+
+Measurements below reflect corpus-level benchmarks from our [PR review context benchmark](pr-context-benchmark.md) across {{ site.data.pr_context_bench.pr_count }} pull requests.
+
+| Capability | Without graph | With trace-mcp |
+|---|---|---|
+| **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
+| **Signal listener discovery** | Hidden in disconnected files | Explicit `django_signal_receiver` edges |
+| **Model relationships** | Search foreign keys with grep | Explicit model relation graph edges |
+| **URL pattern nesting** | Traverses nested `include()` manually | Flattened URL route-to-view graph |
+| **Admin & Form binding** | Must read admin.py and forms.py | Direct edges from model to admin/forms |
+| **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
+
+---
+
+## Frequently asked questions
+
+### How does trace-mcp index Django signals across apps?
+trace-mcp parses `@receiver` decorators and `signal.connect()` calls, creating explicit graph edges that connect signal senders to receiver functions even when defined in separate apps.
+
+### Does trace-mcp support Django REST Framework (DRF)?
+Yes. It indexes DRF DefaultRouter and SimpleRouter registrations, linking registered routes to ViewSet classes, and connects views to explicit model or queryset definitions.
+
+### Does trace-mcp connect Django admin registrations to models?
+Yes. It indexes `@admin.register()` decorators and `admin.site.register()` calls, building `django_admin_registers` edges between ModelAdmin classes and models.
+
+---
+
+## Next steps
+
+Explore the full [Tools reference](tools-reference.md) for available query tools, see the [Language capability matrix](language-matrix.md) for Python AST details, view [Comparisons](comparisons.md) against other tools, or browse all [Supported frameworks](supported-frameworks.md).
+
+---
+
+# Spring MCP server: code graph for AI agents
+
+Source: https://trace-mcp.com/spring-mcp.html
+
+
+
+**TL;DR.** Which `@Service` beans and JPA repositories are touched by a Spring Boot REST endpoint change? trace-mcp indexes your existing Spring Boot repository into a local static code graph. AI coding agents query `@RequestMapping` endpoints, `@Autowired` bean dependencies, and JPA entity relationships through MCP instead of searching through verbose class files.
+
+---
+
+## What trace-mcp extracts in Spring
+
+The `spring` plugin indexes Spring MVC and Spring Boot applications across Java and Kotlin:
+
+- **REST & MVC Routes:** `@RestController`, `@Controller`, `@RequestMapping`, `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping` (`spring_route`).
+- **Dependency Injection:** `@Service`, `@Repository`, `@Component`, `@Configuration`, `@Autowired`, and constructor injection (`spring_injects`).
+- **JPA Entity Relationships:** `@Entity` declarations and relational mappings (`@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne`) (`spring_entity_relation`).
+- **Configuration & Values:** `@Value` property injection keys (`spring_config_value`).
+- **Multi-Language Support:** Route and entity parsing across Java and Kotlin codebases using Maven (`pom.xml`) or Gradle (`build.gradle`), with Java-focused constructor DI analysis.
+
+---
+
+## Installation & Quickstart
+
+Install trace-mcp globally, run initialization, and connect your Spring repository:
+
+```bash
+npm i -g trace-mcp && trace init && trace add
+```
+
+### Example question to your agent
+
+> "Trace which `@Service` components and JPA repositories are invoked by the `AccountController` transfer endpoint."
+
+The AI agent calls `trace-mcp` tools to trace DI bean resolution and route mapping without needing full-text grep over verbose Java classes.
+
+---
+
+## Without graph vs with trace-mcp
+
+Measurements below reflect corpus-level benchmarks from our [PR review context benchmark](pr-context-benchmark.md) across {{ site.data.pr_context_bench.pr_count }} pull requests.
+
+| Capability | Without graph | With trace-mcp |
+|---|---|---|
+| **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
+| **Dependency injection** | Inspect injection sites and bean declarations | Direct `spring_injects` edges |
+| **Route mapping** | Must search annotations across files | Fast URI endpoint index |
+| **JPA entity associations** | Parses complex Java class files | Relational entity graph |
+| **Java & Kotlin mixing** | Inspect symbols across separate Java and Kotlin trees | Unified multi-language graph |
+| **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
+
+---
+
+## Frequently asked questions
+
+### Does trace-mcp support both Java and Kotlin Spring Boot applications?
+Dependency injection extraction targets simple Java-style `@Autowired` fields and constructor signatures. Kotlin dependency injection is not reliably extracted.
+
+### How does trace-mcp resolve Spring dependency injection?
+It indexes `@Service`, `@Repository`, `@Component`, and `@Configuration` beans, building `spring_injects` edges between injection targets (`@Autowired`, constructor injection) and bean declarations.
+
+### Does trace-mcp index JPA entity relationships in Spring?
+Yes. It extracts `@Entity` definitions along with `@ManyToOne`, `@OneToMany`, `@ManyToMany`, and `@OneToOne` relations, generating `spring_entity_relation` graph edges.
+
+---
+
+## Next steps
+
+Explore the full [Tools reference](tools-reference.md) for available query tools, see the [Language capability matrix](language-matrix.md) for Java and Kotlin parser details, view [Comparisons](comparisons.md) against other tools, or browse all [Supported frameworks](supported-frameworks.md).

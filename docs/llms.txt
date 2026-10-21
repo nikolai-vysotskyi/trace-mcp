@@ -52,6 +52,11 @@ layout: null
 - [System Prompt Routing via tweakcc](https://trace-mcp.com/tweakcc.html): Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.
 - [Development](https://trace-mcp.com/development.html): Local setup, build, and test instructions for contributing to trace-mcp.
 - [Tool response token cost](https://trace-mcp.com/perf/response-tokens/): Per-tool measured response token cost weighted by real call volume, including the tools that cost more than the file reads they replace.
+- [Laravel MCP](https://trace-mcp.com/laravel-mcp.html): Code graph MCP server for Laravel applications, indexing routes, controllers, Eloquent relations, migrations, FormRequests, and events.
+- [Vue MCP](https://trace-mcp.com/vue-mcp.html): Code graph MCP server for Vue.js, indexing Single File Components, script setup symbols, render trees, props, emits, and composables.
+- [Nuxt MCP](https://trace-mcp.com/nuxt-mcp.html): Code graph MCP server for Nuxt 3 and 4, indexing file-based routes, Nitro server API routes, auto-imports, and useFetch targets.
+- [Django MCP](https://trace-mcp.com/django-mcp.html): Code graph MCP server for Django, indexing models, URL patterns, views, admin registrations, signals, and ModelForms.
+- [Spring MCP](https://trace-mcp.com/spring-mcp.html): Code graph MCP server for Spring Boot, indexing REST controllers, dependency injection beans, and JPA entity relations across Java and Kotlin.
 
 ## Optional
 
