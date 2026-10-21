@@ -35,7 +35,7 @@ updated: 2026-10-19
   "mainEntity": {
     "@type": "ItemList",
     "name": "trace-mcp documentation and articles catalogue",
-    "numberOfItems": 42,
+    "numberOfItems": 47,
     "itemListElement": [
       {
         "@type": "ListItem",
@@ -330,6 +330,41 @@ updated: 2026-10-19
         "name": "Tool response token cost",
         "url": "https://trace-mcp.com/perf/response-tokens/",
         "description": "What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the ones that cost more than the reads they replace."
+      },
+      {
+        "@type": "ListItem",
+        "position": 43,
+        "name": "Laravel MCP Server: Code Graph & Context for AI Agents",
+        "url": "https://trace-mcp.com/laravel-mcp.html",
+        "description": "Code graph MCP server for Laravel. Indexes routes, Eloquent relationships, controllers, migrations, and events for precise AI agent code context."
+      },
+      {
+        "@type": "ListItem",
+        "position": 44,
+        "name": "Vue MCP Server: Code Graph & Component Context for AI",
+        "url": "https://trace-mcp.com/vue-mcp.html",
+        "description": "Code graph MCP server for Vue.js. Indexes Single File Components, script setup symbols, props, emits, and composables for AI coding assistants."
+      },
+      {
+        "@type": "ListItem",
+        "position": 45,
+        "name": "Nuxt MCP Server: Code Graph & Context for AI Agents",
+        "url": "https://trace-mcp.com/nuxt-mcp.html",
+        "description": "Code graph MCP server for Nuxt 3 and 4. Indexes file-based routes, Nitro API endpoints, auto-imports, and composables for AI coding agents."
+      },
+      {
+        "@type": "ListItem",
+        "position": 46,
+        "name": "Django MCP Server: Code Graph & Context for AI Agents",
+        "url": "https://trace-mcp.com/django-mcp.html",
+        "description": "Code graph MCP server for Django. Indexes models, URL patterns, views, admin registrations, and signals for fast, token-efficient AI context."
+      },
+      {
+        "@type": "ListItem",
+        "position": 47,
+        "name": "Spring MCP Server: Code Graph & Context for AI Agents",
+        "url": "https://trace-mcp.com/spring-mcp.html",
+        "description": "Code graph MCP server for Spring Boot. Indexes controllers, routes, dependency injection beans, and JPA entity relations across Java and Kotlin."
       }
     ]
   }
@@ -344,7 +379,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
   <a href="#vs-comparisons">VS Comparisons (21)</a>
   <a href="#benchmarks">Benchmarks (3)</a>
   <a href="#guides">Guides (5)</a>
-  <a href="#frameworks">Frameworks (2)</a>
+  <a href="#frameworks">Frameworks (7)</a>
   <a href="#reference">Reference (4)</a>
   <a href="#concepts">Concepts (7)</a>
 </nav>
@@ -641,6 +676,51 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 </div>
 <h3 class="article-card-title"><a href="/language-matrix.html">Language capability matrix: what 81 languages extract</a></h3>
 <p class="article-card-desc">What each of the 81 languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/laravel-mcp.html">Laravel MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Laravel. Indexes routes, Eloquent relationships, controllers, migrations, and events for precise AI agent code context.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/vue-mcp.html">Vue MCP Server: Code Graph &amp; Component Context for AI</a></h3>
+<p class="article-card-desc">Code graph MCP server for Vue.js. Indexes Single File Components, script setup symbols, props, emits, and composables for AI coding assistants.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/nuxt-mcp.html">Nuxt MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Nuxt 3 and 4. Indexes file-based routes, Nitro API endpoints, auto-imports, and composables for AI coding agents.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/django-mcp.html">Django MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Django. Indexes models, URL patterns, views, admin registrations, and signals for fast, token-efficient AI context.</p>
+</div>
+
+<div class="article-card">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-10-20</time>
+</div>
+<h3 class="article-card-title"><a href="/spring-mcp.html">Spring MCP Server: Code Graph &amp; Context for AI Agents</a></h3>
+<p class="article-card-desc">Code graph MCP server for Spring Boot. Indexes controllers, routes, dependency injection beans, and JPA entity relations across Java and Kotlin.</p>
 </div>
 </div>
 

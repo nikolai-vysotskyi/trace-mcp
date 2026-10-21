@@ -54,3 +54,14 @@
   url: /development.html
 - title: Tool response token cost
   url: /perf/response-tokens/
+- title: Laravel MCP
+  url: /laravel-mcp.html
+- title: Vue MCP
+  url: /vue-mcp.html
+- title: Nuxt MCP
+  url: /nuxt-mcp.html
+- title: Django MCP
+  url: /django-mcp.html
+- title: Spring MCP
+  url: /spring-mcp.html
+
