@@ -32,6 +32,9 @@ watchdog.start();
 await new Promise((resolve) => setTimeout(resolve, 50));
 Atomics.store(view, 0, BigInt(at('22:53:56')));
 await new Promise((resolve) => setTimeout(resolve, 100));
+// Past the five-second wake grace, only correct sleep subtraction can save us.
+Atomics.store(view, 0, BigInt(at('22:54:03')));
+await new Promise((resolve) => setTimeout(resolve, 100));
 watchdog.beat();
 await new Promise((resolve) => setTimeout(resolve, 50));
 await watchdog.stop();

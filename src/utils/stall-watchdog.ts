@@ -71,6 +71,7 @@ let lastProbeWall = 0;
 let sleepMs = 0;
 let lastWake = 0;
 let graceUntil = 0;
+let pendingSince = 0;
 function now() { return testClock ? Number(Atomics.load(testClock, 0)) : Date.now(); }
 function sleepFromLog(beat, current) {
   let log;
@@ -95,7 +96,7 @@ function sleepFromLog(beat, current) {
       asleepAt = null;
     }
   }
-  return { total, newestWake };
+  return { total, newestWake, pendingSleep: asleepAt !== null && asleepAt <= current };
 }
 function line(kind, stallMs) {
   return JSON.stringify({ time: new Date().toISOString(), pid: cfg.pid, kind: kind, stallMs: stallMs, component: 'daemon' }) + '\\n';
@@ -110,13 +111,15 @@ function check() {
       sleepMs = 0;
       lastProbeWall = 0;
       graceUntil = 0;
+      pendingSince = 0;
     }
     const rawMs = Math.max(0, wall - beat);
     // pmset is the system record of Sleep/DarkWake/Wake. It can take seconds
     // to read, so query after a timer gap or just before a possible kill.
     if ((process.platform === 'darwin' || cfg.testSleepLogFile) && rawMs >= Math.max(5000, cfg.alertAfterMs) &&
         (wall - lastCheckWall > Math.max(1500, cfg.checkIntervalMs * 3) ||
-         (rawMs >= cfg.fatalAfterMs && (!lastProbeWall || wall - lastProbeWall >= 30000)))) {
+         (rawMs >= cfg.fatalAfterMs && (!lastProbeWall || wall - lastProbeWall >= 30000)) ||
+         (pendingSince && wall - lastProbeWall >= Math.max(1000, cfg.checkIntervalMs)))) {
       const result = sleepFromLog(beat, wall);
       // Reading the power log can take seconds. A beat during that read wins
       // over this stale snapshot; the next tick will start a fresh episode.
@@ -124,16 +127,22 @@ function check() {
         lastCheckWall = now();
         return;
       }
-      lastProbeWall = wall;
+      lastProbeWall = now();
       if (result) {
         sleepMs = result.total;
+        if (result.pendingSleep) {
+          if (!pendingSince) pendingSince = now();
+        } else {
+          pendingSince = 0;
+        }
         if (result.newestWake > lastWake) {
           lastWake = result.newestWake;
           graceUntil = now() + 5000;
         }
       }
     }
-    lastCheckWall = wall;
+    // A slow pmset read must not look like another sleep-sized timer gap.
+    lastCheckWall = now();
     stallMs = Math.max(0, rawMs - sleepMs);
   } catch (e) {
     return;
@@ -151,7 +160,10 @@ function check() {
     try { fs.appendFileSync(cfg.alertFile, line('stalled', stallMs)); } catch (e) {}
     return;
   }
-  if (stallMs >= cfg.fatalAfterMs && now() >= graceUntil && !episodeFatal) {
+  // A Sleep record can reach pmset before its Wake record. Retry for a
+  // bounded period instead of killing on that temporarily incomplete log.
+  if (stallMs >= cfg.fatalAfterMs && now() >= graceUntil &&
+      (!pendingSince || now() - pendingSince >= 15000) && !episodeFatal) {
     episodeFatal = true;
     try { fs.appendFileSync(cfg.alertFile, line('fatal', stallMs)); } catch (e) {}
     if (cfg.fatalExit) {

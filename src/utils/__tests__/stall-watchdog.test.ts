@@ -251,4 +251,41 @@ describe('StallWatchdog (TRA-1957)', () => {
       rmSync(logDir, { recursive: true, force: true });
     }
   }, 15_000);
+
+  it('waits for a delayed Wake record before deciding whether to kill', async () => {
+    const clock = new SharedArrayBuffer(8);
+    const view = new BigInt64Array(clock);
+    const at = (time: string) => Date.parse(`2026-10-22 ${time} +0400`);
+    Atomics.store(view, 0, BigInt(at('22:34:20')));
+    const logDir = mkdtempSync(join(tmpdir(), 'stall-delayed-wake-'));
+    try {
+      const logFile = join(logDir, 'pmset.log');
+      writeFileSync(
+        logFile,
+        '2026-10-22 22:34:27 +0400 Sleep               \tEntering Sleep state\n',
+      );
+      const { alertFile } = start({
+        testClock: clock,
+        testSleepLogFile: logFile,
+        alertAfterMs: 30_000,
+        fatalAfterMs: 60_000,
+      });
+      await sleep(50);
+      Atomics.store(view, 0, BigInt(at('22:53:56')));
+      await sleep(100);
+      expect(readLines(alertFile).map((line) => line.kind)).not.toContain('fatal');
+      writeFileSync(
+        logFile,
+        '2026-10-22 22:34:27 +0400 Sleep               \tEntering Sleep state\n' +
+          '2026-10-22 22:53:56 +0400 Wake                \tWake from Deep Idle\n',
+      );
+      Atomics.store(view, 0, BigInt(at('22:53:58')));
+      await sleep(100);
+      Atomics.store(view, 0, BigInt(at('22:54:05')));
+      await sleep(100);
+      expect(readLines(alertFile).map((line) => line.kind)).not.toContain('fatal');
+    } finally {
+      rmSync(logDir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });
