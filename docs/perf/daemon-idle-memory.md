@@ -448,3 +448,25 @@ about 42 MB. Neither visible cache explains the heap total. TRA-2061 owns
 attribution; the project-count and session mix changed during this sample,
 so this observation does not establish a v3.38.0 memory regression or a
 per-hour leak rate.
+
+---
+
+## 2026-10-23 — sleep triggered a false fatal stall and daemon restart (TRA-2622)
+
+Read-only correlation of the installed v3.38.0 daemon logs with `pmset -g log`.
+PID 20456 logged its last line at 2026-10-22 18:44:28.437 UTC. macOS had
+entered Maintenance Sleep at 18:44:27 and woke at 18:53:56. The separate
+`~/.trace/index/stall-alerts.jsonl` records `stalled` at 18:53:56.496
+(`stallMs=567970`) and `fatal` at 18:53:57.497 (`stallMs=568971`) for PID
+20456. Successor PID 80521 started at 18:53:58 and its last-will diagnostic
+attributed the unclean stop to `stall-watchdog SIGKILL`. It later returned
+`ok` from `/health` on port 3741. Neither the live daemon nor the app was
+manually restarted for this check.
+
+Two earlier DarkWake cycles in the same sleep interval produced `stalled` /
+`recovered` pairs, then the final wake led to `fatal` before a main-thread
+heartbeat. The watchdog uses wall-clock `Date.now()` for its heartbeat age;
+it counts sleep as an active stall and can run before the main thread on wake.
+This is a confirmed false kill, distinct from the no-sleep blockage in
+TRA-2603. TRA-2622 owns the watchdog fix; TRA-2583 / draft PR #1694 addresses
+only the same-thread lag monitor.
