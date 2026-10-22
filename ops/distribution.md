@@ -6334,3 +6334,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+### Morning pass, 2026-10-22 (TRA-2608): mention sweep clean, JS/TS static override dispatch, Go shadowing & installer permissions
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph parser & linkage updates**:
+  - Open PR #2779 (`fix(installer)`): atomic write pattern (`<path>.tmp.<pid>` renamed over target) inadvertently reset file permissions to default umask, stripping `0600` permissions on secret configs and credentials. Fixed by reading `fs.statSync(path).mode` beforehand and applying `fchmodSync` on the temporary file before atomic rename.
+  - Merged PR #2778 (`fix(pascal)`): Delphi parameter attributes like `[ref]` (e.g. `const [ref] AValue: Integer`) or `[MVCFromBody]` aborted parameter AST parsing and caused symbol indexers to drop all subsequent class member declarations in the file.
+  - Merged PR #2776 (`fix(go)`): Go function values (e.g. `apply(run)`) recorded once per function at first use. If the first use was shadowed by a local or parameter named `run`, the resolver dropped the use; subsequent unshadowed calls failed to bind because the identifier wasn't recorded again.
+  - Open PR #2775 (`fix(js/ts)`): separates static and instance override dispatch. Base class instance methods were binding to subclass static methods of the same name (and vice-versa) during override edge synthesis because the static modifier was omitted from JavaScript extraction and unchecked in dispatch.
+  - Merged PR #2777 (`fix(upgrade)`): allows global npm package upgrades via `-g` when invoked from any arbitrary working directory.
+- **Graphify-Labs/graphify IPv6 HTTP bind & ingestion boundaries**:
+  - Open PR #4656 (`fix(serve)`): IPv6 HTTP bind Host header handling. Running `python -m graphify.serve --transport http --host ::1` rejected all requests with HTTP 421. `_build_http_app()` populated DNS rebinding allowlists with raw `::1` and `::1:8080`, whereas RFC 3986 requires bracketed host `[::1]` and `[::1]:8080` in HTTP `Host` headers.
+  - Open PR #4657 (`fix(ingest)`): prevents overwriting text captures through existing entries during ingestion walks.
+  - Open PR #4659 (`docs(security)`): clarifies MCP graph-path handling as implemented.
+- **DeusData/codebase-memory-mcp**:
+  - Open PR #2761 (`feat(language)`): maps `.comp`, `.geom`, `.tesc`, `.tese` (glslang Vulkan compute, geometry, tessellation stages) into GLSL parser.
+  - Open PR #2760 (`fix(extract)`): replaces fixed-size C stack buffers in YAML parsing (`scan_yaml_for_infra_bindings` 512-node limit, `walk_yaml_mapping` 256-frame limit) with dynamically growing stacks to prevent silent truncation of deep infrastructure manifests.
+- **oraios/serena clangd preamble & concurrency improvements**:
+  - Open PR #2195: avoids clangd parsing the same file repeatedly on every request. `request_referencing_symbols` and `request_containing_symbol` now open files without notifying the LSP server unless symbol requests are explicitly required.
+  - Open PR #2194: introduces concurrent document symbol requests for clangd during directory scans and project indexing (`request_full_symbol_tree`), mitigating sequential preamble building bottlenecks.
+
+**Competitor pulse (as of 2026-10-22 04:12 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,962★ (+2), 1,593 forks (=)
+- oraios/serena: 30,586★ (+7), 2,081 forks (+1)
+- DeusData/codebase-memory-mcp: 47,140★ (+27), 3,868 forks (+1)
+- tirth8205/code-review-graph: 32,317★ (+9), 2,953 forks (+1)
+- colbymchenry/codegraph: 74,634★ (+15), 4,831 forks (+2)
+- abhigyanpatwari/GitNexus: 47,998★ (=), 5,196 forks (=)
+- jgravelle/jcodemunch-mcp: 2,795★ (=), 374 forks (+2)
+- continuedev/continue: 36,289★ (=), 5,503 forks (+2)
+- Aider-AI/aider: 49,688★ (+1), 5,094 forks (+3)
+- Graphify-Labs/graphify: 131,847★ (+318), 12,654 forks (+26)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
