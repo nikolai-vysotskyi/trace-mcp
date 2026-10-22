@@ -419,3 +419,32 @@ and session ages before treating the pins as a regression of TRA-1738.
 These samples are **not an idle-memory baseline**: connected sessions pin
 projects even while `projects_indexing` and instantaneous CPU are zero. Do
 not apply the isolated `250 + 75 × projects_loaded` target to this window.
+
+---
+
+## 2026-10-22 — v3.38.0 recovers from a watcher overflow; heap remains unattributed
+
+Read-only field observation of the installed v3.38.0 daemon (PID 99565).
+At 2026-10-21 21:58–22:00 UTC, three consecutive one-minute vitals samples
+reported six loaded projects, zero indexing projects, 1,789 MB RSS, and
+1,060 MB heap used. Three projects were session-pinned and three were still
+fresh, so this is **not** a controlled idle baseline and cannot be compared
+with the isolated RSS ceiling.
+
+During a burst of checkout and plugin-cache file events, `fs_drops` and
+`fs_reconciles` both rose from 2 to 3. The log records a dropped-event
+reconcile at 22:01:07 UTC; `/health` subsequently returned `ok` with the
+same PID. The current log file's last-hour window contained 5,043
+`reindex-file` telemetry records,
+many for unchanged files, and transient `ENOENT` warnings from disappearing
+plugin-cache paths. This establishes that the current daemon survived and
+started reconciliation for this burst. It does not prove that every changed
+file was indexed or test wake-from-sleep recovery.
+
+After two more projects loaded, `/debug/memory` reported eight resident
+projects, 22 session handles, 1,944 MB RSS and 1,162 MB heap used. The
+session journal held one entry with zero compact bytes; the tree cache was
+about 42 MB. Neither visible cache explains the heap total. TRA-2061 owns
+attribution; the project-count and session mix changed during this sample,
+so this observation does not establish a v3.38.0 memory regression or a
+per-hour leak rate.
