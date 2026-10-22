@@ -6389,3 +6389,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+### Midday pass, 2026-10-22 (TRA-2611): mention sweep clean, codegraph off-thread index recovery & daemon multi-project watchdog, graphify negative cache & ObjC, codebase-memory unresolved call coverage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph worker index recovery & daemon watchdog progress**:
+  - Merged PR #2794 (`fix(db)`): Reopening an interrupted index caused crash loops because SQLite secondary indexes (`unresolved_refs` and `edges`) dropped during the resolution pass were rebuilt synchronously on the main thread during `DatabaseConnection.open()`. On large repos (Django, 150k–300k+ refs), full-table sorting without WAL progress triggered the liveness watchdog SIGKILL, which repeated on restart. Fixed via `deferIndexRecovery` moving DDL rebuilding to a dedicated worker thread with SQLite `TEMP_STORE=1` (spilling large sorts to disk instead of heap), awaiting completion before query execution.
+  - Merged PR #2793 (`fix(daemon)`): Multi-project daemon watchdog false positives. When a session attached a secondary project via `projectPath`, the shared daemon ran catch-up synchronization on the main thread while the watchdog was only armed with the primary project's `codegraph.db` and `-wal`. Because the primary project files remained idle during secondary sync, the watchdog killed healthy daemons after 24–70 seconds. Fixed by introducing `addWatchdogProgressPaths()` to dynamically track all active writer project DB/WAL files.
+  - Merged PR #2792 (`fix(js,ts)`): Bundler import specifiers with trailing slashes (e.g. `'@/utils/'`) or redundant segments (`'./Chart/./index'`) generated unnormalized path keys (`src/utils//index.js`), causing symbol queries and file lookups to fail. Added POSIX candidate normalization so imports correctly resolve to indexed keys.
+- **Graphify-Labs/graphify negative indexing cache & extraction refinement**:
+  - Open PR #4672 (`fix(extract)`): Incremental indexing re-scanned and re-evaluated declined-by-design files (vendor bundles, generated code, ignored minified assets) on every pass because only parsed ASTs were cached. Added negative manifest caching to suppress re-queuing declined files during incremental syncs.
+  - Open PR #4674 (`fix(extract)`): Resolves Objective-C member calls when class declarations and implementations are split across disparate header and source directories (`include/` vs `src/`).
+  - Open PR #4669 (`fix(cross-repo)`): Fixed cross-repository call edges targeting caller header locations rather than actual call-site AST coordinates.
+  - Open PR #4667 (`fix(extract)`): Stripped absolute checkout paths from Objective-C category node IDs, ensuring deterministic, machine-independent graph snapshots.
+  - Open PR #4665 (`feat(install)`): Added DeepSeek Harness (`dsh`) platform target.
+- **DeusData/codebase-memory-mcp pipeline metrics & concurrency**:
+  - Open PR #2305 (`fix(pipeline)`): Exposes unresolved call coverage metrics (inbound vs outbound unknown call sites, e.g. 43/400 unknown on Prometheus v3.0.0 benchmark) to quantify call-graph resolution completeness.
+  - Open PR #2315 (`fix(pipeline)`): Preserves concurrent architectural decision record writes (`manage_adr`) during background database swap windows.
+  - Open PR #2397 (`feat(lang)`): Added AST extraction for IEC 61131-3 Structured Text (`.st`).
+  - Open PR #2764 (`fix(cypher)`): Corrected Cypher ungrouped aggregate evaluation (`count(*)`, `sum()`) over empty sets to return one row per SQL/openCypher specifications instead of zero rows.
+- **oraios/serena language server expansion & parallel indexing**:
+  - Open PR #2116: Experimental GraphQL language server integration.
+  - Open PR #1528: Introduces `--parallel` flag to `serena project index` for multi-threaded project graph indexing.
+
+**Competitor pulse (as of 2026-10-22 10:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,966★ (+4), 1,593 forks (=)
+- oraios/serena: 30,597★ (+11), 2,081 forks (=)
+- DeusData/codebase-memory-mcp: 47,180★ (+40), 3,872 forks (+4)
+- tirth8205/code-review-graph: 32,317★ (=), 2,953 forks (=)
+- colbymchenry/codegraph: 74,667★ (+33), 4,837 forks (+6)
+- abhigyanpatwari/GitNexus: 48,003★ (+5), 5,198 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,796★ (+1), 375 forks (+1)
+- continuedev/continue: 36,289★ (=), 5,503 forks (=)
+- Aider-AI/aider: 49,692★ (+4), 5,096 forks (+2)
+- Graphify-Labs/graphify: 132,174★ (+327), 12,677 forks (+23)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
