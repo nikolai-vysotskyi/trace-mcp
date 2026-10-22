@@ -6545,3 +6545,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Night pass, 2026-10-23 (TRA-2620): mention sweep clean, codegraph liquid capture & static/instance method override isolation, graphify heal & subagent unread coverage, serena clangd concurrent indexing & didOpen dedup
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph Liquid capture variable indexing, static/instance method override isolation & outer-scope receiver binding**:
+  - Merged PR #2814 (`fix(liquid)`): Variables declared with `{% capture %}` are now indexed alongside `{% assign %}` declarations. Previously, `capture` variables were skipped, causing `codegraph_explore` to report them as missing.
+  - Merged PR #2813 (`fix(js,ts)`): Static and instance methods override only their own kind (#2761). Override-dispatch edges (`synthesizedBy: interface-impl`) previously linked base class methods to subclass methods of the same name even when one was `static` and the other was an instance method. Member dispatches now check for matching kind parity across JS and TS class definitions.
+  - Merged PR #2812 (`fix(liquid)`): Shopify theme JSON templates and `{% sections %}` groups. Supports comments and trailing commas in Shopify-generated theme JSON templates, resolving section references line-by-line and linking layout references accurately.
+  - Merged PR #2811 (`fix(js,ts)`): Outer-scope receiver type binding (#2589). Resolves method receivers declared outside calling functions (e.g., React `root.render(...)` via `createRoot(el)`) to avoid fallback by-name collisions with project class error boundary `render()` methods.
+  - Open PR #2815 (`docs(liquid)`): Documentation update outlining Liquid engine coverage and supported tag constructs.
+- **Graphify-Labs/graphify test failure heal engine, subagent coverage tracking & raw graph alias parity**:
+  - Open PR #4680 (`fix(skill)`): Subagent unread file detection in coverage validator (#3987 / #2225). Step B3.5 previously only compared reported `coverage` with actual file lengths, ignoring files that subagents never opened at all (allowing subagents to guess `INFERRED` nodes without opening files). Now unread dispatched files without coverage entries are treated as unread/incomplete.
+  - Open PR #4678 (`feat(heal)`): Autonomous test healing engine `graphify heal "<test-cmd>"` using architectural knowledge graphs to trace failure blast radius and synthesize targeted repairs across upstream/downstream components.
+  - Open PR #4676 (`fix(build)`): Header import target resolution parity between `--no-cluster` (raw) and clustered graph paths (#4670). Both paths now resolve `#import <Kit/ToolEvent.h>` targets through the shared alias index rather than creating orphaned basename stubs.
+  - Open PR #4677 (`fix(sql)`): AST recovery for `CREATE TABLE` statements with unsupported column defaults (`DEFAULT current_timestamp()`).
+- **oraios/serena C++ & clangd latency optimizations**:
+  - Open PR #2195: Avoid clangd re-parsing files across repeated queries (#2190). Defers `didOpen` notifications until symbols are actually requested, and manages open files efficiently so preamble rebuilds are avoided.
+  - Open PR #2194: Concurrent document symbol retrieval (`SolidLanguageServer.request_full_symbol_tree`) during directory scans and indexing (`serena project index`), allowing clangd's multi-threaded worker pool (`-j`) to build preambles in parallel instead of serially.
+  - Open PR #2193: clangd symbol cache fix for YAML-quoted paths, launch defaults, and line ending normalizations.
+- **yamadashy/repomix token tree threshold & git filename encoding**:
+  - Open PR #1941 (`fix(cli)`): Honor zero (`0`) token-count-tree threshold.
+  - Open PR #1940 (`fix(git)`): Preserve raw non-ASCII file names in git log outputs.
+- **DeusData/codebase-memory-mcp Rust cross-file receivers & tie-breaking**:
+  - Open PR #2771 / #2770: Rust struct field folding in cross-file receivers and type-directed tie-breaking for suffix match candidates.
+
+**Competitor pulse (as of 2026-10-23 02:02 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,979★ (+3), 1,594 forks (=)
+- oraios/serena: 30,617★ (+6), 2,083 forks (+1)
+- DeusData/codebase-memory-mcp: 47,237★ (+12), 3,878 forks (+2)
+- tirth8205/code-review-graph: 32,328★ (+6), 2,953 forks (=)
+- colbymchenry/codegraph: 74,742★ (+29), 4,840 forks (+4)
+- abhigyanpatwari/GitNexus: 47,999★ (+4), 5,199 forks (=)
+- jgravelle/jcodemunch-mcp: 2,796★ (=), 375 forks (=)
+- continuedev/continue: 36,289★ (-1), 5,508 forks (+1)
+- Aider-AI/aider: 49,696★ (+3), 5,099 forks (=)
+- Graphify-Labs/graphify: 132,854★ (+174), 12,713 forks (+7)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
