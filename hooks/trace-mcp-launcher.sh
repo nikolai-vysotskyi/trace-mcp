@@ -1020,6 +1020,20 @@ if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ]; then
   HEALED=1
 fi
 
+# The configured cli.js may still exist even though its node disappeared.
+# If probing replaced that node with the app runtime, the old npm cli.js is
+# incompatible with Electron's native-module ABI and signing identity. The
+# fast-path pairing check ran before the probe, so repeat it for this new pair.
+if [ "$USING_OVERRIDE" = 0 ] && is_app_runtime "$NODE_PATH" && [ -n "$CLI_PATH" ]; then
+  case "$CLI_PATH" in
+    *.app/Contents/Resources/server/dist/cli.js) ;;
+    *)
+      log "ERROR: probed app runtime node=$NODE_PATH cannot load external package cli=$CLI_PATH — reprobing"
+      CLI_PATH=""
+      ;;
+  esac
+fi
+
 if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
   if is_app_runtime "$NODE_PATH"; then
     CLI_PATH=$(cli_from_app_bundle) || CLI_PATH=""
