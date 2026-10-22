@@ -1552,19 +1552,22 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
     expect(config).toContain(`TRACE_MCP_CLI="${bundledCli}"`);
   });
 
-  it('reprobes the cli after a missing node is replaced by the app runtime', () => {
-    const { home, traceHome, cli: externalCli } = setupFakeHome();
-    const { app, cli: bundledCli } = plantAppBundle(home);
-    writeAppLocation(traceHome, app);
-    writeConfig(traceHome, path.join(home, 'removed-node'), externalCli);
+  it.skipIf(HAS_SYSTEM_NODE)(
+    'reprobes the cli after a missing node is replaced by the app runtime',
+    () => {
+      const { home, traceHome, cli: externalCli } = setupFakeHome();
+      const { app, cli: bundledCli } = plantAppBundle(home);
+      writeAppLocation(traceHome, app);
+      writeConfig(traceHome, path.join(home, 'removed-node'), externalCli);
 
-    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
 
-    expect(status).toBe(0);
-    expect(stdout.trim()).toBe(`APP_NODE:1:${bundledCli} serve`);
-    const config = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
-    expect(config).toContain(`TRACE_MCP_CLI="${bundledCli}"`);
-  });
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`APP_NODE:1:${bundledCli} serve`);
+      const config = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+      expect(config).toContain(`TRACE_MCP_CLI="${bundledCli}"`);
+    },
+  );
 
   it('resolves bundled cli directly when node is an app runtime, skipping npm prefixes (TRA-1249)', () => {
     const { home, traceHome } = setupFakeHome();
