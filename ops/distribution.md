@@ -6445,4 +6445,56 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+### Evening pass, 2026-10-22 (TRA-2613): mention sweep clean, codegraph type-gating & workspace manifest resolution, graphify raw/cluster alias unification, codebase-memory cross-file Go aliases, serena LS open-file LRU
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph call type-gating, workspace package manifests & prompt hook isolation**:
+  - Merged PR #2801 (`fix(js,ts)`): Call/new resolution landing on interfaces or type aliases. In TypeScript/JavaScript, when resolving calls or `new` expressions by name or barrel import, name resolution could incorrectly link to an interface or type alias sharing the same name (e.g. `interface Ok<T>` beside `function Ok<T>()` in memfs, or `new Response()` linking Postman types). Fixed via `gateTargetKind`: re-targets `calls`/`instantiates` edges to the actual value symbol (function, class, component, var/const) in the same file if present, or drops the edge entirely (leaving it cleanly unresolved) rather than creating invalid call edges to type definitions.
+  - Merged PR #2799 (`fix(js,ts)`): Internal workspace package imports without root index files. In monorepos (pnpm/npm/yarn/bun), packages declaring entries via `main`, `module`, `types` or `exports` (e.g. `"main": "./src/index.ts"`) were failing to resolve by package name (`import { caseStatus } from '@acme/core'`), causing them to fall back to imprecise global name matching. Fixed by parsing package manifests (`exports` subpaths and conditional mappings like `import`/`require`/`default`, root `main`/`module`), supporting path dependencies (`file:`, `link:`, `portal:`), and mapping build output paths (`dist/`, `build/`, `lib/`, `out/`, `es/`, `esm/`, `cjs/`) to corresponding indexed source files.
+  - Merged PR #2798 (`fix(prompt-hook)`): Isolation from desktop reminders and multi-session messages. The Claude Code desktop app prepends `<system-reminder>` blocks (e.g. `Linked sessions now: ...`) to user prompts. The prompt hook was including these reminders in confidence evaluation, triggering false HIGH exploration passes on simple responses (even "yes"). Fixed by stripping system reminders and `<cross-session-message>` tags before prompt classification.
+  - Merged PR #2797 (`fix(pascal)`): Delphi routine calls written without parentheses now correctly link to target routines.
+  - Merged PR #2796 (`fix(db)`): Disambiguated SQLite file open failures from Node runtime version errors.
+- **Graphify-Labs/graphify raw vs clustered endpoint unification**:
+  - Open PR #4675 (`fix(build)`): Discrepancy between clustered and `--no-cluster` (raw) graph generation. The raw graph path (`finalize_raw_graph_endpoints`) lacked the node stem alias layer used in `build_from_json`, causing imports like `#import <Kit/ToolEvent.h>` to bind to real file nodes in clustered mode but mint spurious external stubs in raw mode. Unified the index into `_endpoint_alias_index` and moved stub minting after alias resolution.
+- **DeusData/codebase-memory-mcp cross-file Go package aliases & pipeline checks**:
+  - Open PR #2769 (`fix(go-lsp)`): Go identity type aliases across package files. In Go, files in the same package share scope without imports. When a type alias was declared in one file (`type FeatureSet = bitmap`) and called in another, the per-file AST scanner only populated `alias_of` locally, dropping receiver-qualified method resolution across files. Fixed cross-file alias propagation in package symbol tables.
+  - Open PR #2766: Differentiated layout checksum mismatch from unsafe archive extraction in Windows installer `install.ps1`.
+- **oraios/serena language server file descriptor LRU caching**:
+  - Open PR #2195: Re-parsing overhead mitigation. Every symbol request was previously triggering repeated `didOpen`/`didClose` notifications to language servers. Decoupled symbol lookup from LS notifications (consulting local caches first) and introduced an LRU open-file cache (retaining the 3 most recently used files open in `clangd` without closing them immediately).
+
+**Competitor pulse (as of 2026-10-22 14:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,973★ (+7), 1,594 forks (+1)
+- oraios/serena: 30,607★ (+10), 2,082 forks (+1)
+- DeusData/codebase-memory-mcp: 47,198★ (+18), 3,875 forks (+3)
+- tirth8205/code-review-graph: 32,319★ (+2), 2,953 forks (=)
+- colbymchenry/codegraph: 74,679★ (+12), 4,834 forks (-3)
+- abhigyanpatwari/GitNexus: 47,994★ (-9), 5,199 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,796★ (=), 375 forks (=)
+- continuedev/continue: 36,290★ (+1), 5,505 forks (+2)
+- Aider-AI/aider: 49,687★ (-5), 5,096 forks (=)
+- Graphify-Labs/graphify: 132,422★ (+248), 12,693 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
 
