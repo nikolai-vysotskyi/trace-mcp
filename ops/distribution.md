@@ -6495,6 +6495,53 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+### Late night pass, 2026-10-22 (TRA-2615): mention sweep clean, codegraph nested Delphi routines & outer receiver package typing, graphify failure triage & SQL default current_timestamp recovery, codebase-memory Rust struct field folding & suffix tie-breaking
 
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
 
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph nested Delphi routine call indexing, outer-scope receiver type isolation & grammar gate process isolation**:
+  - Merged PR #2810 (`fix(pascal)`): Calls inside nested Delphi routines. Delphi allows declaring sub-routines between a routine header and its `begin`. The extractor previously only inspected the top-level routine body block, completely skipping nested routine bodies so their outgoing calls and caller impact were omitted, and calls to nested routines incorrectly matched same-named routines elsewhere. Fixed by extracting nested routines and indexing calls under their declaring routine.
+  - Merged PR #2809 (`fix(extraction)`): Dropped unused `extractVariables` hook from `LanguageExtractor` which was never called by the core indexing pipeline, clarifying variable origin docs and adding guard tests against dead hooks.
+  - Merged PR #2808 (`fix(add-lang)`): Grammar safety check execution in isolated child process. `scripts/add-lang/check-grammar.mjs` previously validated wasm grammars in-process, falsely reporting passes even if grammars crashed or hung. Now forks a child process to verify exit codes cleanly.
+  - Open PR #2807 (`fix(js/ts)`): Outer-scope package-typed receiver call resolution (#2589). When an outer variable typed from a package (e.g. `let root: Root | null` from `react-dom`) had a method call like `root.render(...)`, `inferLocalReceiverType` only searched within the calling function and failed back to unique method matching, generating false call edges to unrelated project methods (such as class error boundary `render()`). Fixed to ensure outer-scope package types suppress false project method links.
+  - Merged PR #2806 (`fix(bundle)`): Bundled Node v24.21.0 in release bundles to prevent Windows commands aborting on exit with `0xC0000409` due to `libuv` handle closing bug.
+- **Graphify-Labs/graphify test failure triage engine & SQL column default current_timestamp recovery**:
+  - Open PR #4678 (`feat(heal)`): Introduced `graphify heal "<test-cmd>"`, utilizing the architectural code knowledge graph to isolate test failure blast radiuses and synthesize targeted code repairs across connected upstream/downstream components.
+  - Open PR #4677 (`fix(sql)`): Recover `CREATE TABLE` statements dropped into `ERROR` nodes by unsupported column defaults (#4613). MySQL/MariaDB schemas using `DEFAULT current_timestamp()` or `ON UPDATE current_timestamp()` caused tree-sitter-sql to generate `ERROR` nodes, dropping the table definition and leaving foreign key `REFERENCES` pointing to sourceless stubs. Added fallback AST parsing to register table definitions despite default syntax errors.
+- **DeusData/codebase-memory-mcp cross-file Rust struct field folding & receiver tie-breaking**:
+  - Open PR #2770 (`fix(rust)`): Struct field folding for cross-file field receivers (#2605). `pxc_fold_struct_fields` in `src/pipeline/pass_lsp_cross.c` was enabled for Go/C/C++ but omitted for Rust. Rust structs emitting flat `Field` definitions now fold composed field hierarchies, resolving multi-segment receiver chains (e.g., `entry.session.push_daily()`) where types are defined in other modules.
+  - Open PR #2771 (`feat(registry)`): Suffix tie-breaker using receiver field type. Value-receiver resolution chains where multiple methods share candidate scores previously fell back to lexicographical order (causing trait stubs to win over inherent methods). Added tie-breaking using the receiver field's declared type.
+- **oraios/serena language server additions**:
+  - Open PR #2116: Added experimental GraphQL language server support via `graphql-language-service-cli` (`graphql-lsp`) in SolidLSP.
+
+**Competitor pulse (as of 2026-10-22 18:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,976★ (+3), 1,594 forks (=)
+- oraios/serena: 30,611★ (+4), 2,082 forks (=)
+- DeusData/codebase-memory-mcp: 47,225★ (+27), 3,876 forks (+1)
+- tirth8205/code-review-graph: 32,322★ (+3), 2,953 forks (=)
+- colbymchenry/codegraph: 74,713★ (+34), 4,836 forks (+2)
+- abhigyanpatwari/GitNexus: 47,995★ (+1), 5,199 forks (=)
+- jgravelle/jcodemunch-mcp: 2,796★ (=), 375 forks (=)
+- continuedev/continue: 36,290★ (=), 5,507 forks (+2)
+- Aider-AI/aider: 49,693★ (+6), 5,099 forks (+3)
+- Graphify-Labs/graphify: 132,680★ (+258), 12,706 forks (+13)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
 
