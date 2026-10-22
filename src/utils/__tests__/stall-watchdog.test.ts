@@ -4,7 +4,7 @@
  * worker thread. These tests drive StallWatchdog with millisecond thresholds
  * against a real Worker and assert on the alert file it appends.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,4 +179,76 @@ describe('StallWatchdog (TRA-1957)', () => {
       rmSync(childDir, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it('does not kill an isolated child after multiple system-recorded sleep cycles', async () => {
+    const childDir = mkdtempSync(join(tmpdir(), 'stall-sleep-'));
+    try {
+      const alertFile = join(childDir, 'stall-alerts.jsonl');
+      const logFile = join(childDir, 'pmset.log');
+      const fixture = join(
+        dirname(fileURLToPath(import.meta.url)),
+        'fixtures',
+        'stall-sleep-child.ts',
+      );
+      const tsxCli = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const child = spawn(process.execPath, [tsxCli, fixture, alertFile, logFile], {
+        cwd: process.cwd(),
+        stdio: 'ignore',
+      });
+      const result = await new Promise<{ code: number | null; signal: string | null }>(
+        (resolve, reject) => {
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL');
+            reject(new Error('sleep test child survived 20 s'));
+          }, 20_000);
+          child.on('error', (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+          child.on('exit', (code, signal) => {
+            clearTimeout(timeout);
+            resolve({ code, signal });
+          });
+        },
+      );
+      expect(result).toEqual({ code: 0, signal: null });
+      expect(readLines(alertFile).map((line) => line.kind)).not.toContain('fatal');
+    } finally {
+      rmSync(childDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('retains a pre-sleep stall and kills after the wake grace if beats never resume', async () => {
+    const clock = new SharedArrayBuffer(8);
+    const view = new BigInt64Array(clock);
+    const at = (time: string) => Date.parse(`2026-10-22 ${time} +0400`);
+    Atomics.store(view, 0, BigInt(at('22:34:00')));
+    const logDir = mkdtempSync(join(tmpdir(), 'stall-sleep-log-'));
+    try {
+      const logFile = join(logDir, 'pmset.log');
+      writeFileSync(
+        logFile,
+        [
+          '2026-10-22 22:34:27 +0400 Sleep               \tEntering Sleep state',
+          '2026-10-22 22:53:56 +0400 Wake                \tWake from Deep Idle',
+        ].join('\n'),
+      );
+      const { alertFile } = start({
+        testClock: clock,
+        testSleepLogFile: logFile,
+        alertAfterMs: 10_000,
+        fatalAfterMs: 20_000,
+      });
+      await sleep(50);
+      Atomics.store(view, 0, BigInt(at('22:53:56')));
+      await sleep(100);
+      expect(readLines(alertFile).map((line) => line.kind)).toContain('stalled');
+      expect(readLines(alertFile).map((line) => line.kind)).not.toContain('fatal');
+      Atomics.store(view, 0, BigInt(at('22:54:02')));
+      await sleep(100);
+      expect(readLines(alertFile).map((line) => line.kind)).toContain('fatal');
+    } finally {
+      rmSync(logDir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });
