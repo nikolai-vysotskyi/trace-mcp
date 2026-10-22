@@ -50,22 +50,91 @@ export interface StallWatchdogOptions {
   fatalExit?: boolean;
   /** Called on the main thread if the worker dies unexpectedly (for logging). */
   onWorkerExit?: (info: { code: number | null; hadError: boolean }) => void;
+  /** @internal Shared wall clock used by isolated sleep/wake tests. */
+  testClock?: SharedArrayBuffer;
+  /** @internal pmset transcript used by isolated sleep/wake tests. */
+  testSleepLogFile?: string;
 }
 
 const WORKER_SOURCE = `
 const { workerData } = require('worker_threads');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 const view = new BigInt64Array(workerData.sab);
 const cfg = workerData;
+const testClock = cfg.testClock && new BigInt64Array(cfg.testClock);
 let episodeAlerted = false;
 let episodeFatal = false;
+let lastBeat = 0;
+let lastCheckWall = 0;
+let lastProbeWall = 0;
+let sleepMs = 0;
+let lastWake = 0;
+let graceUntil = 0;
+function now() { return testClock ? Number(Atomics.load(testClock, 0)) : Date.now(); }
+function sleepFromLog(beat, current) {
+  let log;
+  try {
+    log = cfg.testSleepLogFile
+      ? fs.readFileSync(cfg.testSleepLogFile, 'utf8')
+      : execFileSync('/usr/bin/pmset', ['-g', 'log'], { encoding: 'utf8', timeout: 15000, maxBuffer: 64 * 1024 * 1024 });
+  } catch (e) { return null; }
+  let asleepAt = null;
+  let total = 0;
+  let newestWake = 0;
+  for (const row of log.split('\\n')) {
+    const match = /^(\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d [+-]\\d{4}) (Sleep|DarkWake|Wake)\\s+\\t/.exec(row);
+    if (!match) continue;
+    const at = Date.parse(match[1]);
+    if (!Number.isFinite(at) || at > current) continue;
+    if (match[2] === 'Sleep') {
+      if (asleepAt === null) asleepAt = at;
+    } else if (asleepAt !== null) {
+      total += Math.max(0, Math.min(at, current) - Math.max(asleepAt, beat));
+      if (at > beat) newestWake = at;
+      asleepAt = null;
+    }
+  }
+  return { total, newestWake };
+}
 function line(kind, stallMs) {
   return JSON.stringify({ time: new Date().toISOString(), pid: cfg.pid, kind: kind, stallMs: stallMs, component: 'daemon' }) + '\\n';
 }
 function check() {
   let stallMs;
   try {
-    stallMs = Date.now() - Number(Atomics.load(view, 0));
+    const wall = now();
+    const beat = Number(Atomics.load(view, 0));
+    if (beat !== lastBeat) {
+      lastBeat = beat;
+      sleepMs = 0;
+      lastProbeWall = 0;
+      graceUntil = 0;
+    }
+    const rawMs = Math.max(0, wall - beat);
+    // pmset is the system record of Sleep/DarkWake/Wake. It can take seconds
+    // to read, so query after a timer gap or just before a possible kill.
+    if ((process.platform === 'darwin' || cfg.testSleepLogFile) && rawMs >= Math.max(5000, cfg.alertAfterMs) &&
+        (wall - lastCheckWall > Math.max(1500, cfg.checkIntervalMs * 3) ||
+         (rawMs >= cfg.fatalAfterMs && (!lastProbeWall || wall - lastProbeWall >= 30000)))) {
+      const result = sleepFromLog(beat, wall);
+      // Reading the power log can take seconds. A beat during that read wins
+      // over this stale snapshot; the next tick will start a fresh episode.
+      if (Number(Atomics.load(view, 0)) !== beat) {
+        lastCheckWall = now();
+        return;
+      }
+      lastProbeWall = wall;
+      if (result) {
+        sleepMs = result.total;
+        if (result.newestWake > lastWake) {
+          lastWake = result.newestWake;
+          graceUntil = now() + 5000;
+        }
+      }
+    }
+    lastCheckWall = wall;
+    stallMs = Math.max(0, rawMs - sleepMs);
   } catch (e) {
     return;
   }
@@ -82,7 +151,7 @@ function check() {
     try { fs.appendFileSync(cfg.alertFile, line('stalled', stallMs)); } catch (e) {}
     return;
   }
-  if (stallMs >= cfg.fatalAfterMs && !episodeFatal) {
+  if (stallMs >= cfg.fatalAfterMs && now() >= graceUntil && !episodeFatal) {
     episodeFatal = true;
     try { fs.appendFileSync(cfg.alertFile, line('fatal', stallMs)); } catch (e) {}
     if (cfg.fatalExit) {
@@ -106,6 +175,8 @@ export class StallWatchdog {
   private readonly onWorkerExit?: (info: { code: number | null; hadError: boolean }) => void;
   private readonly view: BigInt64Array;
   private readonly sab: SharedArrayBuffer;
+  private readonly testClock?: SharedArrayBuffer;
+  private readonly testSleepLogFile?: string;
   private worker: Worker | null = null;
 
   constructor(opts: StallWatchdogOptions) {
@@ -115,6 +186,8 @@ export class StallWatchdog {
     this.fatalAfterMs = opts.fatalAfterMs ?? 180_000;
     this.fatalExit = opts.fatalExit ?? true;
     this.onWorkerExit = opts.onWorkerExit;
+    this.testClock = opts.testClock;
+    this.testSleepLogFile = opts.testSleepLogFile;
     this.sab = new SharedArrayBuffer(8);
     this.view = new BigInt64Array(this.sab);
   }
@@ -133,6 +206,8 @@ export class StallWatchdog {
         alertAfterMs: this.alertAfterMs,
         fatalAfterMs: this.fatalAfterMs,
         fatalExit: this.fatalExit,
+        testClock: this.testClock,
+        testSleepLogFile: this.testSleepLogFile,
       },
     });
     // Observe only: a live watchdog must never keep the process up by itself.
@@ -163,7 +238,11 @@ export class StallWatchdog {
 
   /** Record one event-loop turn. Call from a per-tick callback. */
   beat(): void {
-    Atomics.store(this.view, 0, BigInt(Date.now()));
+    Atomics.store(
+      this.view,
+      0,
+      this.testClock ? Atomics.load(new BigInt64Array(this.testClock), 0) : BigInt(Date.now()),
+    );
   }
 
   /** Stop watching and release the worker. Idempotent. */
