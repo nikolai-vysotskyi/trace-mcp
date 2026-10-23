@@ -117,4 +117,27 @@ describe('deferred coverage reconcile', () => {
     await pipeline.__flushCoverageReconcileForTests();
     expect(store.getStats().totalFiles).toBe(2);
   });
+
+  it('recovers and purges ghost files when >= 10 files are deleted from disk', async () => {
+    writeUnannounced(rootDir, 15);
+    await pipeline.indexAll();
+    expect(store.getStats().totalFiles).toBe(16); // a.ts + 15 dropped
+
+    // Delete 12 dropped files on disk (onDisk drops from 16 to 4)
+    for (let i = 0; i < 12; i++) {
+      fs.unlinkSync(path.join(rootDir, 'src', `dropped${i}.ts`));
+    }
+
+    // Deleting 1 file via deleteFiles() schedules coverage reconcile
+    pipeline.deleteFiles(['src/dropped0.ts']);
+    expect(store.getStats().totalFiles).toBe(15);
+
+    await pipeline.__flushCoverageReconcileForTests();
+
+    // After reconcile, all deleted files are pruned: a.ts + dropped12..dropped14 = 4 files
+    expect(store.getStats().totalFiles).toBe(4);
+    expect(store.getFile('src/dropped1.ts')).toBeUndefined();
+    expect(store.getFile('src/dropped11.ts')).toBeUndefined();
+    expect(store.getFile('src/dropped12.ts')).toBeDefined();
+  });
 });
