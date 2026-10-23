@@ -6774,3 +6774,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+### Night pass, 2026-10-23 (TRA-2636): mention sweep clean, codegraph Go stdlib vs project collision (#2853) & TS class-field element call typing (#2852) & Rust receiver chains (#2846) & PHP case-insensitive alias (#2851), graphify TS chained decorator recovery (#4715) & path seed disambiguation (#4713), jcodemunch memoized import resolution (#1224)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph Go stdlib name collision, TS class field element typing, Rust receiver chains & PHP namespace aliases**:
+  - Merged PR #2853 (`fix(go)`): Fixes false standard-library classification when a project package shares its name with a stdlib package (e.g. `errors`, `log`, `types`, `parser`, `template`). Previously, `isBuiltInOrExternal` checked qualifier string against `GO_STDLIB_PACKAGES` without checking file imports. Added `isGoProjectPackage` to check if qualifier is imported from project modules, unblocking linking for Harbor (+2,889 edges) and Prometheus (+454 edges).
+  - Merged PR #2852 (`fix(js,ts)`): Calls on elements of class fields (`this.handlers[type].handle()`, `this.items[0].save()`) now resolve against the declared element type (`Item[]`, `Array<Item>`, `ReadonlyArray<Item>`, `Record<K, Handler>`) instead of falling back to bare name matching across the whole project (which caused false links like `this.listeners[type].push(h)` -> `UndoStack.push`). In JS (untyped fields), subscript calls now deliberately emit nothing rather than making wild bare-name guesses.
+  - Merged PR #2851 (`fix(php)`): Namespace aliases match case-insensitively in `resolvePhpQualifiedClassRef` (`use App\Fields as Field; new field\FirstName()`), matching PHP engine behavior.
+  - Merged PR #2850 (`fix(viewer)`): Viewer route list pagination limits the count of routes, not calls within a single route.
+  - Merged PR #2846 (`fix(rust)`): Rust calls preserve their whole receiver chain up to 16 links (`self.services.store.put()`, `self.store().put("m")`) rather than collapsing to bare method name `put`. Links through method signatures (`Svc::store -> &dyn Store`).
+- **Graphify-Labs/graphify chained TS decorator recovery & path seed disambiguation**:
+  - Open PR #4715 (`fix(extract)`): Recovers chained TS decorators like `@(Link().toMany())` which cause parse errors in tree-sitter-typescript 0.23.2. Unwraps parenthesized decorators via `_ts_decorator_target_name` and extracts outermost recovered call target; updates warning reporting to indicate earliest multiline lossy error region.
+  - Closed PR #4713 / #4714 (`fix(affected)`): Resolves `graphify affected <path>` for disambiguated file labels (shared basenames like `alpha/hooks.py` vs `beta/hooks.py`) when docstrings or definitions sit on line 1 by verifying that the node label matches a trailing path form of its own `source_file`.
+  - Open PR #4723 (`perf(html)`): Keeps graph.html visualization smooth without hiding edges.
+- **jgravelle/jcodemunch-mcp memoized importer-independent resolution**:
+  - Open PR #1224 (`perf(imports)`): Memoizes importer-independent resolution steps (`_resolve_tail` covering absolute paths, Python module paths, tsconfig aliases, SQL stems) per specifier and file set during symbol search import graph construction. Drops first `search_symbols` from 102.2s to 24.4s and import resolution from 33.7s to 4.9s on Home Assistant.
+
+**Competitor pulse (as of 2026-10-23 18:25 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,995★ (+3), 1,596 forks (=)
+- oraios/serena: 30,656★ (+7), 2,085 forks (-1)
+- DeusData/codebase-memory-mcp: 47,331★ (+20), 3,887 forks (+2)
+- tirth8205/code-review-graph: 32,347★ (+5), 2,956 forks (+2)
+- colbymchenry/codegraph: 75,048★ (+54), 4,891 forks (+14)
+- abhigyanpatwari/GitNexus: 48,014★ (+5), 5,202 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,797★ (=), 375 forks (=)
+- continuedev/continue: 36,300★ (+7), 5,512 forks (+2)
+- Aider-AI/aider: 49,716★ (+3), 5,100 forks (=)
+- Graphify-Labs/graphify: 133,780★ (+173), 12,777 forks (+10)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
