@@ -6826,3 +6826,56 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+
+### Morning pass, 2026-10-24 (TRA-2642): mention sweep clean, codegraph viewer trail symlink traversal (#2869) & Java record class indexing (#2868) & Python comment scan perf (#2866) & shared source size policy (#2865), graphify VB.NET sourceless stubs (#4728) & commit provenance manifest (#4727) & Python field call resolution (#4726) & watch rebuild timeout (#4724), jcodemunch v1.108.396 release (#1225)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph viewer trail symlink escape, Java record indexing, long Python comment scan perf & shared source size policy**:
+  - Merged PR #2869 (`fix(viewer)`): Addresses symlink/junction traversal vulnerability in saved trails. When `.codegraph/ui` was a junction or directory symlink, saving a trail wrote `trails/<id>.json` outside the project root before validating. Similarly, trail files that were symlinks pointing outside the project were served via `GET /api/trails`. Now verifies resolved path containment before read or write.
+  - Open PR #2868 (`fix(java)`): Indexes Java `record`s as class symbols across WASM and native extractors. Previously omitted `record_declaration` from class types, resulting in missing nodes and unresolved method/accessor calls. Now extracts record class nodes, components with accessor methods (`name()`) and backing fields, constructors, and resolves `Record::accessor` method references.
+  - Open PR #2866 (`perf(python)`): Mitigates severe degradation (exceeding 90s native / 15s child deadlines) when indexing Python files with large runs of comments (e.g. 70k lines). Replaces repeated backward child/sibling rescans with a single bounded forward sibling collection and direct preceding decorator lookup.
+  - Open PR #2865 (`feat(index)`): Unifies source file size policy (`maxSourceFileSizeBytes` in `codegraph.json`, default 1 MiB) across indexing, sync, resolution, and freshness checks. Reconciles file coverage dynamically: increasing the limit restores previously skipped files and their incoming caller graph without modifying source files.
+  - Merged PR #2867 (`test(resolution)`): Adds regression tests verifying calls on nested receivers maintain evidence chains without generating false target assumptions.
+- **Graphify-Labs/graphify VB.NET sourceless node validation, commit provenance manifest & Python field call resolution**:
+  - Open PR #4728 (`fix(vbnet)`): Resolves validation failures in `validate_extraction()` for external VB.NET namespaces (`Imports <ns>`), types, and events (`source_backed=False`) which previously omitted required field `source_file`. Sets explicit empty `source_file=""` and `source_location=""`.
+  - Open PR #4727 (`feat(global)`): Introduces commit provenance tracking in `~/.graphify/global-manifest.json` (`built_at_commit` vs `head_at_merge`), background-rebuild settle guards, and new `status` and `sync` subcommands in `graphify global` to detect desync between git HEAD and registered repository graph state.
+  - Open PR #4726 (`fix(python)`): Resolves method-call edges through dependency-injected instance attributes (e.g., `self.repository = repository; self.repository.get(k)`) and intermediate method call results (`task = self.repository.get(key); task.complete()`) by tracking parameter type hints and return type propagation.
+  - Open PR #4724 (`fix(watch)`): Bounds watcher rebuild execution with `GRAPHIFY_REBUILD_TIMEOUT` using `signal.alarm` where available and `threading.Timer` fallback, preventing deadlocks during background watch loops.
+- **jgravelle/jcodemunch-mcp v1.108.396 release**:
+  - Merged PR #1225 & #1224: Released v1.108.396 memoizing importer-independent resolution steps per specifier and file set during symbol search import graph construction, reducing cold import resolution time from 33.7s to 4.9s on large repositories.
+
+**Competitor pulse (as of 2026-10-24 02:00 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,999★ (+4), 1,596 forks (=)
+- oraios/serena: 30,662★ (+6), 2,085 forks (=)
+- DeusData/codebase-memory-mcp: 47,342★ (+11), 3,886 forks (-1)
+- tirth8205/code-review-graph: 32,350★ (+3), 2,955 forks (-1)
+- colbymchenry/codegraph: 75,068★ (+20), 4,893 forks (+2)
+- abhigyanpatwari/GitNexus: 48,016★ (+2), 5,203 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,802★ (+5), 375 forks (=)
+- continuedev/continue: 36,302★ (+2), 5,513 forks (+1)
+- Aider-AI/aider: 49,719★ (+3), 5,102 forks (+2)
+- Graphify-Labs/graphify: 133,863★ (+83), 12,788 forks (+11)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
