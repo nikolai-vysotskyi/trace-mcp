@@ -6602,3 +6602,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Morning pass, 2026-10-23 (TRA-2629): mention sweep (DevArKaDiA/rueca), codegraph Nuxt navigateTo & named class expressions, graphify pnpm workspace inline comments & cross-repo ObjC, serena Pkl language server
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 1 new hit outside seen list: `DevArKaDiA/rueca` (created 2026-10-23 03:28 UTC).
+- Inspection: genuine surface. `DevArKaDiA/rueca` is a new Rust-based code intelligence server over MCP ("symbol and call graph over MCP. Rust, local-first"). In `docs/rfcs/0002-building-blocks.md` (§5 "Contracts and framework detection"), Rueca cites `trace-mcp plugins` (~99 framework integrations taxonomy, MIT) as Reference alongside Gortex, codebase-memory-mcp, and colbymchenry/codegraph. Added to `ops/mentions-seen.txt`. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph Nuxt navigateTo navigation edges, named class expressions & TSX Vue blocks**:
+  - Merged PR #2826 (`fix(nuxt)`): Nuxt's `navigateTo('/x')` now generates a `navigates` edge to the target route `/x` (matching `router.push('/x')`) across pages, components, composables, and route middleware. Previously, `navigateTo` was listed in `NUXT_AUTO_IMPORTS`, turning every invocation into a self-referencing `calls` edge with confidence 1 without drawing the navigation target.
+  - Merged PR #2825 (`fix(js,ts)`): Named class expressions (`register(class Widget extends Base {})`, `const Panel = class PanelImpl extends Base {}`, `customElements.define('x-card', class XCard extends HTMLElement {})`, `module.exports = class Router {}`) now index as full class nodes with methods, properties, `extends`, and `implements`. Calls within class bodies link to members consistently with standard class declarations.
+  - Merged PR #2824 (`fix(vue)`): Vue `<script lang="tsx">` blocks are now parsed with the TSX tree-sitter grammar rather than JavaScript. Previously routed to the JS grammar, scripts containing TSX-specific constructs like `withDefaults(defineProps<...>())` caused silent parse failures where interfaces and type aliases were omitted and typed arrow functions degraded into untyped constants.
+  - Open PR #2827 (`fix(ruby)`): Calls on namespaced classes (e.g., `Admin::User.find`) link caller to both the class and its method.
+- **Graphify-Labs/graphify pnpm workspace comment stripping & cross-repo Objective-C declaration folding**:
+  - Open PR #4687 (`fix(workspace)`): Strips inline YAML comments from `pnpm-workspace.yaml` package glob lines (e.g., `- "services/runner/stg/**" # staging runner`). Previously, trailing comments remained part of the parsed glob pattern, causing workspace packages to be missed and `pathlib.Path.glob` to raise unhandled exceptions on Python 3.12, aborting repository extraction.
+  - Open PR #4691 (`fix(cross-repo)`): Binds cross-repo Objective-C split `@interface` (`.h`) and `@implementation` (`.m`) declarations to their definitions across repository boundaries (#4690), fixing dropped member calls caused by directory-scoped IDs in `_merge_decl_def_classes`.
+  - Open PR #4692 (`fix(no-cluster)`): Resolves basename import targets to real file nodes in unclustered graph export paths.
+- **oraios/serena Pkl language server addition**:
+  - Open PR #2198: Integrates experimental support for Apple's [Pkl](https://github.com/apple/pkl-lsp) via `PklLanguageServer`, implementing graceful capability degradation for methods unsupported by the upstream LSP (`textDocument/documentSymbol`, `textDocument/references`).
+
+**Competitor pulse (as of 2026-10-23 04:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,984★ (+5), 1,596 forks (+2)
+- oraios/serena: 30,629★ (+12), 2,084 forks (+1)
+- DeusData/codebase-memory-mcp: 47,264★ (+27), 3,882 forks (+4)
+- tirth8205/code-review-graph: 32,333★ (+5), 2,954 forks (+1)
+- colbymchenry/codegraph: 74,855★ (+113), 4,856 forks (+16)
+- abhigyanpatwari/GitNexus: 48,002★ (+3), 5,200 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,796★ (=), 375 forks (=)
+- continuedev/continue: 36,290★ (+1), 5,509 forks (+1)
+- Aider-AI/aider: 49,701★ (+5), 5,099 forks (=)
+- Graphify-Labs/graphify: 133,140★ (+286), 12,733 forks (+20)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+

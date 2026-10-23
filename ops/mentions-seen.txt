@@ -329,3 +329,10 @@ FlyingWHR/tashan
 # Glama badge transformer allowlist snapshot:
 # tools/glama-badge-server/allowed.txt lists servers/nikolai-vysotskyi/trace-mcp among 2,947 public Glama MCP identities:
 ryanduguid/australian-accounting
+
+# ── Swept 2026-10-23 morning pass (TRA-2629) ──
+# Genuine third-party architectural RFC citation & candidate building block evaluation:
+# docs/rfcs/0002-building-blocks.md evaluates trace-mcp plugins (~99 framework integrations taxonomy)
+# as Reference alongside Gortex, codebase-memory-mcp, and colbymchenry/codegraph in Rust code intelligence engine:
+DevArKaDiA/rueca
+
