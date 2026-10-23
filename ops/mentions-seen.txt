@@ -336,3 +336,13 @@ ryanduguid/australian-accounting
 # as Reference alongside Gortex, codebase-memory-mcp, and colbymchenry/codegraph in Rust code intelligence engine:
 DevArKaDiA/rueca
 
+# ── Swept 2026-10-23 afternoon pass (TRA-2634) ──
+# Searchable Claude Code skills catalog; crawled and ingested trace-mcp's 4 skills
+# (trace-mcp, trace-mcp-codemod, trace-mcp-refactoring, trace-mcp-pre-commit) into public registry:
+majiayu000/claude-skill-registry
+
+# Claude / Codex log inspection and metering verification tool; cites trace-mcp #1175
+# in campaigns/audit-report-2026-09.md among verified post-publication fixes:
+roy-tong/AgentMeasure
+
+
