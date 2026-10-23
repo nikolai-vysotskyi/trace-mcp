@@ -6653,3 +6653,62 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Midday pass, 2026-10-23 (TRA-2632): mention sweep clean, codegraph type re-exports & CFML/Rust resolution, graphify Robot Framework deduplication & scan ContextVar, jcodemunch function match context
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph type re-exports, multi-language call resolution & CLI implementations**:
+  - Merged PR #2838 (`fix(cfml)`): `<cfinclude template>` and `cfinclude()` link code directly to included file nodes.
+  - Merged PR #2837 (`fix(ts)`): Type-only re-exports (`export type * from './types'`) now correctly parse without syntax error drops.
+  - Merged PR #2835 (`fix(cfml)`): Dotted `extends` resolution when test suites mirror component directory paths.
+  - Merged PR #2834 (`fix(ruby)`): Method receiver dispatch accurately separates class vs instance methods.
+  - Merged PR #2832 (`fix(dart)`): Private name calls in multi-part libraries correctly resolve across library parts.
+  - Merged PR #2831 (`fix(rust)`): Type-directed resolution for field chains, struct literals, and outside-type paths.
+  - Merged PR #2828 (`fix(js,ts)`): `.tsx` and `.jsx` classes link override edges identically to `.ts` and `.js` classes.
+  - Open PR #2840 (`perf(resolution)`): Skip receiver typing for JS/TS calls when no graph node carries the target method name.
+  - Open PR #2839 (`feat(cli)`): `codegraph implementations <name>` CLI subcommand to list types implementing or extending an interface/class (#2833).
+- **Graphify-Labs/graphify Robot Framework deduplication, thread-isolated scan root & markdown namespaces**:
+  - Open PR #4697 (`fix(robot)`): Disambiguates duplicate test case names in Robot Framework by allocating distinct graph nodes.
+  - Open PR #4696 (`fix(report)`): Preserves community hub wikilinks matching exported report filenames.
+  - Open PR #4695 (`fix(markdown)`): Recognises backslash namespaces and `Type::member` code-span mentions in markdown docs (#4610).
+  - Open PR #4694 (`fix`): Ambient scan root thread isolation via `ContextVar` to prevent race conditions during concurrent scans.
+- **oraios/serena Open WebUI docs & Docker Node bump**:
+  - Open PR #2200 (`build(docker)`): Update Node.js to 22.23.4.
+  - Open PR #2199 (`docs`): Fix moved Open WebUI MCP documentation link.
+- **jgravelle/jcodemunch-mcp function-level text search context**:
+  - Merged PR #1222 / Open PR #1223: Enclosing function scope attribution in text search matches (`feat: a text match says which function it is in`).
+
+**Competitor pulse (as of 2026-10-23 10:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,990★ (+6), 1,596 forks (=)
+- oraios/serena: 30,641★ (+12), 2,085 forks (+1)
+- DeusData/codebase-memory-mcp: 47,293★ (+29), 3,882 forks (=)
+- tirth8205/code-review-graph: 32,340★ (+7), 2,954 forks (=)
+- colbymchenry/codegraph: 74,936★ (+81), 4,867 forks (+11)
+- abhigyanpatwari/GitNexus: 48,007★ (+5), 5,200 forks (=)
+- jgravelle/jcodemunch-mcp: 2,797★ (+1), 375 forks (=)
+- continuedev/continue: 36,290★ (=), 5,508 forks (-1)
+- Aider-AI/aider: 49,708★ (+7), 5,099 forks (=)
+- Graphify-Labs/graphify: 133,487★ (+347), 12,754 forks (+21)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
