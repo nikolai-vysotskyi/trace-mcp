@@ -156,7 +156,7 @@ const INJECTION_LINE_PATTERNS: RegExp[] = [
   // Role markers an injection uses to fake a new turn.
   /^\s*(system|assistant|user)\s*:/i,
   // Chat-template / role tokens.
-  /<\|?(im_start|im_end|system|assistant|user)\|?>/i,
+  /<\|(im_start|im_end|system|assistant|user)\|>|<im_(start|end)>/i,
   // "you are now …", "act as …", "new instructions:".
   /^\s*(you are now\b|act as\b|new instructions?\b)/i,
 ];
