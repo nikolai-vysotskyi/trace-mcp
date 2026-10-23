@@ -470,3 +470,34 @@ it counts sleep as an active stall and can run before the main thread on wake.
 This is a confirmed false kill, distinct from the no-sleep blockage in
 TRA-2603. TRA-2622 owns the watchdog fix; TRA-2583 / draft PR #1694 addresses
 only the same-thread lag monitor.
+
+---
+
+## 2026-10-24 — memory persists after unpinned projects unload
+
+Read-only observation of the installed v3.38.0 daemon (PID 80521, uptime about
+27 hours). The one-minute `Daemon vitals` records show a project sweep reducing
+the loaded count while the process retained most of its memory:
+
+| UTC | Loaded | Pinned | Indexing | RSS | Heap used |
+|---|---:|---:|---:|---:|---:|
+| 2026-10-23 21:50:02 | 4 | 1 | 0 | 4,705 MB | 2,658 MB |
+| 21:51:02–21:57:02 | 3 | 0 | 0 | 4,676–4,735 MB | 2,542–2,698 MB |
+| 21:58:02 | 3 | 0 | 0 | 4,512 MB | 2,503 MB |
+| 21:59:02 | 2 | 0 | 0 | 4,492 MB | 2,529 MB |
+| 22:00:02 | 2 | 0 | 0 | 4,494 MB | 2,544 MB |
+
+At 21:59:01 the log explicitly records `Unloading idle project (stays
+registered)`. No event-loop stall is recorded in this window. A read-only
+`/debug/memory` request shortly after 22:01 reported 5,378 MB RSS and 2,722 MB
+heap used, but by then two projects had loaded again, so that later reading is
+not part of the two-project plateau. Its reported compact session-journal
+bytes were zero; the tree cache was about 10 MB.
+
+This is stronger evidence than the earlier samples with session-pinned
+projects: the high heap persisted for at least nine minutes with zero pins,
+then remained above 2.5 GB after another project unloaded. It does not prove
+that unloaded projects are the retained objects, nor is this a controlled idle
+baseline: watcher activity and recent indexing may still influence RSS. A
+heap snapshot or per-project retained-size attribution is needed to identify
+the accumulator. TRA-2061 owns that investigation.
