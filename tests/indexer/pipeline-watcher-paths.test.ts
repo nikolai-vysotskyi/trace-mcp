@@ -70,6 +70,7 @@ describe('indexFiles() — full-walk include gates', () => {
       'docs/outside.md': '# Outside\n',
       '.hidden/secret.ts': 'export const secret = 1;\n',
       'src/.hidden/secret.ts': 'export const nestedSecret = 1;\n',
+      'vendor/src/extra.ts': 'export const extra = 1;\n',
     });
     store = createTestStore();
     const registry = new PluginRegistry();
@@ -99,5 +100,70 @@ describe('indexFiles() — full-walk include gates', () => {
     ]);
     expect(result.indexed).toBe(1);
     expect(store.getAllFiles().map((f) => f.path)).toEqual(['src/allowed.ts']);
+  });
+
+  it('does not use the deep fallback when rooted include paths exist', async () => {
+    const result = await pipeline.indexFiles(['vendor/src/extra.ts']);
+    expect(result.totalFiles).toBe(0);
+    expect(store.getAllFiles().map((f) => f.path)).toEqual(['src/allowed.ts']);
+  });
+});
+
+describe('indexFiles() — negated include globs', () => {
+  it('applies negations without admitting unrelated paths', async () => {
+    const root = createTmpFixture({
+      'src/allowed.ts': 'export const allowed = 1;\n',
+      'src/generated/extra.ts': 'export const extra = 1;\n',
+      'docs/outside.md': '# Outside\n',
+    });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({
+        include: ['src/**/*.ts', '!src/generated/**'],
+        exclude: [],
+      }),
+      root,
+    );
+    try {
+      const result = await pipeline.indexFiles([
+        'src/generated/extra.ts',
+        'docs/outside.md',
+        'src/allowed.ts',
+      ]);
+      expect(result.indexed).toBe(1);
+      expect(store.getAllFiles().map((f) => f.path)).toEqual(['src/allowed.ts']);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
+  });
+});
+
+describe('indexFiles() — rooted include fallback', () => {
+  it('accepts a nested source when the full walk has no root match', async () => {
+    const root = createTmpFixture({
+      'nested/src/deep.ts': 'export const deep = 1;\n',
+    });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['src/**/*.ts'], exclude: [] }),
+      root,
+    );
+    try {
+      const result = await pipeline.indexFiles(['nested/src/deep.ts']);
+      expect(result.indexed).toBe(1);
+      expect(store.getAllFiles().map((f) => f.path)).toEqual(['nested/src/deep.ts']);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
   });
 });

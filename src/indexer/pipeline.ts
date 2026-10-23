@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import fg from 'fast-glob';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { disableBulkMode, enableBulkMode } from '../db/schema.js';
@@ -1621,14 +1622,55 @@ export class IndexingPipeline {
   private _excludeMatcher?: (p: string) => boolean;
   private _includeMatcher?: (p: string) => boolean;
 
-  /** Match the full walk's include patterns, including its nested-root fallbacks. */
+  /** Match the full walk's include patterns and conditional nested-root fallbacks. */
   private getIncludeMatcher(): (p: string) => boolean {
     if (!this._includeMatcher) {
-      const includes = this.config.include;
-      const rooted = includes.filter((p) => !p.startsWith('**/'));
-      this._includeMatcher = picomatch([...includes, ...rooted.map((p) => `**/${p}`)], {
-        dot: false,
-      });
+      const positives = this.config.include.filter((p) => !p.startsWith('!'));
+      const negatives = this.config.include.filter((p) => p.startsWith('!')).map((p) => p.slice(1));
+      const rooted = positives.filter((p) => !p.startsWith('**/'));
+      const direct = picomatch(positives, { dot: false });
+      const excluded = picomatch(negatives, { dot: false });
+      const deep = picomatch(
+        rooted.map((p) => `**/${p}`),
+        { dot: false },
+      );
+      const rootedOnly = picomatch(rooted, { dot: false });
+      let workspaces: WorkspaceInfo[] | undefined;
+      let hasRootedFiles: boolean | undefined;
+      this._includeMatcher = (relPosix) => {
+        if (excluded(relPosix)) return false;
+        if (direct(relPosix)) return true;
+        if (!rooted.length || !deep(relPosix)) return false;
+
+        // collectFiles() also anchors rooted globs at detected workspaces.
+        workspaces ??= this.workspaces.length
+          ? this.workspaces
+          : this.config.children?.length
+            ? buildMultiRootWorkspaces(this.rootPath, this.config.children)
+            : detectWorkspaces(this.rootPath);
+        if (
+          workspaces.some(
+            (ws) =>
+              relPosix.startsWith(`${ws.path}/`) && rootedOnly(relPosix.slice(ws.path.length + 1)),
+          )
+        ) {
+          return true;
+        }
+
+        // The full walk tries **/ fallbacks only when no rooted pattern
+        // matched at the project root. This scan happens once, and only for
+        // an event that could use that fallback; normal edits stay O(1).
+        hasRootedFiles ??=
+          fg.sync([...rooted, ...negatives.map((p) => `!${p}`)], {
+            cwd: this.rootPath,
+            ignore: [...this.config.exclude, ...descendantExcludeGlobs(this.rootPath)],
+            dot: false,
+            onlyFiles: true,
+            suppressErrors: true,
+            followSymbolicLinks: this.config.follow_symlinks,
+          }).length > 0;
+        return !hasRootedFiles && relPosix.split('/').length <= 6;
+      };
     }
     return this._includeMatcher;
   }
