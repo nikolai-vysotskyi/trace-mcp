@@ -1427,6 +1427,7 @@ export class IndexingPipeline {
     // never touch — e.g. Laravel storage/framework/sessions blobs arriving on
     // every web request.
     const isExcluded = this.getExcludeMatcher();
+    const isIncluded = this.getIncludeMatcher();
     // A registered descendant owns its own subtree — drop its files so an
     // umbrella root's watcher-driven reindex is a no-op instead of a second,
     // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
@@ -1448,6 +1449,10 @@ export class IndexingPipeline {
       const relPosix = rel.split(path.sep).join('/');
       if (isExcluded(relPosix)) {
         logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+        continue;
+      }
+      if (!isIncluded(relPosix)) {
+        logger.debug({ file: rel }, 'Path outside include skipped in indexFiles');
         continue;
       }
       if (ownedByDescendant?.(relPosix)) {
@@ -1614,6 +1619,19 @@ export class IndexingPipeline {
   }
 
   private _excludeMatcher?: (p: string) => boolean;
+  private _includeMatcher?: (p: string) => boolean;
+
+  /** Match the full walk's include patterns, including its nested-root fallbacks. */
+  private getIncludeMatcher(): (p: string) => boolean {
+    if (!this._includeMatcher) {
+      const includes = this.config.include;
+      const rooted = includes.filter((p) => !p.startsWith('**/'));
+      this._includeMatcher = picomatch([...includes, ...rooted.map((p) => `**/${p}`)], {
+        dot: false,
+      });
+    }
+    return this._includeMatcher;
+  }
 
   /** Lazily-built picomatch matcher over config.exclude (POSIX rel paths). */
   private getExcludeMatcher(): (p: string) => boolean {

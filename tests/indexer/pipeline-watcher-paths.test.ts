@@ -57,3 +57,47 @@ describe('indexFiles() — directory entries in the batch', () => {
     expect(paths.some((p) => p === 'sub')).toBe(false);
   });
 });
+
+describe('indexFiles() — full-walk include gates', () => {
+  let root: string;
+  let store: Store;
+  let pipeline: IndexingPipeline;
+
+  beforeAll(() => {
+    root = createTmpFixture({
+      'src/allowed.ts': 'export const allowed = 1;\n',
+      'src/i18n/en.json': '{"extra": 1}\n',
+      'docs/outside.md': '# Outside\n',
+      '.hidden/secret.ts': 'export const secret = 1;\n',
+      'src/.hidden/secret.ts': 'export const nestedSecret = 1;\n',
+    });
+    store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['src/**/*.ts'], exclude: [] }),
+      root,
+    );
+  });
+
+  afterAll(() => removeTmpDir(root));
+
+  it('rejects files outside include, including JSON data and Markdown', async () => {
+    const result = await pipeline.indexFiles(['src/i18n/en.json', 'docs/outside.md']);
+    expect(result.indexed).toBe(0);
+    expect(result.totalFiles).toBe(0);
+    expect(store.getAllFiles()).toEqual([]);
+  });
+
+  it('rejects dot directories while retaining included source files', async () => {
+    const result = await pipeline.indexFiles([
+      '.hidden/secret.ts',
+      'src/.hidden/secret.ts',
+      'src/allowed.ts',
+    ]);
+    expect(result.indexed).toBe(1);
+    expect(store.getAllFiles().map((f) => f.path)).toEqual(['src/allowed.ts']);
+  });
+});
