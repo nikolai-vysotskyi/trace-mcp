@@ -6712,3 +6712,65 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+### Afternoon pass, 2026-10-23 (TRA-2634): mention sweep (majiayu000/claude-skill-registry, roy-tong/AgentMeasure), codegraph indexFiles write-lock & absent-method skip, graphify Rust use crate-scope & structural YAML, serena BSL 1.0.7
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 2 new hits outside seen list (`ops/mentions-seen.txt`): `majiayu000/claude-skill-registry` and `roy-tong/AgentMeasure`.
+- Inspection:
+  - `majiayu000/claude-skill-registry` (689★, 105 forks): Searchable Claude Code skills catalog that crawled and ingested trace-mcp's 4 skill files (`trace-mcp`, `trace-mcp-codemod`, `trace-mcp-refactoring`, `trace-mcp-pre-commit`) and published them in its registry (`https://majiayu000.github.io/claude-skill-registry/?q=trace-mcp`). Genuine surface, organic skill ingestion. Added to `ops/mentions-seen.txt`.
+  - `roy-tong/AgentMeasure` (217★, 9 forks): Claude / Codex log inspection and metering verification tool. In `campaigns/audit-report-2026-09.md`, cites `trace-mcp #1175` under verified post-publication fixes. Genuine surface, historical audit citation. Added to `ops/mentions-seen.txt`.
+  - External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph indexFiles write-lock, absent-method resolution skip & re-export signatures**:
+  - Merged PR #2845 (`fix(library)`): `CodeGraph.indexFiles()` now holds cross-process write lock until files are stored. Previously, returning `this.orchestrator.indexFiles(...)` from inside `try { ... } finally { this.fileLock.release(); }` without `await` caused the `finally` block to execute immediately while the async extraction promise was still pending, prematurely releasing the lock file before storage completed and allowing external writers (`codegraph sync`, CLI, MCP) into the same index.
+  - Merged PR #2844 (`fix(ts)`): Follow-up to #2837. `export type * from './types'` re-export statements now retain their original written syntax in import nodes instead of storing blanked `export      * from './types'`. Wasm and kernel extractors opt in per-file (`blanksExportTypeStar`) to read source as written.
+  - Merged PR #2843 (`fix(cfml)`): Unparseable `<cfquery>` or `<cfscript>` blocks no longer flag entire CFML files with parse errors.
+  - Merged PR #2841 (`fix(cfml)`): `createObject("component", path)` links to target component and resolves chained `.init()` calls.
+  - Merged PR #2840 (`perf(resolution)`): Skip receiver typing for JS/TS calls when method name does not exist in the loaded node names index (`SELECT DISTINCT name FROM nodes`). Short-circuits absent-name calls (`list.push()`, `fs.writeFileSync()`), saving 1–2% of full indexing time and reducing method inference overhead by 24–31% across large codebases (#2829).
+  - Open PR #2839 (`feat(cli)`): `codegraph implementations <name>` CLI subcommand to list types implementing or extending an interface or class (#2833).
+- **Graphify-Labs/graphify Rust cross-crate use scoping, structural YAML extraction & Objective-C closed enums**:
+  - Open PR #4712 (`fix(rust)`): Scopes Rust `use` to the crate it names (#4699). Previously, `_rewire_unique_stub_nodes` bound sourceless stubs to any unique matching label in the corpus regardless of crate origin, minting false cross-crate edges (e.g. `use serde_json::Value` binding to an `axum-core` enum variant). Now introspects nearest `Cargo.toml`, tracks first path segment on stubs (`_rust_use_roots`), and marks unresolved bindings as `INFERRED`.
+  - Open PR #4706 (`fix(detect/extract)`): Structural extraction for `.yaml` / `.yml` config files (#2214). Reclassifies YAML from documents to code; uses PyYAML parser with 1 MiB limit, 500 pairs / depth 6 cap, and deterministic node IDs for Helm charts, K8s manifests, and CI workflows.
+  - Open PR #4705 (`feat(objc)`): Extracts `NS_CLOSED_ENUM` macro declarations in Objective-C as first-class enum nodes with `case_of` edges.
+  - Open PR #4708 (`security`): Blocks multicast and unspecified IP addresses in `_ip_is_blocked`.
+  - Open PR #4707 (`fix(extract)`): Prevents promoting module-imported same-named calls to EXTRACTED (#2945).
+- **oraios/serena BSL language server 1.0.7 with progress-based readiness**:
+  - Open PR #2202: Upgrades BSL (1C:Enterprise / OneScript) to `bsl-language-server 1.0.7` via `DownloadedDependency`, adds progress-based readiness detection via `$/progress` replacing fixed 2s delay, adds configurable `jvm_options` (mitigating ~2.4 GB default RSS footprint), and re-enables BSL tests.
+- **jgravelle/jcodemunch-mcp function-level text search context merged**:
+  - Merged PR #1223: Release v1.108.395 enclosing function scope reporting in text search matches (`feat: a text match says which function it is in`).
+- **DeusData/codebase-memory-mcp**:
+  - Open PR #2774: Folds prefixed and triple-quoted Python string URLs in extractor.
+
+**Competitor pulse (as of 2026-10-23 14:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,992★ (+2), 1,596 forks (=)
+- oraios/serena: 30,649★ (+8), 2,086 forks (+1)
+- DeusData/codebase-memory-mcp: 47,311★ (+18), 3,885 forks (+3)
+- tirth8205/code-review-graph: 32,342★ (+2), 2,954 forks (=)
+- colbymchenry/codegraph: 74,994★ (+58), 4,877 forks (+10)
+- abhigyanpatwari/GitNexus: 48,009★ (+2), 5,200 forks (=)
+- jgravelle/jcodemunch-mcp: 2,797★ (=), 375 forks (=)
+- continuedev/continue: 36,293★ (+3), 5,510 forks (+2)
+- Aider-AI/aider: 49,713★ (+5), 5,100 forks (+1)
+- Graphify-Labs/graphify: 133,607★ (+120), 12,767 forks (+13)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
