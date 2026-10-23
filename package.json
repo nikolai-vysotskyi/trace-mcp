@@ -122,7 +122,7 @@
     "web-tree-sitter": "^0.27.0",
     "xxhash-wasm": "^1.1.0",
     "yaml": "^2.8.3",
-    "zod": "^4.3.6"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
@@ -168,7 +168,7 @@
   },
   "pnpm": {
     "overrides": {
-      "zod": "4.3.6",
+      "zod": "4.6.6",
       "qs": ">=6.16.0",
       "protobufjs@<8.6.6": ">=8.6.6",
       "hono": ">=4.13.12",
