@@ -20,14 +20,14 @@ import { createTestStore } from '../../../tests/test-utils.js';
 
 const DEBOUNCE_MS = 10 * 60_000;
 
-function makeSetup(rootDir: string) {
+function makeSetup(rootDir: string, include = ['src/**/*.ts']) {
   const store = createTestStore();
   const registry = new PluginRegistry();
   registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
 
   const config = TraceMcpConfigSchema.parse({
     root: rootDir,
-    include: ['src/**/*.ts'],
+    include,
     exclude: [],
   });
 
@@ -122,5 +122,53 @@ describe('coverage reconcile on deletions (TRA-2557)', () => {
     // Reindex should not have run because |gap| = |9 - 11| = 2 < 10
     expect(indexAllSpy).not.toHaveBeenCalled();
     indexAllSpy.mockRestore();
+  });
+
+  it('counts normal files matching wildcard shape like XXexternalYY/foo.ts in coverage drift', async () => {
+    // Regression test for TRA-2557: LIKE '__external__/%' treated '_' as single-character wildcard,
+    // which would exclude 'XXexternalYY/foo.ts' from indexed count. With GLOB, it is correctly counted.
+    const { store: customStore, pipeline: customPipeline } = makeSetup(rootDir, ['**/*.ts']);
+    try {
+      fs.mkdirSync(path.join(rootDir, 'XXexternalYY'), { recursive: true });
+      fs.writeFileSync(
+        path.join(rootDir, 'XXexternalYY', 'foo.ts'),
+        'export function foo() { return "foo"; }\n',
+      );
+      for (let i = 0; i < 14; i++) {
+        fs.writeFileSync(
+          path.join(rootDir, `file${i}.ts`),
+          `export function fn${i}() { return ${i}; }\n`,
+        );
+      }
+      await customPipeline.indexAll();
+      expect(customStore.getStats().totalFiles).toBe(15);
+
+      // Verify that XXexternalYY/foo.ts is counted in the coverage drift query
+      const row = customStore.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
+        )
+        .get() as { c: number };
+      expect(row.c).toBe(15);
+
+      // Delete 11 files from disk (file0..file9 + XXexternalYY/foo.ts)
+      for (let i = 0; i < 10; i++) {
+        fs.unlinkSync(path.join(rootDir, `file${i}.ts`));
+      }
+      fs.unlinkSync(path.join(rootDir, 'XXexternalYY', 'foo.ts'));
+
+      // Delete file0 in pipeline to schedule coverage reconcile
+      customPipeline.deleteFiles(['file0.ts']);
+
+      // onDisk = 4 (file10..file13)
+      // indexed in DB = 14 (file0 removed, but XXexternalYY/foo.ts is still in DB as a ghost)
+      // gap = 4 - 14 = -10, |gap| >= 10, so reconcile should run and purge ghosts!
+      await customPipeline.__flushCoverageReconcileForTests();
+
+      expect(customStore.getStats().totalFiles).toBe(4);
+      expect(customStore.getFile('XXexternalYY/foo.ts')).toBeUndefined();
+    } finally {
+      await customPipeline.dispose();
+    }
   });
 });

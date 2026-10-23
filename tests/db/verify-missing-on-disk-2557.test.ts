@@ -107,4 +107,32 @@ describe('verifyIndex — missing_on_disk check (TRA-2557)', () => {
     expect(check?.detail).toContain('src/deleted1.ts');
     expect(check?.detail).toContain('src/deleted2.ts');
   });
+
+  it('does not falsely ignore normal files matching wildcard shape like XXexternalYY/foo.ts', () => {
+    // Regression test for TRA-2557: SQLite LIKE '__external__/%' treated '_' as single-character
+    // wildcard, causing ordinary paths like 'XXexternalYY/foo.ts' to be falsely excluded from check.
+    // With GLOB '__external__/*', only literal '__external__/' prefix is excluded.
+    db.prepare('INSERT INTO files (id, path) VALUES (?, ?)').run(1, 'XXexternalYY/foo.ts');
+
+    // 1. File does not exist on disk in tempDir -> must be reported as missing
+    const reportMissing = verifyIndex(db, { root: tempDir });
+    expect(reportMissing.ok).toBe(false);
+    expect(reportMissing.status).toBe('warn');
+    const checkMissing = reportMissing.checks.find((c) => c.name === 'missing_on_disk');
+    expect(checkMissing).toBeDefined();
+    expect(checkMissing?.status).toBe('warn');
+    expect(checkMissing?.count).toBe(1);
+    expect(checkMissing?.detail).toContain('XXexternalYY/foo.ts');
+
+    // 2. File exists on disk in tempDir -> must be verified as existing
+    fs.mkdirSync(path.join(tempDir, 'XXexternalYY'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'XXexternalYY', 'foo.ts'), 'export const foo = 1;');
+
+    const reportOk = verifyIndex(db, { root: tempDir });
+    expect(reportOk.ok).toBe(true);
+    expect(reportOk.status).toBe('ok');
+    const checkOk = reportOk.checks.find((c) => c.name === 'missing_on_disk');
+    expect(checkOk?.status).toBe('ok');
+    expect(checkOk?.detail).toContain('All 1 indexed files exist on disk');
+  });
 });

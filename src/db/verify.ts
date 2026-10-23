@@ -451,7 +451,7 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
     try {
       const rows = db
         .prepare(
-          "SELECT path FROM files WHERE path NOT LIKE '__external__/%' AND path != '__external__'",
+          "SELECT path FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
         )
         .all() as Array<{ path: string }>;
       const missing: string[] = [];

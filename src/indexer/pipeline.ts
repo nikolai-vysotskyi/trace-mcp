@@ -2387,7 +2387,7 @@ export class IndexingPipeline {
       if (this._disposed || !this.store.db.open) return;
       const row = this.store.db
         .prepare(
-          "SELECT COUNT(*) as c FROM files WHERE path NOT LIKE '__external__/%' AND path != '__external__'",
+          "SELECT COUNT(*) as c FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
         )
         .get() as { c: number } | undefined;
       const indexed = row?.c ?? 0;
