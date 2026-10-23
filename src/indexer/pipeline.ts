@@ -1399,6 +1399,7 @@ export class IndexingPipeline {
     if (filesToDelete.size > 0) {
       invalidatePageRankCache();
       invalidateSearchCache(this.store.db);
+      this.scheduleCoverageReconcile();
       logger.info({ count: filesToDelete.size }, 'Deleted files from index');
     }
   }
@@ -2383,10 +2384,15 @@ export class IndexingPipeline {
       // don't repeat the expensive collectFiles() disk walk every minute.
       this._lastCoverageReconcileMs = Date.now();
       const onDisk = (await this.collectFiles()).files.length;
-      if (this._disposed) return;
-      const indexed = this.store.getStats().totalFiles;
+      if (this._disposed || !this.store.db.open) return;
+      const row = this.store.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
+        )
+        .get() as { c: number } | undefined;
+      const indexed = row?.c ?? 0;
       const gap = onDisk - indexed;
-      if (gap < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
+      if (Math.abs(gap) < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
       logger.info(
         { root: this.rootPath, onDisk, indexed, gap },
         'Coverage drift detected — running a full hash-gated reindex',
