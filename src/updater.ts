@@ -677,12 +677,14 @@ export async function runPostUpdateMigrations(): Promise<void> {
     },
     { updateClaudeMd },
     { listProjects, markAllProjectsPendingReindex },
+    { refreshStampAfterHookRefresh },
   ] = await Promise.all([
     import('./config-jsonc.js'),
     import('./init/detector.js'),
     import('./init/hooks.js'),
     import('./init/claude-md.js'),
     import('./registry.js'),
+    import('./init/version-stamp.js'),
   ]);
 
   // 1. Migrate global config
@@ -693,6 +695,7 @@ export async function runPostUpdateMigrations(): Promise<void> {
   }
 
   // 2. Re-install hooks (idempotent — overwrites scripts + patches settings.json)
+  let hookRefreshFailed = false;
   const { hasGuardHook } = detectGuardHook();
   if (hasGuardHook) {
     try {
@@ -702,6 +705,7 @@ export async function runPostUpdateMigrations(): Promise<void> {
       installWorktreeHook({ global: true });
       logger.info('Post-update: hooks upgraded');
     } catch (err) {
+      hookRefreshFailed = true;
       logger.warn({ error: err }, 'Post-update: hook upgrade failed (non-fatal)');
     }
   }
@@ -716,6 +720,7 @@ export async function runPostUpdateMigrations(): Promise<void> {
       installMirrorHook({ global: true });
       logger.info('Post-update: mirror hook upgraded');
     } catch (err) {
+      hookRefreshFailed = true;
       logger.warn({ error: err }, 'Post-update: mirror hook upgrade failed (non-fatal)');
     }
   }
@@ -761,6 +766,25 @@ export async function runPostUpdateMigrations(): Promise<void> {
       { count: projects.length, marked, version: CURRENT_VERSION },
       'Post-update: marked projects for lazy reindex (deferred to ProjectManager.addProject)',
     );
+  }
+
+  // 5. Refresh version stamp so subsequent sessions don't report false drift,
+  // but ONLY if hook upgrade succeeded — if hooks failed to install, preserve
+  // the drift warning so the user is alerted to the stale scripts.
+  try {
+    const refreshed = refreshStampAfterHookRefresh(CURRENT_VERSION, {
+      skipHooks: hookRefreshFailed,
+    });
+    if (refreshed) {
+      logger.info({ version: CURRENT_VERSION }, 'Post-update: version stamp refreshed');
+    } else if (hookRefreshFailed) {
+      logger.warn(
+        { version: CURRENT_VERSION },
+        'Post-update: version stamp refresh skipped because hook upgrade failed',
+      );
+    }
+  } catch (err) {
+    logger.warn({ error: err }, 'Post-update: version stamp refresh failed (non-fatal)');
   }
 
   logger.info({ version: CURRENT_VERSION }, 'Post-update: migrations complete');

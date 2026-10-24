@@ -39,6 +39,33 @@ export function writeStampedVersion(version: string, stampPath: string = STAMP_P
   }
 }
 
+export interface RefreshStampOptions {
+  /** If true, do not write to disk (dry run). */
+  dryRun?: boolean;
+  /** If true, hooks were intentionally skipped, so stamp must not be refreshed. */
+  skipHooks?: boolean;
+}
+
+/**
+ * Refresh the version stamp after a command or background path has brought
+ * hooks up-to-date with `version`.
+ *
+ * Skips write when:
+ *  - `dryRun` is true (no side effects allowed)
+ *  - `skipHooks` is true (hooks were intentionally not updated, so stale warning should remain)
+ *  - `version` is invalid or empty
+ *
+ * Returns true if the stamp was written, false if skipped or on I/O error.
+ */
+export function refreshStampAfterHookRefresh(
+  version: string,
+  opts: RefreshStampOptions = {},
+  stampPath: string = STAMP_PATH,
+): boolean {
+  if (opts.dryRun || opts.skipHooks) return false;
+  return writeStampedVersion(version, stampPath);
+}
+
 /**
  * Read the stamp. Returns null when the file is missing, unreadable, or
  * empty so the caller can fall through to "no drift to report".

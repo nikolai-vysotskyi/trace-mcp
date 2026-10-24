@@ -5,6 +5,7 @@ import {
   checkVersionDrift,
   computeVersionDrift,
   readStampedVersion,
+  refreshStampAfterHookRefresh,
   versionDriftMessage,
   writeStampedVersion,
 } from '../../src/init/version-stamp.js';
@@ -131,5 +132,50 @@ describe('checkVersionDrift (integration)', () => {
     expect(r.drift).toBe(true);
     expect(r.stamped).toBe('1.0.0');
     expect(r.installed).toBe('2.0.0');
+  });
+});
+
+describe('refreshStampAfterHookRefresh', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = createTmpDir('refresh-stamp-');
+  });
+  afterEach(() => {
+    removeTmpDir(tmpDir);
+  });
+
+  it('writes stamp when options are empty / omitted', () => {
+    const stamp = path.join(tmpDir, 'last_init_version.txt');
+    expect(refreshStampAfterHookRefresh('3.29.0', {}, stamp)).toBe(true);
+    expect(readStampedVersion(stamp)).toBe('3.29.0');
+  });
+
+  it('skips write when dryRun is true', () => {
+    const stamp = path.join(tmpDir, 'last_init_version.txt');
+    expect(refreshStampAfterHookRefresh('3.29.0', { dryRun: true }, stamp)).toBe(false);
+    expect(readStampedVersion(stamp)).toBeNull();
+  });
+
+  it('skips write when skipHooks is true', () => {
+    const stamp = path.join(tmpDir, 'last_init_version.txt');
+    expect(refreshStampAfterHookRefresh('3.29.0', { skipHooks: true }, stamp)).toBe(false);
+    expect(readStampedVersion(stamp)).toBeNull();
+  });
+
+  it('acceptance: clears false drift on upgrade but preserves warning when hooks skipped', () => {
+    const stamp = path.join(tmpDir, 'last_init_version.txt');
+    // Pre-condition: user has 1.45.0 stamp from older version
+    writeStampedVersion('1.45.0', stamp);
+    expect(checkVersionDrift('3.29.0', stamp).drift).toBe(true);
+
+    // If upgraded with --skip-hooks, stamp is untouched and drift remains
+    refreshStampAfterHookRefresh('3.29.0', { skipHooks: true }, stamp);
+    expect(checkVersionDrift('3.29.0', stamp).drift).toBe(true);
+
+    // Normal upgrade brings hooks up to date and refreshes stamp
+    refreshStampAfterHookRefresh('3.29.0', {}, stamp);
+    const report = checkVersionDrift('3.29.0', stamp);
+    expect(report.drift).toBe(false);
+    expect(versionDriftMessage(report)).toBe('');
   });
 });
