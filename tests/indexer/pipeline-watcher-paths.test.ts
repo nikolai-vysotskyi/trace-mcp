@@ -9,6 +9,8 @@
  * 18 directory paths completed as `{ indexed: 67, errors: 18 }` with eighteen
  * `Cannot read file` warns — and retried with the same 18 errors. TRA-1649.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
@@ -141,6 +143,25 @@ describe('indexFiles() — negated include globs', () => {
       removeTmpDir(root);
     }
   });
+
+  it('keeps a leading negative extglob as a positive include', async () => {
+    const root = createTmpFixture({ 'src/allowed.ts': 'export const allowed = 1;\n' });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['!(test)/**/*.ts'], exclude: [] }),
+      root,
+    );
+    try {
+      expect((await pipeline.indexFiles(['src/allowed.ts'])).indexed).toBe(1);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
+  });
 });
 
 describe('indexFiles() — rooted include fallback', () => {
@@ -161,6 +182,79 @@ describe('indexFiles() — rooted include fallback', () => {
       const result = await pipeline.indexFiles(['nested/src/deep.ts']);
       expect(result.indexed).toBe(1);
       expect(store.getAllFiles().map((f) => f.path)).toEqual(['nested/src/deep.ts']);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
+  });
+
+  it('ignores root matches in built-in skipped directories', async () => {
+    const root = createTmpFixture({
+      'build/output.ts': 'export const built = 1;\n',
+      'nested/src/deep.ts': 'export const deep = 1;\n',
+    });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['src/**/*.ts', 'build/**/*.ts'], exclude: [] }),
+      root,
+    );
+    try {
+      expect((await pipeline.indexFiles(['build/output.ts', 'nested/src/deep.ts'])).indexed).toBe(
+        1,
+      );
+      expect(store.getAllFiles().map((f) => f.path)).toEqual(['nested/src/deep.ts']);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
+  });
+
+  it('respects the full walk depth limit', async () => {
+    const root = createTmpFixture({
+      'a/b/c/src/allowed.ts': 'export const allowed = 1;\n',
+      'a/b/c/d/src/tooDeep.ts': 'export const tooDeep = 1;\n',
+    });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['src/**/*.ts'], exclude: [] }),
+      root,
+    );
+    try {
+      const result = await pipeline.indexFiles(['a/b/c/src/allowed.ts', 'a/b/c/d/src/tooDeep.ts']);
+      expect(result.indexed).toBe(1);
+      expect(store.getAllFiles().map((f) => f.path)).toEqual(['a/b/c/src/allowed.ts']);
+    } finally {
+      await pipeline.dispose();
+      removeTmpDir(root);
+    }
+  });
+
+  it('refreshes fallback eligibility after root files change', async () => {
+    const root = createTmpFixture({
+      'src/root.ts': 'export const root = 1;\n',
+      'nested/src/deep.ts': 'export const deep = 1;\n',
+    });
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const pipeline = new IndexingPipeline(
+      store,
+      registry,
+      TraceMcpConfigSchema.parse({ include: ['src/**/*.ts'], exclude: [] }),
+      root,
+    );
+    try {
+      expect((await pipeline.indexFiles(['nested/src/deep.ts'])).totalFiles).toBe(0);
+      fs.unlinkSync(path.join(root, 'src/root.ts'));
+      expect((await pipeline.indexFiles(['nested/src/deep.ts'])).indexed).toBe(1);
     } finally {
       await pipeline.dispose();
       removeTmpDir(root);
