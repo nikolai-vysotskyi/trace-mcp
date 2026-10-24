@@ -127,8 +127,8 @@ export function caller${i}(): number { return fn${(i + 1) % 20}(); }
     }
     delete process.env.TRACE_MCP_DATA_DIR;
     delete process.env.TRACE_MCP_HOME;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-    fs.rmSync(testRoot, { recursive: true, force: true });
+    fs.rmSync(tmpHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     vi.restoreAllMocks();
   });
 
@@ -191,13 +191,16 @@ export function caller${i}(): number { return fn${(i + 1) % 20}(); }
 
     // On restart, the project can be loaded and re-indexed cleanly
     pm = new ProjectManager();
-    await pm.addProject(testRoot);
-    const db = initializeDatabase(registry.getProject(testRoot)!.dbPath);
-    const store = new Store(db);
-    expect(db.open).toBe(true);
+    const managed = await pm.addProject(testRoot);
+    if (managed.initialIndexPromise) {
+      await managed.initialIndexPromise;
+    }
+    const store = new Store(managed.db);
+    expect(managed.db.open).toBe(true);
     const files = store.getAllFiles();
     expect(files.length).toBeGreaterThan(0);
-    db.close();
+    await pm.shutdown();
+    pm = null;
   });
 
   it('aborts framework resolveEdges and storeRawEdges cleanly during shutdown without database closed errors', async () => {
@@ -249,12 +252,15 @@ export function caller${i}(): number { return fn${(i + 1) % 20}(); }
 
     // Verify consistency on restart
     pm = new ProjectManager();
-    await pm.addProject(testRoot);
-    const db = initializeDatabase(registry.getProject(testRoot)!.dbPath);
-    const store = new Store(db);
-    expect(db.open).toBe(true);
+    const managed = await pm.addProject(testRoot);
+    if (managed.initialIndexPromise) {
+      await managed.initialIndexPromise;
+    }
+    const store = new Store(managed.db);
+    expect(managed.db.open).toBe(true);
     expect(store.getAllFiles().length).toBeGreaterThan(0);
-    db.close();
+    await pm.shutdown();
+    pm = null;
   });
 
   it('aborts multi-chunk commitInChunks during resolvePhpCallEdges when shutdown triggers between chunks', async () => {
@@ -303,11 +309,14 @@ export function caller${i}(): number { return fn${(i + 1) % 20}(); }
 
     // On restart, verification
     pm = new ProjectManager();
-    await pm.addProject(testRoot);
-    const db = initializeDatabase(registry.getProject(testRoot)!.dbPath);
-    const store = new Store(db);
-    expect(db.open).toBe(true);
+    const managed = await pm.addProject(testRoot);
+    if (managed.initialIndexPromise) {
+      await managed.initialIndexPromise;
+    }
+    const store = new Store(managed.db);
+    expect(managed.db.open).toBe(true);
     expect(store.getAllFiles().length).toBeGreaterThan(0);
-    db.close();
+    await pm.shutdown();
+    pm = null;
   });
 });

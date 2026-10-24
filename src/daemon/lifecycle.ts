@@ -24,6 +24,7 @@ import {
   isDevCheckoutEntry,
   isEphemeralInstallPath,
   LAUNCHD_PLIST_PATH,
+  RESTART_MARKER_PATH,
   TRACE_MCP_HOME,
 } from '../global.js';
 import { readIfExists } from '../utils/safe-fs.js';
@@ -91,6 +92,122 @@ export interface EnsureResult {
   error?: string;
   /** Informational: which strategy was used to start (if started). */
   strategy?: 'launchd' | 'detached' | 'already-running' | 'none';
+  throttled?: boolean;
+}
+
+/**
+ * Minimum cooldown period between consecutive daemon restarts (TRA-1954).
+ * Prevents restart storms when parallel clients or watchdog loops attempt to
+ * restart a live, heavily indexing daemon that is temporarily slow to respond
+ * to /health.
+ */
+export const RESTART_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+export { RESTART_MARKER_PATH };
+
+export function getRestartMarkerPath(): string {
+  return path.join(TRACE_MCP_HOME, 'daemon-restart.marker');
+}
+
+/**
+ * Read the timestamp of the last recorded daemon restart.
+ * Returns null if the marker does not exist or cannot be parsed.
+ */
+export function readRestartMarker(markerPath: string = getRestartMarkerPath()): number | null {
+  try {
+    const raw = readIfExists(markerPath);
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('{')) {
+      const parsed = JSON.parse(trimmed);
+      const ts =
+        typeof parsed.restartedAt === 'number'
+          ? parsed.restartedAt
+          : typeof parsed.iso === 'string'
+            ? Date.parse(parsed.iso)
+            : null;
+      return ts !== null && Number.isFinite(ts) ? ts : null;
+    }
+    const num = Number(trimmed);
+    if (Number.isFinite(num)) return num;
+    const parsedDate = Date.parse(trimmed);
+    return Number.isFinite(parsedDate) ? parsedDate : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist the timestamp of a daemon restart to disk.
+ * Uses atomicWriteString to prevent half-written marker files.
+ */
+export function writeRestartMarker(
+  markerPath: string = getRestartMarkerPath(),
+  now: number = Date.now(),
+): void {
+  try {
+    const dir = path.dirname(markerPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const payload = JSON.stringify(
+      {
+        restartedAt: now,
+        iso: new Date(now).toISOString(),
+        pid: process.pid,
+      },
+      null,
+      2,
+    );
+    atomicWriteString(markerPath, `${payload}\n`);
+  } catch (err) {
+    logger.warn({ err: String(err), markerPath }, 'Failed to persist daemon restart marker');
+  }
+}
+
+/**
+ * Pure policy check: decides whether a restart should be throttled based on the
+ * elapsed time since the last restart.
+ */
+export function shouldThrottleLiveRestart(
+  lastRestartAt?: number | null,
+  now = Date.now(),
+  cooldownMs = RESTART_COOLDOWN_MS,
+): boolean {
+  if (lastRestartAt === null || lastRestartAt === undefined || Number.isNaN(lastRestartAt)) {
+    return false;
+  }
+  const diff = now - lastRestartAt;
+  // If the recorded restart is within cooldownMs in the past, throttle.
+  // If slight clock skew placed lastRestartAt in the future by <= cooldownMs (e.g. NTP sync / VM resume),
+  // throttle as well to prevent restart storms on clock drift.
+  // Future timestamps beyond cooldownMs are considered corrupt/invalid and not throttled.
+  if (diff < 0) {
+    return -diff < cooldownMs;
+  }
+  return diff < cooldownMs;
+}
+
+export interface RestartThrottlePolicyInput {
+  isAlive: boolean;
+  lastRestartAt?: number | null;
+  force?: boolean;
+  now?: number;
+  cooldownMs?: number;
+}
+
+/**
+ * Pure policy check: evaluates whether a restart attempt should be throttled
+ * given daemon liveness, previous restart timestamp, and the force flag.
+ *
+ * Rules:
+ * - force=true: never throttled (explicit override).
+ * - dead process (isAlive=false): never throttled (a dead daemon must be restarted).
+ * - live process (isAlive=true): throttled if restarted within RESTART_COOLDOWN_MS.
+ */
+export function shouldThrottleRestartFor(input: RestartThrottlePolicyInput): boolean {
+  if (input.force) return false;
+  if (!input.isAlive) return false;
+  return shouldThrottleLiveRestart(input.lastRestartAt, input.now, input.cooldownMs);
 }
 
 /**
@@ -1124,13 +1241,37 @@ export function stopDaemon(): { swept: number[] } {
 
 /**
  * Kill existing daemon then start a fresh one.
+ *
+ * If the daemon is currently alive and was restarted within RESTART_COOLDOWN_MS,
+ * the restart is throttled unless opts.force is true (TRA-1954).
  */
-export function restartDaemon(opts?: { port?: number }): EnsureResult {
+export function restartDaemon(
+  opts?: { port?: number; force?: boolean },
+  restartFn: (port: number) => EnsureResult = isMac ? restartDaemonMac : restartDaemonGeneric,
+): EnsureResult {
   const port = opts?.port ?? DEFAULT_DAEMON_PORT;
-  // An explicit restart is a clear intent to run the daemon — clear any opt-out.
+  const force = opts?.force ?? false;
+
+  // An explicit restart is a clear intent to run the daemon — clear any opt-out
+  // before checking throttling, so auto-spawn is re-enabled even if this restart is throttled.
   enableDaemon();
+
+  const isAlive = isDaemonProcessAlive();
+  const lastRestart = readRestartMarker();
+  if (shouldThrottleRestartFor({ isAlive, lastRestartAt: lastRestart, force })) {
+    logger.info(
+      { port, lastRestart, cooldownMs: RESTART_COOLDOWN_MS },
+      'Daemon restart throttled: daemon is alive and was recently restarted',
+    );
+    return { ok: true, throttled: true, alreadyRunning: true, strategy: 'already-running' };
+  }
+
   logLifecycleRequest('restart');
-  return isMac ? restartDaemonMac(port) : restartDaemonGeneric(port);
+  const result = restartFn(port);
+  if (result.ok) {
+    writeRestartMarker();
+  }
+  return result;
 }
 
 /**
@@ -1342,17 +1483,26 @@ export async function tryAutoSpawnDaemon(
       // Generous multi-minute wait: an indexing run can starve /health for a
       // couple of minutes. Kill+restart is reserved for a genuinely gone or
       // wedged-beyond-recovery process.
-      const backoffUp = await waitForDaemonUp(port, ALIVE_DAEMON_BACKOFF_MS);
+      const backoffMs =
+        process.env.TRACE_MCP_ALIVE_DAEMON_BACKOFF_MS &&
+        !Number.isNaN(Number(process.env.TRACE_MCP_ALIVE_DAEMON_BACKOFF_MS))
+          ? Number(process.env.TRACE_MCP_ALIVE_DAEMON_BACKOFF_MS)
+          : ALIVE_DAEMON_BACKOFF_MS;
+      const backoffUp = await waitForDaemonUp(port, backoffMs);
       if (backoffUp) {
         logger.info({ port }, 'Daemon became responsive after back-off — no restart needed');
         return { ok: true, alreadyRunning: true };
       }
-      // Still no /health after a multi-minute wait AND still alive — genuinely
-      // wedged. Fall through to restart as a last resort.
-      logger.warn(
-        { port, backoffMs: ALIVE_DAEMON_BACKOFF_MS },
-        'Daemon still unresponsive after back-off despite live process — restarting as last resort',
-      );
+      // Recheck liveness: never kill a live process from auto-spawn (TRA-1954).
+      // If it is still alive after backoff, leave it alone; session runs local-only.
+      if (isDaemonProcessAlive()) {
+        logger.warn(
+          { port, backoffMs },
+          'Daemon still unresponsive after back-off but process is alive — skipping restart to avoid death spiral; session will run local-only',
+        );
+        return { ok: true, alreadyRunning: true };
+      }
+      logger.warn({ port, backoffMs }, 'Daemon process died during back-off — restarting');
     }
 
     // Daemon is gone (or wedged beyond the back-off). One retry with restart.

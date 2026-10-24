@@ -149,7 +149,8 @@ daemonCommand
   .command('restart')
   .description('Restart the daemon')
   .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_DAEMON_PORT))
-  .action(async (opts: { port: string }) => {
+  .option('-f, --force', 'Force restart even if daemon was recently restarted')
+  .action(async (opts: { port: string; force?: boolean }) => {
     const port = parseInt(opts.port, 10);
     // Same single-instance lock as `start` (TRA-1607): a restart kills the
     // running daemon first, so a concurrent starter racing it would spawn
@@ -168,15 +169,21 @@ daemonCommand
       console.error('Another process holds the daemon spawn lock but no daemon came up.');
       process.exit(1);
     }
-    let result: { ok: boolean; error?: string; strategy?: string };
+    let result: { ok: boolean; error?: string; strategy?: string; throttled?: boolean };
     try {
-      result = restartDaemon({ port });
+      result = restartDaemon({ port, force: opts.force });
     } finally {
       releaseSpawnLock();
     }
     if (!result.ok) {
       console.error(`Failed to restart daemon: ${result.error ?? 'unknown'}`);
       process.exit(1);
+    }
+    if (result.throttled) {
+      console.log(
+        'Daemon restart was throttled: daemon is alive and was recently restarted (use --force to override).',
+      );
+      return;
     }
     // Block until /health responds — callers (the menu bar app's "Restart
     // Daemon" button, scripts, humans) need to know the daemon is actually
