@@ -11,6 +11,7 @@ import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
 import type { InferenceService, VectorStore } from './interfaces.js';
 import { PROMPTS, sanitizeGeneratedSummary, stripLeadingDocstrings } from './prompts.js';
+import { CachedInferenceService } from './cached-inference.js';
 
 interface SummarizationConfig {
   batchSize: number;
@@ -288,6 +289,11 @@ export class SummarizationPipeline {
         // unsummarized means it is retried on the next run once the model is
         // fixed, instead of being masked by a low-value signature restatement
         // that search can already derive from the stored signature.
+        // A cached raw response will sanitize to the same empty result on
+        // every later run. Discard it so a later provider response can recover.
+        if (this.inferenceService instanceof CachedInferenceService) {
+          this.inferenceService.invalidate(prompt, this.config.maxTokens ?? template.maxTokens);
+        }
         this.silentFallbacks++;
       } catch (e) {
         logger.warn({ symbolId: sym.id, name: sym.name, error: e }, 'Failed to summarize symbol');

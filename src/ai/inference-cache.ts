@@ -52,6 +52,12 @@ export class InferenceCache {
       .run(key, model, promptHash, response);
   }
 
+  delete(model: string, prompt: string, maxTokens?: number): void {
+    this.db
+      .prepare('DELETE FROM inference_cache WHERE cache_key = ?')
+      .run(this.cacheKey(model, prompt, maxTokens));
+  }
+
   evictExpired(): number {
     const result = this.db
       .prepare(
