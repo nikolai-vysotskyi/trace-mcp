@@ -267,11 +267,17 @@ describe('runPostUpdateMigrations', () => {
     // Should not throw
     await runPostUpdateMigrations();
 
-    // Should still update CLAUDE.md and stamp version
+    // Should still update CLAUDE.md and stamp installedVersion in cache
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
     const written = getWrittenCache();
     expect(written!.installedVersion).toBe('2.0.0');
+
+    // But must NOT update last_init_version.txt stamp because hook refresh failed
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeUndefined();
   });
 
   it('continues on tool-prefix migration failure', async () => {
@@ -290,6 +296,13 @@ describe('runPostUpdateMigrations', () => {
     expect(updateClaudeMd).toHaveBeenCalled();
     const written = getWrittenCache();
     expect(written!.installedVersion).toBe('2.0.0');
+
+    // Hooks succeeded, so version stamp should still be refreshed
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeDefined();
+    expect(String(stampCall![1])).toBe('2.0.0\n');
   });
 
   it('continues on CLAUDE.md update failure', async () => {
@@ -330,6 +343,39 @@ describe('runPostUpdateMigrations', () => {
 
   it('does not touch version stamp when cache does not exist', async () => {
     setupCache(null);
+    await runPostUpdateMigrations();
+
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeUndefined();
+  });
+
+  it('does not refresh version stamp when hook install fails', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.0.0' });
+
+    const hooks = await import('../src/init/hooks.js');
+    vi.mocked(hooks.installGuardHook).mockImplementation(() => {
+      throw new Error('hook fail');
+    });
+
+    await runPostUpdateMigrations();
+
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeUndefined();
+  });
+
+  it('does not refresh version stamp when mirror hook install fails', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.0.0' });
+
+    const hooks = await import('../src/init/hooks.js');
+    vi.mocked(hooks.isMirrorHookInstalled).mockReturnValue(true);
+    vi.mocked(hooks.installMirrorHook).mockImplementation(() => {
+      throw new Error('mirror hook fail');
+    });
+
     await runPostUpdateMigrations();
 
     const stampCall = mockFs.writeFileSync.mock.calls.find(
