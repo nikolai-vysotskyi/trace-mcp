@@ -7048,3 +7048,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+### Night pass, 2026-10-24 (TRA-2661): mention sweep clean, codebase-memory-mcp hybrid RRF & test demotion (#2783), GitNexus Java import memory bound (#3711), graphify node collision dedup (#4743), token-shrink & imc & T-Zero architectural telemetry
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **ajdev0/token-shrink**: Local-first AST skeletonizer and MCP server (`@ajdev0/token-shrink`, 14 languages). Strips implementation bodies from imported files while preserving type signatures/interfaces/exports for LLM agents. Features Claude Code statusline script integration (`~/.claude/settings.json statusLine`) and project stats logging (`.token-shrink/stats.json`). Contrast: trace-mcp supports 81 languages / 88 frameworks natively with zero runtime parser downloads, maintains all index/cache state globally in `~/.trace-mcp/` without polluting project roots with rule files (`.claude/rules/`, `.cursor/rules/`) or `.gitignore` entries, and provides full graph querying and atomic AST refactoring rather than only skeleton extraction.
+- **toihocweb/imc**: Polyglot code intelligence engine (single Rust binary, CLI + MCP server + local proxy + embedded web dashboard). Indexes with tree-sitter into SQLite FTS5 + vector RRF hybrid retrieval, call-graph edge tracing (`imc trace <symbol> --callers`), and context packing (`imc pack <query> --budget 6000`). Claude Code launcher (`imc claude`) proxies HTTP traffic through `http://127.0.0.1:12345` for context compression (CCR) and launches web UI on `http://localhost:4789`. Contrast: trace-mcp operates purely via native MCP stdio / local RPC without proxying external HTTP traffic, opening network ports, or intercepting API keys; stores indexes off-repo; and provides a dedicated native Electron desktop application with visual call graphs and safety-bounded refactoring tools (`apply_rename`, `confirm_large`).
+- **toprakahmetaydogmus/TZeroAlgorithm (T-Zero)**: Python 3.11+ AST context pruner and MCP server (`tzero-mcp` on PyPI) claiming up to 94.9% token reduction. Strips internal routine bodies while preserving class contracts and typed signatures across ~10 languages. Implements an Omni-Tool pattern (`execute_codebase_workflow` with 15 canonical / 48 total tools). Contrast: trace-mcp runs on zero-install Node `npx` or native desktop binary with no Python 3.11+ prerequisite, supports 81 languages via tree-sitter, and favors discrete, atomic, refactor-confined MCP query tools over heavy omni-tool wrappers.
+- **nexusvibe-ai/code-context-mcp**: Python MCP server focused on Python AST symbol extraction (`extract_python_ast_symbols`), cyclomatic complexity analysis, and TODO hotspot detection. Single-language (Python only via standard library `ast`). Contrast: trace-mcp provides polyglot cross-file symbol indexing and caller/callee resolution across 81 languages.
+
+**Competitor intelligence & architectural triage:**
+- **DeusData/codebase-memory-mcp**:
+  - *Hybrid BM25 + vector ranking via RRF (PR #2783, open)*: Key architectural insight: random-indexing node vectors alone suffered from severe vector collapse on real codebases (mean cosine to centroid was 0.981), causing `semantic_query` ranking to degenerate into noise and test code to dominate top results. Introduced hybrid Reciprocal Rank Fusion (`cbm_store_vector_search`, k=60, lexical weight 5, vector weight 1) combining FTS5 `bm25()` over `nodes_fts` with IDF-weighted token vector cosine, alongside explicit test symbol demotion and deterministic ordering. Reported benchmark on 81 queries: keyword R@10 improved from 0.099 to 0.901, test contamination in top-10 dropped from ~50% to 0.7%.
+- **abhigyanpatwari/GitNexus**:
+  - *Java import return-type memory bound (PR #3711, open)*: Resolved a quadratic heap growth bug where Java import propagation copied from module maps that earlier iterations had already expanded. On a 100-file chain with 20 methods per file, accumulated module bindings plummeted from 101,000 to 3,980. On a 1,000-file test, previously crashed with V8 heap OOM under `--max-old-space-size=512`; now completes within 211 MiB JS heap.
+  - *Wiki slug handling (PR #3710, open)*: Passes real page slugs rather than display names into parent/overview prompts to avoid broken Markdown links.
+  - *Dependency bumps (PR #3712, #3713, #3714)*: Updates `body-parser` to 2.4.0 and `fast-uri` to 3.1.9.
+- **Graphify-Labs/graphify**:
+  - *Node ID collision ranking dedup (PR #4743, open)*: Fixes #4738 where reference stubs sharing a parent path prefix with the target were mistakenly ranked as the definition, dropping the true target node. Now strictly prefers the node whose source path most specifically matches the ID.
+  - *MSBuild build directory pruning (PR #4742, open)* and *Dart unnamed extensions (PR #4741, open)*: Continue in open status.
+- **colbymchenry/codegraph**:
+  - *POSIX test temp directory cleanup (PR #2877, open)*: Cleans up temporary working directories created by npm shim and index orphan tests.
+  - *Bun build loop fix (PR #2876, merged)* and *Play Class.method reference (PR #2875, merged)*: Landed in main.
+- **jgravelle/jcodemunch-mcp**:
+  - *Release v1.108.397 shipped (PR #1227 merged)*: Landed truncated search `more_files` inventory and brace expansion in `file_pattern`.
+
+**Competitor pulse (as of 2026-10-24 18:03 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 29,009★ (+2), 1,597 forks (+2)
+- oraios/serena: 30,681★ (+5), 2,087 forks (+1)
+- DeusData/codebase-memory-mcp: 47,398★ (+9), 3,892 forks (+4)
+- tirth8205/code-review-graph: 32,373★ (+7), 2,958 forks (+1)
+- colbymchenry/codegraph: 75,208★ (+32), 4,914 forks (+3)
+- abhigyanpatwari/GitNexus: 48,017★ (+2), 5,203 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,804★ (=), 374 forks (=)
+- continuedev/continue: 36,311★ (+2), 5,514 forks (=)
+- Aider-AI/aider: 49,736★ (+2), 5,101 forks (-1)
+- Graphify-Labs/graphify: 134,302★ (+104), 12,829 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
