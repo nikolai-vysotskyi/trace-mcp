@@ -26,11 +26,22 @@ interface FakeWatcherCall {
   descendantExcludeGlobs: string[];
 }
 
+interface FakePrefixCall {
+  root: string;
+  prefix: string;
+}
+
 const watcherStartCalls: FakeWatcherCall[] = [];
 const watcherRestartCalls: FakeWatcherCall[] = [];
+const deletePrefixCalls: FakePrefixCall[] = [];
+const requestCoverageReconcileCalls: string[] = [];
 
 vi.mock('../../indexer/pipeline.js', () => {
   class FakeIndexingPipeline {
+    root: string;
+    constructor(_store?: unknown, _registry?: unknown, _config?: unknown, root?: string) {
+      this.root = root ?? '';
+    }
     async indexAll() {
       return { totalFiles: 0, indexed: 0, skipped: 0, errors: 0, durationMs: 0 };
     }
@@ -38,6 +49,13 @@ vi.mock('../../indexer/pipeline.js', () => {
       return { totalFiles: 0, indexed: 0, skipped: 0, errors: 0, durationMs: 0 };
     }
     deleteFiles() {}
+    async deleteFilesByPrefix(prefix: string) {
+      deletePrefixCalls.push({ root: this.root, prefix });
+      return 0;
+    }
+    requestCoverageReconcile() {
+      requestCoverageReconcileCalls.push(this.root);
+    }
     async dispose() {}
   }
   return { IndexingPipeline: FakeIndexingPipeline };
@@ -89,6 +107,8 @@ function makeProjectDir(...segments: string[]): string {
 beforeEach(() => {
   watcherStartCalls.length = 0;
   watcherRestartCalls.length = 0;
+  deletePrefixCalls.length = 0;
+  requestCoverageReconcileCalls.length = 0;
   tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-ancestor-watcher-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
   vi.resetModules();
@@ -130,6 +150,12 @@ describe('ProjectManager ancestor watcher restart (#209)', () => {
       root: umbrella,
       descendantExcludeGlobs: ['child-repo/**'],
     });
+
+    // TRA-2558: ancestor's index must have cleaned the descendant's subtree
+    expect(deletePrefixCalls).toContainEqual({
+      root: umbrella,
+      prefix: 'child-repo',
+    });
     // TRA-1854: 60s, not 30s. The cross-platform job budget is already 60s,
     // but this per-test timeout overrides it — and on a loaded
     // windows-latest runner the cold daemon-graph import + sequential
@@ -156,6 +182,9 @@ describe('ProjectManager ancestor watcher restart (#209)', () => {
       root: umbrella,
       descendantExcludeGlobs: [],
     });
+
+    // TRA-2558: descendant removal requests coverage reconcile on ancestor
+    expect(requestCoverageReconcileCalls).toContain(umbrella);
   }, 60_000); // TRA-1854: see above — cold import on loaded windows runners.
 
   it('does not restart unrelated (sibling) project watchers', async () => {

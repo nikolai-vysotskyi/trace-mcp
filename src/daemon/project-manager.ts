@@ -1261,6 +1261,7 @@ export class ProjectManager {
     // exclude that subtree either way.
     if (persist) {
       await this.restartManagedAncestorWatchers(projectRoot);
+      await this.cleanManagedAncestorSubtrees(projectRoot);
     }
 
     logger.info({ projectRoot, watch, persist }, 'Project added to daemon');
@@ -1273,8 +1274,14 @@ export class ProjectManager {
    * so the ancestor's ignore list picks up `changedRoot` having just been
    * registered (addProject) or unregistered (removeProject). Cheap and rare:
    * this only runs on registration changes, never on the watcher's hot path.
+   *
+   * When `requestCoverageReconcile` is true (descendant removal), also kicks
+   * coverage reconcile on the ancestor so orphaned files are pulled back in.
    */
-  private async restartManagedAncestorWatchers(changedRoot: string): Promise<void> {
+  private async restartManagedAncestorWatchers(
+    changedRoot: string,
+    options?: { requestCoverageReconcile?: boolean },
+  ): Promise<void> {
     for (const managed of this.projects.values()) {
       if (managed.root === changedRoot) continue;
       const rel = path.relative(managed.root, changedRoot);
@@ -1291,6 +1298,47 @@ export class ProjectManager {
           { error: err, ancestor: managed.root, changedRoot },
           'Failed to restart ancestor watcher after registration change (non-fatal — ' +
             'excludes will still be recomputed on next daemon restart via loadAllRegistered)',
+        );
+      }
+      if (options?.requestCoverageReconcile) {
+        try {
+          managed.pipeline.requestCoverageReconcile?.({ force: true });
+          logger.info(
+            { ancestor: managed.root, changedRoot },
+            'Requested coverage reconcile on ancestor after descendant removal',
+          );
+        } catch (err) {
+          logger.warn(
+            { error: err, ancestor: managed.root, changedRoot },
+            'Failed to request coverage reconcile on ancestor after descendant removal (non-fatal)',
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Delete files belonging to `descendantRoot` from any managed ancestor's
+   * index database (TRA-2558). Called when a new project is registered inside
+   * an already-indexed ancestor to prevent double-indexing.
+   */
+  private async cleanManagedAncestorSubtrees(descendantRoot: string): Promise<void> {
+    for (const managed of this.projects.values()) {
+      if (managed.root === descendantRoot) continue;
+      const rel = path.relative(managed.root, descendantRoot);
+      const isStrictAncestor = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+      if (!isStrictAncestor) continue;
+      const relPosix = path.sep === '\\' ? rel.split('\\').join('/') : rel;
+      try {
+        await managed.pipeline.deleteFilesByPrefix?.(relPosix);
+        logger.info(
+          { ancestor: managed.root, descendantRoot, relPrefix: relPosix },
+          'Cleaned descendant subtree files from ancestor index',
+        );
+      } catch (err) {
+        logger.warn(
+          { error: err, ancestor: managed.root, descendantRoot, relPrefix: relPosix },
+          'Failed to clean descendant subtree files from ancestor index (non-fatal)',
         );
       }
     }
@@ -1939,8 +1987,9 @@ export class ProjectManager {
     // Mirror addProject(): a managed ancestor's watcher ignore list may have
     // been scoped around this now-unregistered root and would otherwise stay
     // stale (harmlessly over-excluding) until the next daemon restart.
-    // Recompute so the ancestor resumes owning these now-orphaned files.
-    await this.restartManagedAncestorWatchers(effective);
+    // Recompute so the ancestor resumes owning these now-orphaned files,
+    // and request coverage reconcile so files in the subtree return to the ancestor index.
+    await this.restartManagedAncestorWatchers(effective, { requestCoverageReconcile: true });
     logger.info(
       {
         projectRoot: effective,
