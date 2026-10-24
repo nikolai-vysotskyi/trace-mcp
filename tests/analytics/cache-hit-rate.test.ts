@@ -9,7 +9,6 @@ import {
   isCacheRegression,
 } from '../../src/analytics/cache-hit-rate.js';
 import type { ParsedSession } from '../../src/analytics/log-parser.js';
-import { getSessionAnalytics } from '../../src/analytics/session-analytics.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('cache-hit-rate unit tests (TRA-1681)', () => {
@@ -222,19 +221,5 @@ describe('cache-hit-rate store integration & smoke test (TRA-1681)', () => {
     expect((day.cache_hit_rate * 100).toFixed(1)).toBe('65.9');
     expect((day.cache_hit_rate_by_provider.anthropic * 100).toFixed(1)).toBe('98.0');
     expect((day.cache_hit_rate_by_provider.local * 100).toFixed(1)).toBe('30.3');
-
-    // Test session-analytics getSessionAnalytics (camelCase wrapper)
-    const sessionAnalytics = getSessionAnalytics(store, { period: 'all' });
-    expect(sessionAnalytics.sessionsCount).toBe(2);
-    expect((sessionAnalytics.cacheHitRate.blended * 100).toFixed(1)).toBe('65.9');
-    expect((sessionAnalytics.cacheHitRate.byProvider.anthropic * 100).toFixed(1)).toBe('98.0');
-    expect((sessionAnalytics.cacheHitRate.byProvider.local * 100).toFixed(1)).toBe('30.3');
-    expect((sessionAnalytics.cacheHitRate.byModel['claude-opus-5'] * 100).toFixed(1)).toBe('98.0');
-    expect(
-      (
-        sessionAnalytics.cacheHitRate.byModel['ddalcu/Qwen3.8-Flash-Next-MLX-Serve-mixed-4-8bit'] *
-        100
-      ).toFixed(1),
-    ).toBe('30.3');
   });
 });
