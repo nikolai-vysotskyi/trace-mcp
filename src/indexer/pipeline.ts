@@ -2244,7 +2244,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolvePhpCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),
-      () => edgeResolver.resolveMemberOfEdges(scope),
+      () => edgeResolver.resolveMemberOfEdges(scope, activeSignal),
       () => edgeResolver.resolveSqlCteRefEdges(scope),
       () => edgeResolver.resolveSqlReadEdges(scope),
       () => edgeResolver.resolveLoadsSqlEdges(scope),

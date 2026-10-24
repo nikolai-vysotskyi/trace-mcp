@@ -17,10 +17,12 @@ import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
+import { isForeignKeyViolation } from '../../db/repair.js';
 
 export async function resolveMemberOfEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store } = state;
 
@@ -93,6 +95,7 @@ export async function resolveMemberOfEdges(
   );
 
   let created = 0;
+  let skippedStale = 0;
   await commitInChunks(
     store.db,
     rows,
@@ -101,14 +104,28 @@ export async function resolveMemberOfEdges(
         const src = nodeMap.get(r.member_id);
         const tgt = nodeMap.get(r.parent_id);
         if (src == null || tgt == null || src === tgt) continue;
-        insertStmt.run(src, tgt, memberOfType.id);
-        created++;
+        try {
+          insertStmt.run(src, tgt, memberOfType.id);
+          created++;
+        } catch (e) {
+          // TRA-2649 / TRA-2249 / TRA-1902: endpoint node deleted after snapshot —
+          // the edge is stale, not the pass. Anything else is a real bug: rethrow.
+          if (!isForeignKeyViolation(e)) throw e;
+          skippedStale++;
+        }
       }
     },
     RESOLVER_WRITE_CHUNK,
+    signal,
   );
 
   if (created > 0) {
     logger.info({ edges: created }, 'member_of edges resolved');
+  }
+  if (skippedStale > 0) {
+    logger.warn(
+      { skipped: skippedStale },
+      'member_of edges skipped stale node references deleted mid-pass (TRA-2649)',
+    );
   }
 }
