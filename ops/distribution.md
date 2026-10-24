@@ -6935,3 +6935,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+
+
+
+### Afternoon pass, 2026-10-24 (TRA-2657): mention sweep clean, codegraph test temp dir cleanup (#2877) & local binding reuse (#2871), graphify zcode platform support (#4737) & Python member call folded twin fix (#4734) & mis-cased EXTRACTED evidence check (#4733) & numeric hyperedge member alias coercion (#4732), codebase-memory CI action bumps (#2781-#2779)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph POSIX test temp directory cleanup & local binding check reuse**:
+  - Open PR #2877 (`test`): Cleans up temporary working directories created by npm shim (`__tests__/npm-shim`) and index orphan tests across POSIX environments.
+  - Open PR #2871 (`perf(resolution)`): Reuses exact-name local binding check results to eliminate redundant AST traverses during local scope resolution.
+- **Graphify-Labs/graphify ZCode platform install, Python member call folding fix, mis-cased EXTRACTED evidence validation & numeric hyperedge alias coercion**:
+  - Open PR #4737 (`feat(install)`): Adds `zcode` platform (`graphify install --platform zcode` global and `--project` with `AGENTS.md` section). Discovers skills in `~/.zcode/skills` and `.zcode/skills`, riding Claude's split bundle and wiring `AGENTS.md` natively for ZCode agents.
+  - Open PR #4734 (`fix(python)`): Fixes member-call edge resolution when public and private methods share a case-folded / underscore-stripped key (`run` vs `_run`). Previously, `_run` overwritten `run` in `method_index`, resolving `Worker.run()` to `_run()`. Now exact spelling match wins when folded keys collide, falling back to no edge on ambiguous/inexact matches.
+  - Open PR #4733 (`fix(llm)`): Performs evidence validation on code nodes when confidence tag is mis-cased (e.g. uppercase `EXTRACTED` instead of canonical lowercase), avoiding unverified node promotion.
+  - Open PR #4732 (`fix(build)`): Coerces numeric hyperedge member IDs to strings under `members` and `node_ids` aliases before normalization, preventing valid hyperedges from being dropped when using non-canonical field names with integer node IDs.
+  - Closed PR #4735 (`Fix/affected disambiguated file label`): Disambiguation cleanup closed in favor of canonical label path handling.
+- **DeusData/codebase-memory-mcp actions & CodeQL dependency updates**:
+  - Open PRs #2781, #2780, #2779: Dependency bumps updating `actions/upload-artifact` to 7.0.2 and `github/codeql-action` to 4.39.1.
+  - Open PR #2777 (`fix(daemon)`): Logs effective `auto_index_limit` in `daemon.autoindex.skipped` events.
+- **jgravelle/jcodemunch-mcp search_text truncated files & brace globs**:
+  - Open PR #1226: Open, continues under review.
+
+**Competitor pulse (as of 2026-10-24 10:02 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 29,006★ (+4), 1,595 forks (=)
+- oraios/serena: 30,673★ (+4), 2,084 forks (-1)
+- DeusData/codebase-memory-mcp: 47,374★ (+12), 3,887 forks (+1)
+- tirth8205/code-review-graph: 32,357★ (+2), 2,958 forks (+1)
+- colbymchenry/codegraph: 75,157★ (+52), 4,906 forks (+7)
+- abhigyanpatwari/GitNexus: 48,014★ (=), 5,204 forks (+3)
+- jgravelle/jcodemunch-mcp: 2,804★ (=), 374 forks (-1)
+- continuedev/continue: 36,308★ (+6), 5,514 forks (=)
+- Aider-AI/aider: 49,731★ (+4), 5,102 forks (+1)
+- Graphify-Labs/graphify: 134,080★ (+123), 12,804 forks (+8)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
