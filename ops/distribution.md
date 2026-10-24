@@ -6879,3 +6879,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+
+
+### Midday pass, 2026-10-24 (TRA-2654): mention sweep clean, codegraph bun build loop (#2876) & Play framework Class.method (#2875) & lone same-file scoring (#2874) & explore maxFiles default (#2873) & POSIX test temp dir leak (#2877), graphify Obsidian parallel relation export (#4731) & GitHub CheckRun WAITING/PENDING CI classification (#4730) & uv.lock pin (#4729), jcodemunch search_text truncated files & brace globs (#1226), codebase-memory daemon auto-index limit logging (#2777)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **colbymchenry/codegraph Bun build loop, Play framework Class.method member resolution, lone same-file scoring, explore maxFiles default documentation & POSIX test temp dir leak**:
+  - Merged PR #2876 (`fix(build)`): Fixes recursive bun rebuild loop where `bun run build` / `build:ui` repeatedly restarted itself until killed. `build:ui` and `build:lib` now reference the `ui` workspace by directory instead of `--workspace ui`, making scripts identical under both bun and npm.
+  - Merged PR #2875 (`fix(play)`): `Class.method` references in Play projects (in routes files and ordinary Java/Scala code) now reach methods of the named class/object with overload resolution against call arguments. In particular, Scala `RequestAuthority.parse(...)` reaches the Scala object again following Java record indexing (#2868).
+  - Merged PR #2874 (`fix(resolution)`): When a name has several same-named definitions and the one in the reference's own file wins, edge scoring moves from directory-proximity 0.4/0.7 to 0.9 (lone candidate match). Shallow file calls to internal functions avoid uncertain penalties and beat weaker framework naming heuristics pointing to other files.
+  - Merged PR #2873 (`fix(mcp)`): Corrects `codegraph_explore`'s `maxFiles` parameter description and schema. Parameter claimed a fixed `(default: 12)` but the handler actually clamps to 1–20 and selects 4, 5, or 8 files based on repository size. Schema default removed and docs updated to reflect runtime behavior.
+  - Open PR #2877 (`test`): Cleans up temp directory leaks across POSIX-only tests (`__tests__/npm-shim` and index orphan tests) on macOS/Linux.
+- **Graphify-Labs/graphify Obsidian parallel relation export, GitHub CheckRun WAITING/PENDING CI classification & uv.lock Python 3.11+ pin**:
+  - Open PR #4731 (`fix(export)`): Vault note export in `graphify export obsidian` now iterates over all parallel edges between node pairs instead of only reading `edge_data()` (which returned only the first parallel edge in a MultiGraph). Preserves dual `imports` and `calls` relations in `## Connections`.
+  - Open PR #4730 (`fix(prs)`): Extends `graphify prs` CI status parsing from `statusCheckRollup`. GitHub's `CheckStatusState` includes `WAITING` and `PENDING` (e.g. environment deployment protection rules or required manual approvers). Previously only matched `IN_PROGRESS` and `QUEUED`, mistakenly categorizing waiting/pending checks as untracked.
+  - Open PR #4729 (`fix(uv-lock)`): Pins `pillow` to 13.x on Python 3.11+ branch to avoid upstream wheel build issues.
+- **jgravelle/jcodemunch-mcp search_text truncated files reporting & brace globs**:
+  - Open PR #1226 (`feat`): When `search_text` is truncated at `max_results` (default 20), output now explicitly lists all additional matched files that were omitted so agents know what was skipped rather than guessing. Also adds brace expansion support (`components/{update,websocket_api}/**`) to `file_pattern`.
+- **DeusData/codebase-memory-mcp auto-index limit logging**:
+  - Open PR #2777 (`fix(daemon)`): Adds `limit=<effective auto_index_limit>` to `daemon.autoindex.skipped` log events in `application_background_initialize_impl()`, aligning with MCP `autoindex.skip` event format (#1779).
+
+**Competitor pulse (as of 2026-10-24 04:06 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 29,002★ (+3), 1,595 forks (-1)
+- oraios/serena: 30,669★ (+7), 2,085 forks (=)
+- DeusData/codebase-memory-mcp: 47,362★ (+20), 3,886 forks (=)
+- tirth8205/code-review-graph: 32,355★ (+5), 2,957 forks (+2)
+- colbymchenry/codegraph: 75,105★ (+37), 4,899 forks (+6)
+- abhigyanpatwari/GitNexus: 48,014★ (-2), 5,201 forks (-2)
+- jgravelle/jcodemunch-mcp: 2,804★ (+2), 375 forks (=)
+- continuedev/continue: 36,302★ (=), 5,514 forks (+1)
+- Aider-AI/aider: 49,727★ (+8), 5,101 forks (-1)
+- Graphify-Labs/graphify: 133,957★ (+94), 12,796 forks (+8)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
