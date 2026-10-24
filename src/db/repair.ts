@@ -80,6 +80,23 @@ export function isSqliteBusyError(err: unknown): boolean {
   return /database is locked|database table is locked/i.test(msg);
 }
 
+/**
+ * True when `err` is a SQLite foreign key constraint failure (TRA-2649).
+ * (`SQLITE_CONSTRAINT_FOREIGNKEY` or message `FOREIGN KEY constraint failed`).
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  if (err !== null && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.code === 'string' && /SQLITE_CONSTRAINT_FOREIGNKEY/i.test(rec.code)) return true;
+    if (typeof rec.codeName === 'string' && /SQLITE_CONSTRAINT_FOREIGNKEY/i.test(rec.codeName))
+      return true;
+    if (typeof rec.message === 'string' && /FOREIGN KEY constraint failed/i.test(rec.message))
+      return true;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /FOREIGN KEY constraint failed/i.test(msg);
+}
+
 function tableExists(db: Database.Database, name: string): boolean {
   const r = db
     .prepare(`SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ? LIMIT 1`)
