@@ -345,4 +345,9 @@ majiayu000/claude-skill-registry
 # in campaigns/audit-report-2026-09.md among verified post-publication fixes:
 roy-tong/AgentMeasure
 
+# ── Swept 2026-10-25 morning pass (TRA-2664) ──
+# Automated personal activity / starring feed scrapers logging user starring event:
+CrackerCat/feed
+w00tzenheimer/feed
+
 

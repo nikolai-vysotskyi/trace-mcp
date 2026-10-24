@@ -7105,3 +7105,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Morning pass, 2026-10-25 (TRA-2664): mention sweep (CrackerCat, w00tzenheimer), graphify pre-extraction skip (#4748) & XAML codebehind (#4747), GitNexus eval isolation (#3715), CogniCode & Glyphtrail architecture triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 2 hits: `CrackerCat/feed` and `w00tzenheimer/feed`. Verified both as automated personal user activity scrapers logging user starring event (`maskelihileci`). Both added to `ops/mentions-seen.txt` to keep subsequent sweeps clean. Sweep re-run confirmed 100% clean.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **Rubentxu/CogniCode**: Rust-based code intelligence server ("Super-LSP") via MCP (78 MCP tools, 30 languages, Redb embedded graph store `RedbGraphStore`, safe refactor previews, Tarjan SCC cycle detection, Mermaid export). Contrast: trace-mcp supports 81 languages and 88 frameworks natively with ahead-of-time tree-sitter AST, 72.7% token reduction, Electron desktop GUI, zero-compile `npx -y trace-mcp`, and stores index state globally in `~/.trace-mcp/`.
+- **glyphtrail/glyphtrail**: Rust local code intelligence graph for AI coding agents (Tree-sitter static analysis, LadybugDB Cypher graph backend in `.glyphtrail/ladybug`, Cytoscape viz, blast-radius analysis, Axum server, MCP server). Contrast: trace-mcp keeps project directories pristine (no `.glyphtrail/` in working tree), avoids heavy C++ `liblbug` compile requirements, and operates under permissive MIT license.
+- **tatsuya6502/symtrace-mcp**: Minimal LSP-to-MCP bridge server over stdio for AI coding agents (lazy startup, 10 min idle shutdown). Currently supports only Rust (`rust-analyzer`) and TypeScript (`typescript-language-server`). Contrast: trace-mcp does not require host language servers or their heavy memory footprint, indexes 81 languages natively, and provides 88 framework-specific symbol semantics.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Pre-extraction skip gate (PR #4748, open)*: In `_rebuild_code`, moves the no-change exit from post-cluster topology comparison to the very front before extraction. Uses a multi-factor skip key digest (`.graphify_build_state.json`) spanning content-based AST hash of code files, path set digest, resolution inputs (lockfiles, tsconfig, package.json), extractor epoch (`v{version}-s{schema}-g{grammar}`), build config, and output shape env vars. On an unchanged 605-file repo, rerun drops from 36.1s / 1GB RSS to 1.4s / 53MB RSS.
+  - *XAML codebehind resolution determinism (PR #4747, open)*: In `_xaml_codebehind_path`, case-insensitive fallback previously iterated filesystem order via `iterdir()`, which is nondeterministic on case-sensitive filesystems when case variants (e.g. `App.xaml.cs` and `app.xaml.CS`) coexist. Fixed by explicitly sorting siblings by `p.name` (avoiding bare `sorted(iterdir())` which fails on Windows due to case-insensitive `WindowsPath` comparisons).
+  - *AST cache hit rate reporting (PR #4746)* and *Platform skill targets (PR #4744)*: Added platform skill targets for zcode and dsh.
+- **abhigyanpatwari/GitNexus**:
+  - *Evaluation containment & benchmark fairness (PR #3715, open)*: Corrects an evaluation confounder where the candidate MCP arm could read uncommitted or newer compiled code than the task checkout. Implements isolated Bubblewrap runtime containment with per-cell stdio sockets. Reported historical paired study: MCP cost +21.6% and agent time -5.1% (contrast with trace-mcp's measured 72.7% token reduction).
+  - *Dependency consolidation (PR #3716, open)*: Consolidates `body-parser` and `fast-uri` security bumps.
+- **colbymchenry/codegraph**:
+  - *Test cleanup (PR #2877, open)*: Cleans up temporary working directories created by npm shim and index orphan tests.
+  - *Exact-name binding evaluation (PR #2871, open)*: Reuses exact-name local binding checks.
+- **DeusData/codebase-memory-mcp**:
+  - *Hybrid BM25 + vector ranking (PR #2783, open)*: Reciprocal Rank Fusion (k=60) and test symbol demotion PR remains in review.
+
+**Competitor pulse (as of 2026-10-25 02:03 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (+1), 24 forks (=)
+- yamadashy/repomix: 29,011★ (+2), 1,597 forks (=)
+- oraios/serena: 30,681★ (=), 2,086 forks (-1)
+- DeusData/codebase-memory-mcp: 47,407★ (+9), 3,892 forks (=)
+- tirth8205/code-review-graph: 32,373★ (=), 2,957 forks (-1)
+- colbymchenry/codegraph: 75,217★ (+9), 4,918 forks (+4)
+- abhigyanpatwari/GitNexus: 48,019★ (+2), 5,203 forks (=)
+- jgravelle/jcodemunch-mcp: 2,805★ (+1), 374 forks (=)
+- continuedev/continue: 36,312★ (+1), 5,514 forks (=)
+- Aider-AI/aider: 49,736★ (=), 5,102 forks (+1)
+- Graphify-Labs/graphify: 134,389★ (+87), 12,835 forks (+6)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
