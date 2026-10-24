@@ -362,8 +362,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2i: structural member_of edges for every nested symbol → its parent. */
-  resolveMemberOfEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('member-of', () => _resolveMemberOf(this.state, scope));
+  resolveMemberOfEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('member-of', () => _resolveMemberOf(this.state, scope, signal));
   }
 
   /** Pass 2i-sql: CTE → CTE edges within `.sql` files. */

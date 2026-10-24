@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import fg from 'fast-glob';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { disableBulkMode, enableBulkMode } from '../db/schema.js';
@@ -130,6 +131,10 @@ export interface IndexingResult {
   skippedBinary?: number;
   /** TRA-2273: Aggregated count of files skipped due to exceeding file size cap. */
   skippedOversize?: number;
+}
+
+interface IncludeScope {
+  workspaces?: WorkspaceInfo[];
 }
 
 /**
@@ -917,10 +922,17 @@ export class IndexingPipeline {
     // non-default `status.relativePaths`, or a file deleted after listing).
     const {
       relPaths: filteredChanged,
+      deepCandidates,
+      traceignore,
       skippedBinary: discSkippedBinary,
       skippedOversize: discSkippedOversize,
     } = this.filterIndexablePaths(discovery.changed);
-    const changed = filteredChanged.filter((rel) => {
+    const scopedChanged = await this.resolveDeepFallback(
+      filteredChanged,
+      deepCandidates,
+      traceignore,
+    );
+    const changed = scopedChanged.filter((rel) => {
       try {
         return fs.statSync(path.resolve(this.rootPath, rel)).isFile();
       } catch {
@@ -1399,8 +1411,85 @@ export class IndexingPipeline {
     if (filesToDelete.size > 0) {
       invalidatePageRankCache();
       invalidateSearchCache(this.store.db);
+      this.scheduleCoverageReconcile();
       logger.info({ count: filesToDelete.size }, 'Deleted files from index');
     }
+  }
+
+  /**
+   * Delete all indexed files under `relPrefix` (or matching it exactly), cascading
+   * through symbols, graph edges, and associated caches (TRA-2558).
+   *
+   * Used when a nested project is registered under an already-managed ancestor
+   * so the descendant's subtree stops being double-indexed in the ancestor's DB.
+   * Serialized onto `_lock` so concurrent indexing cannot interleave or re-insert
+   * deleted files.
+   */
+  deleteFilesByPrefix(relPrefix: string): Promise<number> {
+    const run = this._lock.then(async () => {
+      if (!this.store.db.open) {
+        logger.warn(
+          { root: this.rootPath, prefix: relPrefix },
+          'deleteFilesByPrefix skipped — database already closed',
+        );
+        return 0;
+      }
+      const rel = path.isAbsolute(relPrefix) ? path.relative(this.rootPath, relPrefix) : relPrefix;
+      const cleanPrefix = rel.split(path.sep).join('/').replace(/^\/+/, '').replace(/\/+$/, '');
+
+      if (
+        !cleanPrefix ||
+        cleanPrefix === '.' ||
+        cleanPrefix.startsWith('..') ||
+        validatePath(cleanPrefix, this.rootPath).isErr()
+      ) {
+        logger.warn(
+          { root: this.rootPath, prefix: relPrefix, cleanPrefix },
+          'deleteFilesByPrefix skipped — invalid prefix',
+        );
+        return 0;
+      }
+
+      const filesToDelete = new Map<number, { id: number; path: string }>();
+      const exact = this.store.getFile(cleanPrefix);
+      if (exact) filesToDelete.set(exact.id, exact);
+
+      for (const file of this.store.getFilesUnderPath(cleanPrefix)) {
+        filesToDelete.set(file.id, file);
+      }
+
+      if (filesToDelete.size === 0) {
+        clearPackageEntriesCacheForDeletedPath(this.rootPath, cleanPrefix);
+        return 0;
+      }
+
+      for (const file of filesToDelete.values()) {
+        invalidateTreeCacheFile(this.rootPath, file.path);
+        if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
+          clearPackageEntriesCache(this.rootPath);
+        }
+        clearPackageEntriesCacheForDeletedPath(this.rootPath, file.path);
+      }
+      clearPackageEntriesCacheForDeletedPath(this.rootPath, cleanPrefix);
+
+      this.store.db
+        .transaction(() => {
+          for (const file of filesToDelete.values()) {
+            this.store.deleteFile(file.id);
+          }
+        })
+        .immediate();
+
+      invalidatePageRankCache();
+      invalidateSearchCache(this.store.db);
+      logger.info(
+        { root: this.rootPath, prefix: cleanPrefix, count: filesToDelete.size },
+        'Deleted files by prefix from index',
+      );
+      return filesToDelete.size;
+    });
+    this._lock = run.catch(() => {});
+    return run;
   }
 
   /**
@@ -1418,6 +1507,8 @@ export class IndexingPipeline {
    */
   private filterIndexablePaths(filePaths: string[]): {
     relPaths: string[];
+    deepCandidates: Set<string>;
+    traceignore: TraceignoreMatcher;
     skippedBinary: number;
     skippedOversize: number;
   } {
@@ -1426,6 +1517,9 @@ export class IndexingPipeline {
     // never touch — e.g. Laravel storage/framework/sessions blobs arriving on
     // every web request.
     const isExcluded = this.getExcludeMatcher();
+    const isIncluded = this.getIncludeMatcher();
+    const traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
+    const includeScope: IncludeScope = {};
     // A registered descendant owns its own subtree — drop its files so an
     // umbrella root's watcher-driven reindex is a no-op instead of a second,
     // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
@@ -1435,6 +1529,7 @@ export class IndexingPipeline {
       : undefined;
     const gitignore = this.gitignoreMatcher();
     const relPaths: string[] = [];
+    const deepCandidates = new Set<string>();
     let skippedBinary = 0;
     let skippedOversize = 0;
     for (const fp of filePaths) {
@@ -1447,6 +1542,15 @@ export class IndexingPipeline {
       const relPosix = rel.split(path.sep).join('/');
       if (isExcluded(relPosix)) {
         logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+        continue;
+      }
+      if (traceignore.isIgnored(relPosix)) {
+        logger.debug({ file: rel }, 'Trace-ignored path skipped in indexFiles');
+        continue;
+      }
+      const includeDecision = isIncluded(relPosix, includeScope);
+      if (!includeDecision) {
+        logger.debug({ file: rel }, 'Path outside include skipped in indexFiles');
         continue;
       }
       if (ownedByDescendant?.(relPosix)) {
@@ -1521,8 +1625,38 @@ export class IndexingPipeline {
       // duplicate file row on Windows instead of matching the existing one,
       // breaking every downstream mtime/existing-row lookup (TRA-1045).
       relPaths.push(relPosix);
+      if (includeDecision === 'fallback') deepCandidates.add(relPosix);
     }
-    return { relPaths, skippedBinary, skippedOversize };
+    return { relPaths, deepCandidates, traceignore, skippedBinary, skippedOversize };
+  }
+
+  /** Resolve the full walk's conditional deep fallback without blocking the event loop. */
+  private async resolveDeepFallback(
+    relPaths: string[],
+    deepCandidates: Set<string>,
+    traceignore: TraceignoreMatcher,
+  ): Promise<string[]> {
+    if (deepCandidates.size === 0) return relPaths;
+    const isNegative = (p: string) => p.startsWith('!') && !p.startsWith('!(');
+    const rooted = this.config.include.filter((p) => !isNegative(p) && !p.startsWith('**/'));
+    const negatives = this.config.include.filter(isNegative);
+    const stream = fg.stream([...rooted, ...negatives], {
+      cwd: this.rootPath,
+      ignore: [
+        ...this.config.exclude,
+        ...traceignore.toFastGlobIgnore(),
+        ...descendantExcludeGlobs(this.rootPath),
+      ],
+      dot: false,
+      onlyFiles: true,
+      suppressErrors: true,
+      followSymbolicLinks: this.config.follow_symlinks,
+    });
+    for await (const _ of stream) {
+      (stream as NodeJS.EventEmitter & { destroy?: () => void }).destroy?.();
+      return relPaths.filter((p) => !deepCandidates.has(p));
+    }
+    return relPaths;
   }
 
   async indexFiles(
@@ -1530,7 +1664,8 @@ export class IndexingPipeline {
     opts: { postprocess?: PostprocessLevel; signal?: AbortSignal } = {},
   ): Promise<IndexingResult> {
     const enqueuedAt = Date.now();
-    const { relPaths, skippedBinary, skippedOversize } = this.filterIndexablePaths(filePaths);
+    const { relPaths, deepCandidates, traceignore, skippedBinary, skippedOversize } =
+      this.filterIndexablePaths(filePaths);
     const skippedUnindexable = skippedBinary + skippedOversize;
 
     // TRA-935: nothing survived the filters, so this run cannot change a
@@ -1563,6 +1698,36 @@ export class IndexingPipeline {
       // TRA-1017: a watcher batch queued before the stop must not start
       // persisting after it — the abort is observed here, at lock entry.
       throwIfIndexAborted(opts.signal, this.rootPath);
+
+      // TRA-2558: re-check descendant exclusions in case a descendant registered
+      // while we waited for _lock.
+      const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+      let activeRelPaths = relPaths;
+      let lateSkippedDescendant = 0;
+      if (descendantGlobs.length > 0) {
+        const ownedByDescendant = picomatch(descendantGlobs, { dot: true });
+        activeRelPaths = relPaths.filter((p) => {
+          if (ownedByDescendant(p)) {
+            lateSkippedDescendant++;
+            return false;
+          }
+          return true;
+        });
+      }
+      if (activeRelPaths.length === 0) {
+        return {
+          totalFiles: skippedUnindexable + lateSkippedDescendant,
+          indexed: 0,
+          skipped: skippedUnindexable + lateSkippedDescendant,
+          ...(skippedBinary > 0 ? { skippedBinary } : {}),
+          ...(skippedOversize > 0 ? { skippedOversize } : {}),
+          errors: 0,
+          durationMs: Date.now() - enqueuedAt,
+          incremental: true,
+          postprocess: opts.postprocess ?? 'minimal',
+        };
+      }
+
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
       // indexAll left behind so it can't force a postprocess here.
@@ -1578,10 +1743,28 @@ export class IndexingPipeline {
       // wall-clock to get the queue time instead of reporting the two summed
       // as reindex latency.
       const start = Date.now();
-      const r = await this.runPipeline(relPaths, false, start, opts.signal);
-      if (skippedUnindexable > 0) {
-        r.totalFiles += skippedUnindexable;
-        r.skipped += skippedUnindexable;
+      const scopedPaths = await this.resolveDeepFallback(
+        activeRelPaths,
+        deepCandidates,
+        traceignore,
+      );
+      if (scopedPaths.length === 0) {
+        return {
+          totalFiles: skippedUnindexable + lateSkippedDescendant,
+          indexed: 0,
+          skipped: skippedUnindexable + lateSkippedDescendant,
+          ...(skippedBinary > 0 ? { skippedBinary } : {}),
+          ...(skippedOversize > 0 ? { skippedOversize } : {}),
+          errors: 0,
+          durationMs: Date.now() - start,
+          incremental: true,
+          postprocess: this._postprocessLevel,
+        };
+      }
+      const r = await this.runPipeline(scopedPaths, false, start, opts.signal);
+      if (skippedUnindexable + lateSkippedDescendant > 0) {
+        r.totalFiles += skippedUnindexable + lateSkippedDescendant;
+        r.skipped += skippedUnindexable + lateSkippedDescendant;
         if (skippedBinary > 0) {
           r.skippedBinary = (r.skippedBinary ?? 0) + skippedBinary;
         }
@@ -1613,6 +1796,52 @@ export class IndexingPipeline {
   }
 
   private _excludeMatcher?: (p: string) => boolean;
+  private _includeMatcher?: (p: string, scope: IncludeScope) => boolean | 'fallback';
+
+  /** Match the full walk's include patterns and conditional nested-root fallbacks. */
+  private getIncludeMatcher(): (p: string, scope: IncludeScope) => boolean | 'fallback' {
+    if (!this._includeMatcher) {
+      const isNegative = (p: string) => p.startsWith('!') && !p.startsWith('!(');
+      const positives = this.config.include.filter((p) => !isNegative(p));
+      const negatives = this.config.include.filter(isNegative).map((p) => p.slice(1));
+      const rooted = positives.filter((p) => !p.startsWith('**/'));
+      const direct = picomatch(positives, { dot: false });
+      const excluded = picomatch(negatives, { dot: false });
+      const deep = picomatch(
+        rooted.map((p) => `**/${p}`),
+        { dot: false },
+      );
+      const rootedOnly = picomatch(rooted, { dot: false });
+      this._includeMatcher = (relPosix, scope) => {
+        if (excluded(relPosix)) return false;
+        if (direct(relPosix)) return true;
+        if (!rooted.length || !deep(relPosix)) return false;
+
+        // collectFiles() also anchors rooted globs at detected workspaces.
+        scope.workspaces ??= this.workspaces.length
+          ? this.workspaces
+          : this.config.children?.length
+            ? buildMultiRootWorkspaces(this.rootPath, this.config.children)
+            : detectWorkspaces(this.rootPath);
+        if (
+          scope.workspaces.some(
+            (ws) =>
+              relPosix.startsWith(`${ws.path}/`) && rootedOnly(relPosix.slice(ws.path.length + 1)),
+          )
+        ) {
+          return true;
+        }
+
+        // The deep fallback has the same five-component limit as collectFiles.
+        if (relPosix.split('/').length > 5) return false;
+
+        // The root-presence probe is deferred until the pipeline has reserved
+        // its lock, preserving synchronous enqueue and dispose semantics.
+        return 'fallback';
+      };
+    }
+    return this._includeMatcher;
+  }
 
   /** Lazily-built picomatch matcher over config.exclude (POSIX rel paths). */
   private getExcludeMatcher(): (p: string) => boolean {
@@ -2125,7 +2354,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolvePhpCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),
-      () => edgeResolver.resolveMemberOfEdges(scope),
+      () => edgeResolver.resolveMemberOfEdges(scope, activeSignal),
       () => edgeResolver.resolveSqlCteRefEdges(scope),
       () => edgeResolver.resolveSqlReadEdges(scope),
       () => edgeResolver.resolveLoadsSqlEdges(scope),
@@ -2343,11 +2572,27 @@ export class IndexingPipeline {
   private _coverageDebounceMs: number = IndexingPipeline.COVERAGE_RECONCILE_DEBOUNCE_MS;
   private _coverageTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastCoverageReconcileMs = 0;
+  private _coverageReconcileForced = false;
+
+  /**
+   * Request a coverage reconcile on this pipeline (TRA-2558).
+   *
+   * Called when a previously-registered nested descendant project is removed,
+   * so this ancestor resumes indexing the now-unorphaned subtree.
+   */
+  requestCoverageReconcile(options?: { force?: boolean }): void {
+    if (this._disposed) return;
+    const force = options?.force ?? true;
+    if (force) {
+      this._lastCoverageReconcileMs = 0;
+    }
+    this.scheduleCoverageReconcile(force);
+  }
 
   /**
    * Schedule a coalesced coverage check. Registration indexes the tree once;
    * everything after that arrives as watcher-driven `indexFiles()` calls, so a
-   * project whose on-disk shape changes drastically (a repo cloned into an
+   * project whose on-disk shape changed drastically (a repo cloned into an
    * already-registered workdir) settles at whatever fraction of the tree the
    * watcher managed to report — TRA-231. The check walks the include globs and
    * compares the candidate count to the indexed file count; a real gap kicks a
@@ -2355,10 +2600,13 @@ export class IndexingPipeline {
    * needed for. Coalesced onto a single trailing timer so an edit storm costs
    * one walk, not N.
    */
-  private scheduleCoverageReconcile(): void {
+  private scheduleCoverageReconcile(force = false): void {
     // TRA-1752: same guard as scheduleEdgeReconcile — a run draining through
     // dispose() must not arm a timer that fires against the closed DB.
     if (this._disposed) return;
+    if (force) {
+      this._coverageReconcileForced = true;
+    }
     if (this._coverageTimer) clearTimeout(this._coverageTimer);
     this._coverageTimer = setTimeout(() => this.fireCoverageReconcile(), this._coverageDebounceMs);
     // Never keep the process alive just for a pending coverage check.
@@ -2368,11 +2616,29 @@ export class IndexingPipeline {
   /** Timer body — walks the tree and reindexes only when coverage actually drifted. */
   private fireCoverageReconcile(): void {
     this._coverageTimer = null;
+    const force = this._coverageReconcileForced;
+    this._coverageReconcileForced = false;
+
     // TRA-1763: same mark as the edge reconcile — the drift walk and the
     // `indexAll` it can trigger both run at `status: ready`.
     const endReindex = beginReindex(this.rootPath);
     const run = (async () => {
       if (this._disposed) return;
+
+      // TRA-2558: When force is true (e.g. descendant unregistration or explicit request),
+      // bypass cooldown and counter-drift checks because the aggregate file count
+      // might happen to match even though file composition changed or contains
+      // non-code / external records.
+      if (force) {
+        this._lastCoverageReconcileMs = Date.now();
+        logger.info(
+          { root: this.rootPath },
+          'Forced coverage reconcile requested — running a full hash-gated reindex',
+        );
+        await this.indexAll(false, { discovery: 'full-walk' });
+        return;
+      }
+
       if (
         Date.now() - this._lastCoverageReconcileMs <
         IndexingPipeline.COVERAGE_RECONCILE_COOLDOWN_MS
@@ -2383,15 +2649,20 @@ export class IndexingPipeline {
       // don't repeat the expensive collectFiles() disk walk every minute.
       this._lastCoverageReconcileMs = Date.now();
       const onDisk = (await this.collectFiles()).files.length;
-      if (this._disposed) return;
-      const indexed = this.store.getStats().totalFiles;
+      if (this._disposed || !this.store.db.open) return;
+      const row = this.store.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
+        )
+        .get() as { c: number } | undefined;
+      const indexed = row?.c ?? 0;
       const gap = onDisk - indexed;
-      if (gap < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
+      if (Math.abs(gap) < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
       logger.info(
         { root: this.rootPath, onDisk, indexed, gap },
         'Coverage drift detected — running a full hash-gated reindex',
       );
-      await this.indexAll();
+      await this.indexAll(false, { discovery: 'full-walk' });
     })();
     void run.catch((e) => {
       logger.warn({ error: e }, 'Deferred coverage reconcile failed');

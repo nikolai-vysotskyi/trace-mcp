@@ -26,4 +26,8 @@ export class CachedInferenceService implements InferenceService {
     }
     return response;
   }
+
+  invalidate(prompt: string, maxTokens?: number): void {
+    this.cache.delete(this.model, prompt, maxTokens);
+  }
 }

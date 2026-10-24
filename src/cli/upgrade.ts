@@ -11,6 +11,7 @@ import { updateClaudeMd } from '../init/claude-md.js';
 import { detectGuardHook } from '../init/detector.js';
 import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
+import { refreshStampAfterHookRefresh, STAMP_PATH } from '../init/version-stamp.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
@@ -192,6 +193,25 @@ export const upgradeCommand = new Command('upgrade')
       // Global: refresh CLAUDE.md
       if (!opts.skipClaudeMd) {
         globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
+      }
+
+      // Refresh version stamp after hook/launcher upgrade so session start doesn't emit false version drift warning
+      const stampRefreshed = refreshStampAfterHookRefresh(PKG_VERSION, {
+        dryRun: opts.dryRun,
+        skipHooks: opts.skipHooks,
+      });
+      if (stampRefreshed) {
+        globalSteps.push({
+          target: STAMP_PATH,
+          action: 'updated',
+          detail: `Version stamp refreshed (${PKG_VERSION})`,
+        });
+      } else if (opts.dryRun && !opts.skipHooks) {
+        globalSteps.push({
+          target: STAMP_PATH,
+          action: 'skipped',
+          detail: `Would refresh version stamp (${PKG_VERSION})`,
+        });
       }
 
       // Report

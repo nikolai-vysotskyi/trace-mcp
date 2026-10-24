@@ -21,6 +21,8 @@
  * with {@link repairIndex} (in `repair.ts`) for the destructive side. Read-
  * only by design so it's safe to call from CI / pre-flight checks.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import type Database from 'better-sqlite3';
 
 export type VerifyCheckStatus = 'ok' | 'warn' | 'error';
@@ -105,6 +107,12 @@ export interface VerifyOptions {
    * available, e.g. CLI subcommands run outside the AI subsystem).
    */
   activeEmbedding?: { provider: string; model: string };
+  /**
+   * TRA-2557 — project root directory. When provided, compares indexed files
+   * (excluding synthetic `__external__/*`) against disk presence. Surfaces
+   * `missing_on_disk` check with 'warn' status and 'reindex --force' recommendation.
+   */
+  root?: string;
 }
 
 export function verifyIndex(db: Database.Database, options?: VerifyOptions): VerifyReport {
@@ -434,6 +442,49 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
         name: 'embedding_provider_match',
         status: 'warn',
         detail: `Provider-match probe failed: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
+  // ── 8. Missing on disk check (TRA-2557) ───────────────────────────────
+  if (options?.root && tableExists(db, 'files')) {
+    try {
+      const rows = db
+        .prepare(
+          "SELECT path FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
+        )
+        .all() as Array<{ path: string }>;
+      const missing: string[] = [];
+      for (const row of rows) {
+        if (row.path.startsWith('__external__/') || row.path === '__external__') continue;
+        const resolvedPath = path.isAbsolute(row.path)
+          ? row.path
+          : path.resolve(options.root, row.path);
+        if (!fs.existsSync(resolvedPath)) {
+          missing.push(row.path);
+        }
+      }
+      if (missing.length === 0) {
+        checks.push({
+          name: 'missing_on_disk',
+          status: 'ok',
+          detail: `All ${rows.length} indexed files exist on disk`,
+        });
+      } else {
+        checks.push({
+          name: 'missing_on_disk',
+          status: 'warn',
+          detail: `${missing.length} indexed file(s) missing on disk: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '; …' : ''}`,
+          count: missing.length,
+          suggested_repair: 'reindex --force',
+        });
+      }
+    } catch (e) {
+      checks.push({
+        name: 'missing_on_disk',
+        status: 'warn',
+        detail: `missing_on_disk probe failed: ${e instanceof Error ? e.message : String(e)}`,
+        suggested_repair: 'reindex --force',
       });
     }
   }

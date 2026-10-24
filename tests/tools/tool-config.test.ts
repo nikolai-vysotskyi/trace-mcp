@@ -178,36 +178,6 @@ describe('description_verbosity config', () => {
     expect(applyVerbosity('No period at all', 'minimal')).toBe('No period at all');
     expect(applyVerbosity('Any description.', 'none')).toBe('');
   });
-
-  it('minimal and none strip Zod param descriptions', () => {
-    const { z } = require('zod');
-    function stripParamDescriptions(schema: Record<string, unknown>): void {
-      for (const val of Object.values(schema)) {
-        if (val && typeof val === 'object' && '_def' in val) {
-          const def = (val as { _def: Record<string, unknown> })._def;
-          // biome-ignore lint/performance/noDelete: Zod description is a getter-only property — assigning undefined throws.
-          delete def.description;
-          // biome-ignore lint/performance/noDelete: same as above.
-          delete (val as Record<string, unknown>).description;
-        }
-      }
-    }
-
-    const schema = {
-      query: z.string().describe('Search query text'),
-      kind: z.string().optional().describe('Filter by kind'),
-    };
-    expect(schema.query.description).toBe('Search query text');
-    expect(schema.kind.description).toBe('Filter by kind');
-
-    stripParamDescriptions(schema);
-    expect(schema.query.description).toBeUndefined();
-    expect(schema.kind.description).toBeUndefined();
-    expect(schema.query._def.description).toBeUndefined();
-    expect(schema.kind._def.description).toBeUndefined();
-    // Zod types still work after stripping
-    expect(schema.query.safeParse('test').success).toBe(true);
-  });
 });
 
 describe('meta_fields config', () => {

@@ -31,7 +31,7 @@ describe('TRA-1543 incremental overhead', () => {
     rmSync(workDir, { recursive: true, force: true });
   });
 
-  function makePipeline(store: Store, registry?: PluginRegistry) {
+  function makePipeline(store: Store, registry?: PluginRegistry, include = ['**/*.ts']) {
     const reg =
       registry ??
       (() => {
@@ -41,7 +41,7 @@ describe('TRA-1543 incremental overhead', () => {
       })();
     const config = TraceMcpConfigSchema.parse({
       root: workDir,
-      include: ['**/*.ts'],
+      include,
       exclude: [],
     });
     return new IndexingPipeline(store, reg, config, workDir);
@@ -102,7 +102,7 @@ describe('TRA-1543 incremental overhead', () => {
         return orig(...args);
       };
     }
-    const pipeline = makePipeline(store, registry);
+    const pipeline = makePipeline(store, registry, ['**/*.ts', '**/package.json']);
 
     await pipeline.indexAll(false);
 

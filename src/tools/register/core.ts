@@ -389,7 +389,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'verify_index',
-    'Read-only structural check of the local SQLite index: SQLite integrity_check, foreign-key violations, required-table presence, FTS5 integrity-check, embedding dimension consistency, and orphan embedding detection. Returns a check-by-check report with status (ok/warn/error) and a suggested repair mode for any non-ok finding. Never writes. Use as a preflight before reindex/embed_repo or when search is misbehaving. Returns JSON: { ok, status, checks: [{ name, status, detail, count?, suggested_repair? }] }.',
+    'Read-only structural check of the local SQLite index: SQLite integrity_check, foreign-key violations, required-table presence, FTS5 integrity-check, embedding dimension consistency, orphan embedding detection, and missing-on-disk file check. Returns a check-by-check report with status (ok/warn/error) and a suggested repair mode for any non-ok finding. Never writes. Use as a preflight before reindex/embed_repo or when search is misbehaving. Returns JSON: { ok, status, checks: [{ name, status, detail, count?, suggested_repair? }] }.',
     {},
     async () => {
       // P0.1 — pass the active embedding (when configured) so verify_index
@@ -402,7 +402,10 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             model: embeddingService.modelName(),
           }
         : undefined;
-      const report = verifyIndex(store.db, activeEmbedding ? { activeEmbedding } : undefined);
+      const report = verifyIndex(store.db, {
+        activeEmbedding,
+        root: projectRoot,
+      });
       return {
         content: [{ type: 'text', text: j(report) }],
         isError: report.status === 'error',
