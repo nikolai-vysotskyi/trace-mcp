@@ -6991,4 +6991,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+### Evening pass, 2026-10-24 (TRA-2659): mention sweep clean, codegraph same-file scoring (#2874) & idle release (#2872), graphify MSBuild prune (#4742) & Dart extensions (#4741), GitNexus line endings (#3708) & Mermaid sanitizer (#3707), jcodemunch truncated search (#1226 / #1227), ecosystem intelligence (code-context-control, Gitnova)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. No repos outside the seen list (`ops/mentions-seen.txt`). Nothing to read.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **drknowhow/code-context-control (C3)**: Local Python-based MCP code-intelligence layer for AI coding tools (`c3_compress`, `c3_read`, `c3_search`, `c3_filter`, `c3_edit`, `c3_validate`, `c3_shell`, `c3_session`, `c3_memory`). Addresses the exact problem statement of token waste and agent file-slurping. Relies on TF-IDF + runtime Python parsers, path masking (`.env`/CSVs), and local bash execution. Contrast: trace-mcp requires no Python runtime (runs via zero-install `npx -y trace-mcp` or native desktop binary), supports 81 languages / 88 frameworks via ahead-of-time tree-sitter AST, and avoids shell execution in favor of atomic, deterministic MCP query tools with refactor confinement gates.
+- **982945902/Gitnova**: Local-first Rust MCP code intelligence server for 5 languages (Rust, TS/JS, Python, C++). Writes SQLite database and index files (`.gitnova/gitnova.db`, `.gitnova/index.json`) directly into the indexed repository root. Contrast: trace-mcp stores index/cache in dedicated global user profiles (`~/.trace-mcp/`), leaving project working directories completely clean without requiring `.gitignore` pollution.
+- **AlexGracas/ODiagramador**: Native desktop app (Rust/tauri/tao) + MCP server (`odg mcp`) for Mermaid diagram rendering and agent-guided visual layout manipulation (ELK layout, 33 diagram types).
+- **aoreshkov/kotlin-lib-mcp**: MCP server downloading external Maven/Gradle-published Kotlin/Java library sources and parsing them via Kotlin Analysis API (K2/FIR) to expose public API signatures and KDoc to Claude Code and IDEs.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Same-file match scoring fix (PR #2874, closed/merged)*: In `matchByExactName`, when multiple definitions exist for a symbol, a winner in the reference's own file previously scored 0.4 or 0.7 based on leading directory proximity, causing it to lose against weaker cross-file framework naming heuristics (e.g. ASP.NET model/service convention taking property access for a foreign class). Raised to 0.9 (decisive same-file match) when caller is inside the declaring owner.
+  - *Project idle release deadline (PR #2872, closed/merged)*: When a session opened a secondary project (`projectPath`), an in-flight background catch-up caused `scheduleIdleRelease` to retain the timer of an earlier project, delaying cleanup for up to 2x the 10-minute idle timeout. Now replaces the timer for the oldest releasable project.
+- **Graphify-Labs/graphify**:
+  - *Pruning MSBuild obj/ and bin/ outputs (PR #4742, open)*: C# projects built with `dotnet build` without `.gitignore` pulled generated sources (`GlobalUsings.g.cs`, `AssemblyInfo.cs`) and copied binaries into the graph. Now gates both directories on MSBuild artifact markers (`restore output`, `FileListAbsolute.txt`, `*.deps.json`, `*.runtimeconfig.json`).
+  - *Dart unnamed extension detection (PR #4741, open)*: In Dart, `extension on String { ... }` was dropped because regex required whitespace between extension name and `on`. Folded whitespace into the optional name group. (Contrast: trace-mcp uses tree-sitter grammars rather than regexes for language AST extraction).
+- **abhigyanpatwari/GitNexus**:
+  - *CRLF/LF line ending normalization in AGENTS.md / CLAUDE.md (PR #3708, open)*: Upserting sections on Windows with `core.autocrlf=true` wrote LF blocks into CRLF files, causing `w/mixed` git dirty state on every reindex. Added `detectLineEnding` and `writeWithLineEnding`.
+  - *Mermaid sanitizer label masking (PR #3707, open)*: Sanitizer previously split on `\.\.+`, breaking valid diagrams containing `...` in node labels or dots in link syntax. Added placeholder masking for quoted strings and bracketed labels.
+  - *Wiki page slug passing (PR #3710, open)*: Prompts for wiki overview and parent modules now pass real file slugs (`${child.slug}.md`) instead of display names to prevent LLM hallucination of broken Markdown links.
+- **jgravelle/jcodemunch-mcp**:
+  - *Truncated search more_files inventory & brace expansion (PR #1226 merged, release PR #1227 open)*: When `search_text` is truncated at `max_results`, reports `more_files: [{file, matches}]` and expands brace patterns in `file_pattern`. Disclosed tradeoff: wall time for cut search jumped from 2.8s to 7.4s on home-assistant/core, and response payload size grew by ~20%. (Contrast: trace-mcp pre-indexes symbol locations and provides lean, structured symbol query responses without linear disk re-scans).
+
+**Competitor pulse (as of 2026-10-24 14:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 29,007★ (+1), 1,595 forks (=)
+- oraios/serena: 30,676★ (+3), 2,086 forks (+2)
+- DeusData/codebase-memory-mcp: 47,389★ (+15), 3,888 forks (+1)
+- tirth8205/code-review-graph: 32,366★ (+9), 2,957 forks (-1)
+- colbymchenry/codegraph: 75,176★ (+19), 4,911 forks (+5)
+- abhigyanpatwari/GitNexus: 48,015★ (+1), 5,204 forks (=)
+- jgravelle/jcodemunch-mcp: 2,804★ (=), 374 forks (=)
+- continuedev/continue: 36,309★ (+1), 5,514 forks (=)
+- Aider-AI/aider: 49,734★ (+3), 5,102 forks (=)
+- Graphify-Labs/graphify: 134,198★ (+118), 12,813 forks (+9)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
 
