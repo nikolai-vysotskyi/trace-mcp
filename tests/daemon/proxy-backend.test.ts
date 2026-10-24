@@ -14,6 +14,8 @@ class FakeTransport implements ProxyTransport {
   started = false;
   closed = false;
   failSessionLost = false;
+  initializeResponse: 'success' | 'error' | 'none' = 'success';
+  hangInitializeSend = false;
   // Body the daemon returns for a dead session. Defaults to the 404 restart
   // case; overridable to the "Session expired, reinitialize required" variant.
   sessionLostMessage = 'Session not found';
@@ -31,12 +33,24 @@ class FakeTransport implements ProxyTransport {
           `{"jsonrpc":"2.0","error":{"code":-32000,"message":"${this.sessionLostMessage}"},"id":null}`,
       );
     }
+    if ((msg as { method?: string }).method === 'initialize' && this.hangInitializeSend) {
+      return new Promise<void>(() => {});
+    }
     this.sent.push(msg);
     const m = msg as Record<string, unknown>;
     if (m.method === 'initialize') {
+      if (this.initializeResponse === 'none') return;
       // Daemon answers initialize asynchronously, like the real transport.
       queueMicrotask(() =>
-        this.onmessage?.({ jsonrpc: '2.0', id: m.id, result: { ok: true } } as JSONRPCMessage),
+        this.onmessage?.(
+          (this.initializeResponse === 'error'
+            ? {
+                jsonrpc: '2.0',
+                id: m.id,
+                error: { code: -32000, message: 'Initialization failed' },
+              }
+            : { jsonrpc: '2.0', id: m.id, result: { ok: true } }) as JSONRPCMessage,
+        ),
       );
     }
   }
@@ -63,6 +77,8 @@ describe('ProxyBackend daemon-restart recovery', () => {
   // When true, every transport opened from now on (including recovery ones)
   // reports a lost session — simulates a daemon stuck in a restart loop.
   let failNewTransports: boolean;
+  let newInitializeResponse: FakeTransport['initializeResponse'];
+  let hangNewInitializeSend: boolean;
 
   function makeBackend(): ProxyBackend {
     const backend = new ProxyBackend({
@@ -72,6 +88,8 @@ describe('ProxyBackend daemon-restart recovery', () => {
       transportFactory: () => {
         const t = new FakeTransport();
         t.failSessionLost = failNewTransports;
+        t.initializeResponse = newInitializeResponse;
+        t.hangInitializeSend = hangNewInitializeSend;
         transports.push(t);
         return t;
       },
@@ -84,6 +102,8 @@ describe('ProxyBackend daemon-restart recovery', () => {
     transports = [];
     clientInbox = [];
     failNewTransports = false;
+    newInitializeResponse = 'success';
+    hangNewInitializeSend = false;
     // Project/client registration is best-effort fetch — stub it out.
     vi.stubGlobal(
       'fetch',
@@ -91,7 +111,51 @@ describe('ProxyBackend daemon-restart recovery', () => {
     );
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('rejects a recovery handshake that returns an initialize error', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+    transports[0]!.failSessionLost = true;
+    newInitializeResponse = 'error';
+
+    await expect(backend.send(toolCall(2))).rejects.toThrow(/Initialization failed/);
+    expect(transports[1]!.sent.map(methodOf)).toEqual(['initialize']);
+    expect(transports[1]!.closed).toBe(true);
+    expect(transports[0]!.closed).toBe(false);
+  });
+
+  it('rejects a recovery handshake that never answers before the timeout', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+    transports[0]!.failSessionLost = true;
+    newInitializeResponse = 'none';
+    vi.useFakeTimers();
+
+    const recovery = backend.send(toolCall(2));
+    const rejection = expect(recovery).rejects.toThrow(/initialize.*timed out/i);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+    expect(transports[1]!.sent.map(methodOf)).toEqual(['initialize']);
+    expect(transports[1]!.closed).toBe(true);
+  });
+
+  it('bounds recovery even when sending initialize never settles', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+    transports[0]!.failSessionLost = true;
+    hangNewInitializeSend = true;
+    vi.useFakeTimers();
+
+    const rejection = expect(backend.send(toolCall(2))).rejects.toThrow(/initialize.*timed out/i);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+    expect(transports[1]!.closed).toBe(true);
   });
 
   it('transparently re-initializes and retries after the daemon session is lost', async () => {
