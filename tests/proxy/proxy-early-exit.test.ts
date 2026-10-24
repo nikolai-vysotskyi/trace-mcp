@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyProxyArgs,
   extractProxyArgs,
+  handleProxyEarlyExit,
   isMainEntry,
   PKG_VERSION,
   PROXY_USAGE,
@@ -27,6 +28,23 @@ describe('classifyProxyArgs (TRA-1739)', () => {
     const resWithPrefix = classifyProxyArgs(['node', 'proxy.js', '--help']);
     expect(resWithPrefix.action).toBe('help');
     expect(resWithPrefix.exitCode).toBe(0);
+  });
+
+  it('classifies help and help [command] as help with exitCode 0', () => {
+    const resHelp = classifyProxyArgs(['help']);
+    expect(resHelp.action).toBe('help');
+    expect(resHelp.exitCode).toBe(0);
+    expect(resHelp.output).toBe(PROXY_USAGE);
+
+    const resHelpServe = classifyProxyArgs(['help', 'serve']);
+    expect(resHelpServe.action).toBe('help');
+    expect(resHelpServe.exitCode).toBe(0);
+    expect(resHelpServe.output).toBe(PROXY_USAGE);
+
+    const resWithPrefix = classifyProxyArgs(['node', 'proxy.js', 'help']);
+    expect(resWithPrefix.action).toBe('help');
+    expect(resWithPrefix.exitCode).toBe(0);
+    expect(resWithPrefix.output).toBe(PROXY_USAGE);
   });
 
   it('classifies -v, -V, and --version as version with exitCode 0', () => {
@@ -98,6 +116,21 @@ describe('classifyProxyArgs (TRA-1739)', () => {
       type: 'serve',
       exitCode: 0,
     });
+    expect(classifyProxyArgs(['--preset', 'help'])).toEqual({
+      action: 'serve',
+      type: 'serve',
+      exitCode: 0,
+    });
+    expect(classifyProxyArgs(['serve', '--preset', 'help'])).toEqual({
+      action: 'serve',
+      type: 'serve',
+      exitCode: 0,
+    });
+    expect(classifyProxyArgs(['--preset=help'])).toEqual({
+      action: 'serve',
+      type: 'serve',
+      exitCode: 0,
+    });
     expect(classifyProxyArgs(['node', 'proxy.js', 'serve', '--preset', 'minimal'])).toEqual({
       action: 'serve',
       type: 'serve',
@@ -142,6 +175,81 @@ describe('classifyProxyArgs (TRA-1739)', () => {
     ];
     expect(extractProxyArgs(windowsTsxArgv)).toEqual(['serve', '--preset', 'minimal']);
     expect(classifyProxyArgs(windowsTsxArgv).action).toBe('serve');
+  });
+});
+
+describe('handleProxyEarlyExit (TRA-1739)', () => {
+  it('returns false for serve action without exiting or writing', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((() => true) as any);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as any);
+
+    try {
+      expect(handleProxyEarlyExit(['serve'])).toBe(false);
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(stdoutSpy).not.toHaveBeenCalled();
+      expect(stderrSpy).not.toHaveBeenCalled();
+    } finally {
+      exitSpy.mockRestore();
+      stdoutSpy.mockRestore();
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('writes output and exits on help without stream truncation', () => {
+    let capturedExitCode: number | undefined;
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      capturedExitCode = code;
+    }) as any);
+    let capturedOutput = '';
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((
+      chunk: any,
+      cb?: any,
+    ) => {
+      capturedOutput += String(chunk);
+      if (typeof cb === 'function') cb();
+      return true;
+    }) as any);
+
+    try {
+      const handled = handleProxyEarlyExit(['help']);
+      expect(handled).toBe(true);
+      expect(process.exitCode).toBe(0);
+      expect(stdoutSpy).toHaveBeenCalled();
+      expect(capturedOutput).toContain('Usage: trace-mcp-proxy');
+      expect(capturedExitCode).toBe(0);
+    } finally {
+      exitSpy.mockRestore();
+      stdoutSpy.mockRestore();
+    }
+  });
+
+  it('writes error to stderr and exits 1 on unknown option', () => {
+    let capturedExitCode: number | undefined;
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      capturedExitCode = code;
+    }) as any);
+    let capturedErr = '';
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(((
+      chunk: any,
+      cb?: any,
+    ) => {
+      capturedErr += String(chunk);
+      if (typeof cb === 'function') cb();
+      return true;
+    }) as any);
+
+    try {
+      const handled = handleProxyEarlyExit(['--bogus-flag']);
+      expect(handled).toBe(true);
+      expect(process.exitCode).toBe(1);
+      expect(stderrSpy).toHaveBeenCalled();
+      expect(capturedErr).toContain("error: unknown option '--bogus-flag'");
+      expect(capturedExitCode).toBe(1);
+    } finally {
+      exitSpy.mockRestore();
+      stderrSpy.mockRestore();
+    }
   });
 });
 
@@ -196,6 +304,28 @@ describe('proxy early exit subprocess execution (TRA-1739)', () => {
     // No files or directories created in TRACE_MCP_HOME
     const files = fs.readdirSync(tmpHome);
     expect(files).toEqual([]);
+  });
+
+  it('proxy.js help prints usage to stdout, exit 0, empty stderr, no files created (TRA-1739 regression)', () => {
+    const start = Date.now();
+    const res = runProxy(['help']);
+    const elapsedMs = Date.now() - start;
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Usage: trace-mcp-proxy');
+    expect(res.stdout).toContain('Thin stdio proxy to the trace-mcp daemon.');
+    expect(res.stderr).toBe('');
+    expect(elapsedMs).toBeLessThan(5000);
+
+    const files = fs.readdirSync(tmpHome);
+    expect(files).toEqual([]);
+  });
+
+  it('proxy.js help serve prints usage to stdout, exit 0, empty stderr', () => {
+    const res = runProxy(['help', 'serve']);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Usage: trace-mcp-proxy');
+    expect(res.stderr).toBe('');
   });
 
   it('proxy.js --version prints version to stdout, exit 0, empty stderr', () => {

@@ -112,6 +112,14 @@ export function classifyProxyArgs(argv: string[]): ProxyArgClassification {
     if (arg === 'serve') {
       continue;
     }
+    if (arg === 'help') {
+      return {
+        action: 'help',
+        type: 'help',
+        exitCode: 0,
+        output: PROXY_USAGE,
+      };
+    }
     if (arg === '--preset') {
       if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
         i++;
@@ -173,19 +181,22 @@ export function classifyProxyArgs(argv: string[]): ProxyArgClassification {
 
 export function handleProxyEarlyExit(argv: string[] = process.argv): boolean {
   const result = classifyProxyArgs(argv);
-  if (result.action === 'help') {
-    process.stdout.write(`${result.output}\n`);
-    process.exit(0);
+  if (result.action === 'serve') {
+    return false;
   }
-  if (result.action === 'version') {
-    process.stdout.write(`${result.output}\n`);
-    process.exit(0);
-  }
-  if (result.action === 'error') {
-    process.stderr.write(`${result.output}\n`);
-    process.exit(1);
-  }
-  return false;
+
+  process.exitCode = result.exitCode;
+  const stream = result.action === 'error' ? process.stderr : process.stdout;
+  const content = `${result.output}\n`;
+
+  // Avoid stdout/stderr truncation when piped: flush the stream before exiting (Node.js GH#6456).
+  stream.on('error', () => {
+    process.exit(result.exitCode);
+  });
+  stream.write(content, () => {
+    process.exit(result.exitCode);
+  });
+  return true;
 }
 
 import { loadConfig } from './config.js';
@@ -271,10 +282,11 @@ async function main(): Promise<void> {
 }
 
 if (isMainEntry(import.meta.url, process.argv[1])) {
-  handleProxyEarlyExit(process.argv);
-  hardenStdio();
-  main().catch((err) => {
-    logger.error({ err: String(err) }, 'trace-mcp proxy: fatal error');
-    process.exit(1);
-  });
+  if (!handleProxyEarlyExit(process.argv)) {
+    hardenStdio();
+    main().catch((err) => {
+      logger.error({ err: String(err) }, 'trace-mcp proxy: fatal error');
+      process.exit(1);
+    });
+  }
 }
