@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import fg from 'fast-glob';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { disableBulkMode, enableBulkMode } from '../db/schema.js';
@@ -130,6 +131,10 @@ export interface IndexingResult {
   skippedBinary?: number;
   /** TRA-2273: Aggregated count of files skipped due to exceeding file size cap. */
   skippedOversize?: number;
+}
+
+interface IncludeScope {
+  workspaces?: WorkspaceInfo[];
 }
 
 /**
@@ -917,10 +922,17 @@ export class IndexingPipeline {
     // non-default `status.relativePaths`, or a file deleted after listing).
     const {
       relPaths: filteredChanged,
+      deepCandidates,
+      traceignore,
       skippedBinary: discSkippedBinary,
       skippedOversize: discSkippedOversize,
     } = this.filterIndexablePaths(discovery.changed);
-    const changed = filteredChanged.filter((rel) => {
+    const scopedChanged = await this.resolveDeepFallback(
+      filteredChanged,
+      deepCandidates,
+      traceignore,
+    );
+    const changed = scopedChanged.filter((rel) => {
       try {
         return fs.statSync(path.resolve(this.rootPath, rel)).isFile();
       } catch {
@@ -1419,6 +1431,8 @@ export class IndexingPipeline {
    */
   private filterIndexablePaths(filePaths: string[]): {
     relPaths: string[];
+    deepCandidates: Set<string>;
+    traceignore: TraceignoreMatcher;
     skippedBinary: number;
     skippedOversize: number;
   } {
@@ -1427,6 +1441,9 @@ export class IndexingPipeline {
     // never touch — e.g. Laravel storage/framework/sessions blobs arriving on
     // every web request.
     const isExcluded = this.getExcludeMatcher();
+    const isIncluded = this.getIncludeMatcher();
+    const traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
+    const includeScope: IncludeScope = {};
     // A registered descendant owns its own subtree — drop its files so an
     // umbrella root's watcher-driven reindex is a no-op instead of a second,
     // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
@@ -1436,6 +1453,7 @@ export class IndexingPipeline {
       : undefined;
     const gitignore = this.gitignoreMatcher();
     const relPaths: string[] = [];
+    const deepCandidates = new Set<string>();
     let skippedBinary = 0;
     let skippedOversize = 0;
     for (const fp of filePaths) {
@@ -1448,6 +1466,15 @@ export class IndexingPipeline {
       const relPosix = rel.split(path.sep).join('/');
       if (isExcluded(relPosix)) {
         logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+        continue;
+      }
+      if (traceignore.isIgnored(relPosix)) {
+        logger.debug({ file: rel }, 'Trace-ignored path skipped in indexFiles');
+        continue;
+      }
+      const includeDecision = isIncluded(relPosix, includeScope);
+      if (!includeDecision) {
+        logger.debug({ file: rel }, 'Path outside include skipped in indexFiles');
         continue;
       }
       if (ownedByDescendant?.(relPosix)) {
@@ -1522,8 +1549,38 @@ export class IndexingPipeline {
       // duplicate file row on Windows instead of matching the existing one,
       // breaking every downstream mtime/existing-row lookup (TRA-1045).
       relPaths.push(relPosix);
+      if (includeDecision === 'fallback') deepCandidates.add(relPosix);
     }
-    return { relPaths, skippedBinary, skippedOversize };
+    return { relPaths, deepCandidates, traceignore, skippedBinary, skippedOversize };
+  }
+
+  /** Resolve the full walk's conditional deep fallback without blocking the event loop. */
+  private async resolveDeepFallback(
+    relPaths: string[],
+    deepCandidates: Set<string>,
+    traceignore: TraceignoreMatcher,
+  ): Promise<string[]> {
+    if (deepCandidates.size === 0) return relPaths;
+    const isNegative = (p: string) => p.startsWith('!') && !p.startsWith('!(');
+    const rooted = this.config.include.filter((p) => !isNegative(p) && !p.startsWith('**/'));
+    const negatives = this.config.include.filter(isNegative);
+    const stream = fg.stream([...rooted, ...negatives], {
+      cwd: this.rootPath,
+      ignore: [
+        ...this.config.exclude,
+        ...traceignore.toFastGlobIgnore(),
+        ...descendantExcludeGlobs(this.rootPath),
+      ],
+      dot: false,
+      onlyFiles: true,
+      suppressErrors: true,
+      followSymbolicLinks: this.config.follow_symlinks,
+    });
+    for await (const _ of stream) {
+      (stream as NodeJS.EventEmitter & { destroy?: () => void }).destroy?.();
+      return relPaths.filter((p) => !deepCandidates.has(p));
+    }
+    return relPaths;
   }
 
   async indexFiles(
@@ -1531,7 +1588,8 @@ export class IndexingPipeline {
     opts: { postprocess?: PostprocessLevel; signal?: AbortSignal } = {},
   ): Promise<IndexingResult> {
     const enqueuedAt = Date.now();
-    const { relPaths, skippedBinary, skippedOversize } = this.filterIndexablePaths(filePaths);
+    const { relPaths, deepCandidates, traceignore, skippedBinary, skippedOversize } =
+      this.filterIndexablePaths(filePaths);
     const skippedUnindexable = skippedBinary + skippedOversize;
 
     // TRA-935: nothing survived the filters, so this run cannot change a
@@ -1579,7 +1637,21 @@ export class IndexingPipeline {
       // wall-clock to get the queue time instead of reporting the two summed
       // as reindex latency.
       const start = Date.now();
-      const r = await this.runPipeline(relPaths, false, start, opts.signal);
+      const scopedPaths = await this.resolveDeepFallback(relPaths, deepCandidates, traceignore);
+      if (scopedPaths.length === 0) {
+        return {
+          totalFiles: skippedUnindexable,
+          indexed: 0,
+          skipped: skippedUnindexable,
+          ...(skippedBinary > 0 ? { skippedBinary } : {}),
+          ...(skippedOversize > 0 ? { skippedOversize } : {}),
+          errors: 0,
+          durationMs: Date.now() - start,
+          incremental: true,
+          postprocess: this._postprocessLevel,
+        };
+      }
+      const r = await this.runPipeline(scopedPaths, false, start, opts.signal);
       if (skippedUnindexable > 0) {
         r.totalFiles += skippedUnindexable;
         r.skipped += skippedUnindexable;
@@ -1614,6 +1686,52 @@ export class IndexingPipeline {
   }
 
   private _excludeMatcher?: (p: string) => boolean;
+  private _includeMatcher?: (p: string, scope: IncludeScope) => boolean | 'fallback';
+
+  /** Match the full walk's include patterns and conditional nested-root fallbacks. */
+  private getIncludeMatcher(): (p: string, scope: IncludeScope) => boolean | 'fallback' {
+    if (!this._includeMatcher) {
+      const isNegative = (p: string) => p.startsWith('!') && !p.startsWith('!(');
+      const positives = this.config.include.filter((p) => !isNegative(p));
+      const negatives = this.config.include.filter(isNegative).map((p) => p.slice(1));
+      const rooted = positives.filter((p) => !p.startsWith('**/'));
+      const direct = picomatch(positives, { dot: false });
+      const excluded = picomatch(negatives, { dot: false });
+      const deep = picomatch(
+        rooted.map((p) => `**/${p}`),
+        { dot: false },
+      );
+      const rootedOnly = picomatch(rooted, { dot: false });
+      this._includeMatcher = (relPosix, scope) => {
+        if (excluded(relPosix)) return false;
+        if (direct(relPosix)) return true;
+        if (!rooted.length || !deep(relPosix)) return false;
+
+        // collectFiles() also anchors rooted globs at detected workspaces.
+        scope.workspaces ??= this.workspaces.length
+          ? this.workspaces
+          : this.config.children?.length
+            ? buildMultiRootWorkspaces(this.rootPath, this.config.children)
+            : detectWorkspaces(this.rootPath);
+        if (
+          scope.workspaces.some(
+            (ws) =>
+              relPosix.startsWith(`${ws.path}/`) && rootedOnly(relPosix.slice(ws.path.length + 1)),
+          )
+        ) {
+          return true;
+        }
+
+        // The deep fallback has the same five-component limit as collectFiles.
+        if (relPosix.split('/').length > 5) return false;
+
+        // The root-presence probe is deferred until the pipeline has reserved
+        // its lock, preserving synchronous enqueue and dispose semantics.
+        return 'fallback';
+      };
+    }
+    return this._includeMatcher;
+  }
 
   /** Lazily-built picomatch matcher over config.exclude (POSIX rel paths). */
   private getExcludeMatcher(): (p: string) => boolean {
