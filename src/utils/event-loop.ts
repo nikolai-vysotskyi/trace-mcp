@@ -16,6 +16,7 @@
  * inside the loop and yield only every `every` iterations to keep overhead
  * negligible.
  */
+import { execFileSync } from 'node:child_process';
 
 let yieldCount = 0;
 
@@ -126,6 +127,53 @@ export interface EventLoopLagMonitorOptions {
    * stall watchdog beats its heartbeat here — one call per event-loop turn.
    */
   onTick?: () => void;
+  /** Monotonic clock, injectable for deterministic timer tests. */
+  now?: () => number;
+  /** Wall clock, injectable for deterministic timer tests. */
+  wallNow?: () => number;
+  /** Cumulative OS-confirmed sleep time; null if unsupported. */
+  sleepOffsetMs?: () => number | null;
+  /** Last OS-confirmed sleep interval; null means no trustworthy signal. */
+  sleepInterval?: () => { startMs: number; endMs: number } | null;
+}
+
+function macSleepOffsetMs(): number | null {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') return null;
+  try {
+    // At the last wake, continuous minus absolute Mach time is cumulative
+    // suspended time. The values are ticks; hw.tbfrequency converts to ms.
+    const output = execFileSync(
+      '/usr/sbin/sysctl',
+      ['-n', 'machdep.wake_abstime', 'machdep.wake_conttime', 'hw.tbfrequency'],
+      { encoding: 'utf8', timeout: 100, maxBuffer: 1024, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    const values = output.trim().split('\n').map(Number);
+    if (values.length !== 3 || values.some((value) => !Number.isSafeInteger(value))) return null;
+    const [absolute, continuous, frequency] = values as [number, number, number];
+    if (frequency <= 0 || continuous < absolute) return null;
+    return ((continuous - absolute) * 1000) / frequency;
+  } catch {
+    return null;
+  }
+}
+
+function macLastSleepInterval(): { startMs: number; endMs: number } | null {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const output = execFileSync('/usr/sbin/sysctl', ['-n', 'kern.sleeptime', 'kern.waketime'], {
+      encoding: 'utf8',
+      timeout: 100,
+      maxBuffer: 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const times = [...output.matchAll(/\{ sec = (\d+), usec = (\d+) \}/g)].map(
+      ([, seconds, microseconds]) => Number(seconds) * 1000 + Number(microseconds) / 1000,
+    );
+    if (times.length !== 2 || times[1]! <= times[0]!) return null;
+    return { startMs: times[0]!, endMs: times[1]! };
+  } catch {
+    return null;
+  }
 }
 
 export interface EventLoopLagStats {
@@ -138,31 +186,88 @@ export class EventLoopLagMonitor {
   private readonly thresholdMs: number;
   private readonly onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
   private readonly onTick?: () => void;
+  private readonly now: () => number;
+  private readonly wallNow: () => number;
+  private readonly sleepOffsetMs: () => number | null;
+  private readonly sleepInterval: () => { startMs: number; endMs: number } | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTick = 0;
+  private lastWallTick = 0;
+  private lastSleepOffset: number | null = null;
   private stalls = 0;
   private maxLag = 0;
+
+  private sampleClocks(): { now: number; sleepOffset: number | null } {
+    let before = this.now();
+    let sleepOffset = this.sleepOffsetMs();
+    let now = this.now();
+    // A system sleep can occur while sysctl is reading several values. If
+    // the read itself spans >100 ms, retry after the machine has woken.
+    if (now - before > 100) {
+      before = now;
+      sleepOffset = this.sleepOffsetMs();
+      now = this.now();
+      if (now - before > 100) sleepOffset = null;
+    }
+    return { now, sleepOffset };
+  }
 
   constructor(opts: EventLoopLagMonitorOptions = {}) {
     this.intervalMs = opts.intervalMs ?? 1000;
     this.thresholdMs = opts.thresholdMs ?? 1000;
     this.onStall = opts.onStall;
     this.onTick = opts.onTick;
+    this.now = opts.now ?? (() => performance.now());
+    this.wallNow = opts.wallNow ?? (() => Date.now());
+    this.sleepOffsetMs = opts.sleepOffsetMs ?? macSleepOffsetMs;
+    this.sleepInterval = opts.sleepInterval ?? macLastSleepInterval;
   }
 
   start(): void {
     if (this.timer) return;
-    this.lastTick = Date.now();
+    const initial = this.sampleClocks();
+    this.lastSleepOffset = initial.sleepOffset;
+    this.lastTick = initial.now;
+    this.lastWallTick = this.wallNow();
     this.timer = setInterval(() => {
-      const now = Date.now();
-      const lag = now - this.lastTick - this.intervalMs;
+      const { now, sleepOffset } = this.sampleClocks();
+      const wallNow = this.wallNow();
+      let lag = now - this.lastTick - this.intervalMs;
       this.lastTick = now;
+      const previousWallTick = this.lastWallTick;
+      this.lastWallTick = wallNow;
+      const previousSleepOffset = this.lastSleepOffset;
+      const sleptMs =
+        sleepOffset != null && previousSleepOffset != null && sleepOffset >= previousSleepOffset
+          ? sleepOffset - previousSleepOffset
+          : 0;
+      this.lastSleepOffset = sleepOffset;
+      lag = Math.max(0, lag - sleptMs);
       try {
         this.onTick?.();
       } catch {
         /* observing must never break the loop it watches */
       }
       if (lag >= this.thresholdMs) {
+        // Apple Silicon exposes cumulative sleep time through the difference
+        // between continuous and absolute time at the last wake. On older
+        // Macs, use the last OS-confirmed sleep interval as a fallback.
+        if (sleepOffset == null || previousSleepOffset == null) {
+          const sleep = this.sleepInterval();
+          if (
+            sleep &&
+            sleep.startMs >= previousWallTick - 2000 &&
+            sleep.startMs <= wallNow + 2000 &&
+            sleep.endMs <= wallNow + 2000
+          ) {
+            const overlapMs = Math.max(
+              0,
+              Math.min(wallNow, sleep.endMs) - Math.max(previousWallTick, sleep.startMs),
+            );
+            lag = Math.max(0, lag - overlapMs);
+          }
+        }
+        if (lag < this.thresholdMs) return;
         this.stalls++;
         if (lag > this.maxLag) this.maxLag = lag;
         try {
