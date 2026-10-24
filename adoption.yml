@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-10-23T06:42:49.760Z"
+updated: "2026-10-24T06:39:07.135Z"
 active_users:
-  day: 47
-  week: 170
-  month: 336
+  day: 66
+  week: 176
+  month: 329
   first_ping_date: "2026-08-29"
-  days_observed: 56
+  days_observed: 57
   month_window_full: true
-events_28d: 2481
+events_28d: 2509
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 2481
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 160683356
-  tokens_saved_raw: 188613145
-  usd_saved: 160.68
+  tokens_saved: 166365963
+  tokens_saved_raw: 194316696
+  usd_saved: 166.37
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 48
+  days: 49
   capped_days: 2
   raw_ratio: 1.17
   inflation_suspected: false
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 246
+  new_installs_28d: 238
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 14
+  retention_dau_mau_pct: 20
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -163,20 +163,19 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1388
-  "upgrade": 737
-  "new": 246
-  "(not set)": 55
-  "downgrade": 54
+  "active": 1452
+  "upgrade": 712
+  "new": 238
+  "(not set)": 56
+  "downgrade": 50
   "unknown": 1
 by_version:
   "3.34.6": 88
-  "3.38.0": 72
+  "3.38.0": 84
   "3.37.10": 57
   "3.34.4": 47
   "3.34.8": 46
   "3.36.7": 45
-  "3.32.0": 43
   "3.34.7": 43
   "3.37.0": 42
   "3.37.6": 33
@@ -184,17 +183,18 @@ by_version:
   "3.34.3": 32
   "3.37.7": 29
   "3.37.4": 27
-  "3.33.0": 26
   "3.37.9": 24
   "3.36.3": 23
   "3.36.6": 23
   "3.36.0": 22
+  "3.33.0": 21
   "3.36.5": 21
+  "3.32.0": 19
   "3.37.3": 16
   "3.34.2": 15
-  "3.31.5": 12
   "3.35.0": 11
-  "3.31.3": 8
+  "3.37.2": 8
+  "3.31.3": 7
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 837
+  at_or_above: 815
   below: 0
   unknown: 0
   pct: 100
@@ -258,13 +258,13 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 117
+  "United Arab Emirates": 113
   "(not set)": 58
   "United States": 24
   "Russia": 17
   "China": 11
-  "Thailand": 10
-  "Brazil": 9
+  "Thailand": 9
+  "Brazil": 8
   "Germany": 6
   "Poland": 6
   "Australia": 5
@@ -276,18 +276,18 @@ by_country:
   "Türkiye": 4
   "Egypt": 3
   "Netherlands": 3
+  "Pakistan": 3
   "Sweden": 3
   "Italy": 2
   "Norway": 2
-  "Pakistan": 2
   "Romania": 2
   "Singapore": 2
 by_client:
-  "unknown": 222
-  "claude-code": 83
-  "codex-mcp-client": 40
+  "unknown": 214
+  "claude-code": 82
+  "codex-mcp-client": 39
   "antigravity-client": 17
-  "opencode": 15
+  "opencode": 16
   "mcp": 13
   "cursor-vscode": 5
   "Cursor": 4
