@@ -203,6 +203,7 @@ export class ProxyBackend implements Backend {
   /** While re-initializing, swallow the replayed initialize response by id. */
   private pendingReinitId: string | number | null = null;
   private resolveReinit: (() => void) | null = null;
+  private rejectReinit: ((err: Error) => void) | null = null;
   /** Ids of in-flight `tools/list` requests, whose responses need filtering. */
   private readonly pendingToolsListIds = new Set<string | number>();
   /**
@@ -365,27 +366,48 @@ export class ProxyBackend implements Backend {
 
       const next = this.buildTransport(projectRoot);
       this.wire(next);
-      await next.start();
-
-      const initId = messageId(this.initializeFrame!)!;
-      const done = new Promise<void>((resolve) => {
-        this.resolveReinit = resolve;
-      });
-      this.pendingReinitId = initId;
       try {
-        await next.send(this.initializeFrame!);
-        await Promise.race([done, delay(REINIT_TIMEOUT_MS)]);
-      } finally {
-        this.pendingReinitId = null;
-        this.resolveReinit = null;
-      }
+        await next.start();
+        const initId = messageId(this.initializeFrame!)!;
+        const done = new Promise<void>((resolve, reject) => {
+          this.resolveReinit = resolve;
+          this.rejectReinit = reject;
+        });
+        this.pendingReinitId = initId;
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            Promise.all([next.send(this.initializeFrame!), done]),
+            new Promise<never>((_, reject) => {
+              timeout = setTimeout(
+                () => reject(new Error('Daemon initialize timed out during session recovery')),
+                REINIT_TIMEOUT_MS,
+              );
+              timeout.unref?.();
+            }),
+          ]);
+        } finally {
+          if (timeout) clearTimeout(timeout);
+          this.pendingReinitId = null;
+          this.resolveReinit = null;
+          this.rejectReinit = null;
+        }
 
-      // Complete the MCP handshake — the daemon won't serve requests until the
-      // `initialized` notification lands.
-      await next.send({
-        jsonrpc: '2.0',
-        method: 'notifications/initialized',
-      } as unknown as JSONRPCMessage);
+        // Complete the MCP handshake only after initialize succeeds.
+        await next.send({
+          jsonrpc: '2.0',
+          method: 'notifications/initialized',
+        } as unknown as JSONRPCMessage);
+      } catch (err) {
+        next.onmessage = undefined;
+        next.onerror = undefined;
+        try {
+          await next.close();
+        } catch {
+          /* the failed transport may already be closed */
+        }
+        throw err;
+      }
 
       const dead = this.httpTransport;
       this.httpTransport = next;
@@ -606,7 +628,9 @@ export class ProxyBackend implements Backend {
       // Swallow the replayed initialize response — the client already received
       // one during its original handshake; a duplicate would corrupt its state.
       if (this.pendingReinitId !== null && messageId(msg) === this.pendingReinitId) {
-        this.resolveReinit?.();
+        const error = (msg as { error?: { message?: string } }).error;
+        if (error) this.rejectReinit?.(new Error(error.message ?? 'Daemon initialize failed'));
+        else this.resolveReinit?.();
         return;
       }
       // An internal tools/list prime: record the daemon's surface, tell nobody.
