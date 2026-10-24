@@ -1469,7 +1469,7 @@ export class IndexingPipeline {
         }
       }
       const merged = Array.from(new Set([...existing, ...relPaths]));
-      const capped = merged.slice(0, PENDING_DELETES_MAX);
+      const capped = merged.slice(-PENDING_DELETES_MAX);
       fs.mkdirSync(path.dirname(sidecarPath), { recursive: true });
       fs.writeFileSync(sidecarPath, JSON.stringify(capped));
     } catch (err) {
@@ -1489,13 +1489,13 @@ export class IndexingPipeline {
     let pending: string[];
     try {
       const raw = fs.readFileSync(sidecarPath, 'utf-8');
-      try {
-        fs.unlinkSync(sidecarPath);
-      } catch {
-        /* best-effort unlink */
-      }
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
+      if (!Array.isArray(parsed)) {
+        try {
+          fs.unlinkSync(sidecarPath);
+        } catch {}
+        return;
+      }
       pending = parsed.filter((p): p is string => typeof p === 'string');
     } catch (err) {
       try {
@@ -1505,7 +1505,12 @@ export class IndexingPipeline {
       return;
     }
 
-    if (pending.length === 0 || !this.store.db.open) return;
+    if (pending.length === 0 || !this.store.db.open) {
+      try {
+        if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+      } catch {}
+      return;
+    }
 
     const filesToDelete = new Map<number, { id: number; path: string }>();
     for (const relPath of pending) {
@@ -1528,26 +1533,35 @@ export class IndexingPipeline {
       }
     }
 
-    if (filesToDelete.size === 0) return;
-
-    for (const file of filesToDelete.values()) {
-      invalidateTreeCacheFile(this.rootPath, file.path);
-      if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
-        clearPackageEntriesCache(this.rootPath);
+    if (filesToDelete.size > 0) {
+      for (const file of filesToDelete.values()) {
+        invalidateTreeCacheFile(this.rootPath, file.path);
+        if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
+          clearPackageEntriesCache(this.rootPath);
+        }
       }
+
+      this.store.db
+        .transaction(() => {
+          for (const file of filesToDelete.values()) {
+            this.store.deleteFile(file.id);
+          }
+        })
+        .immediate();
+
+      invalidatePageRankCache();
+      invalidateSearchCache(this.store.db);
+      this.scheduleCoverageReconcile();
+      logger.info({ count: filesToDelete.size }, 'Replayed pending deletes from sidecar');
     }
 
-    this.store.db
-      .transaction(() => {
-        for (const file of filesToDelete.values()) {
-          this.store.deleteFile(file.id);
-        }
-      })
-      .immediate();
-
-    invalidatePageRankCache();
-    invalidateSearchCache(this.store.db);
-    logger.info({ count: filesToDelete.size }, 'Replayed pending deletes from sidecar');
+    // Unlink sidecar ONLY after successful transaction commit so a crash during row
+    // deletion does not lose pending deletes.
+    try {
+      if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+    } catch {
+      /* best-effort unlink */
+    }
   }
 
   /**

@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TraceMcpConfigSchema } from '../../config.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
@@ -146,5 +146,120 @@ describe('TRA-1998 pending deletes replay on closed DB', () => {
 
     await pipeline.dispose();
     rawDb.close();
+  });
+
+  it('survives failure before sidecar unlink: pending deletes remain idempotent on next run', async () => {
+    const rawDb = initializeDatabase(dbPath);
+    const store = new Store(rawDb);
+    const pipeline = makePipeline(store);
+
+    await pipeline.indexAll(false);
+    expect(store.getFile('src/phantom.ts')).toBeDefined();
+
+    // Delete phantom file on disk
+    rmSync(join(workDir, 'src', 'phantom.ts'));
+
+    const sidecarPath = pendingDeletesPathForDb(dbPath);
+    writeFileSync(sidecarPath, JSON.stringify(['src/phantom.ts']));
+    expect(existsSync(sidecarPath)).toBe(true);
+
+    // Simulate crash or failure between transaction commit and unlink
+    const fsMod = await import('node:fs');
+    let unlinkAttempted = false;
+    const unlinkSpy = vi.spyOn(fsMod.default, 'unlinkSync').mockImplementation((path: any) => {
+      if (String(path) === sidecarPath) {
+        unlinkAttempted = true;
+        throw new Error('Simulated failure during unlink');
+      }
+      return unlinkSpy.getMockImplementation()?.(path);
+    });
+
+    try {
+      // Replay executes transaction; unlink throws inside catch block
+      pipeline.replayPendingDeletes();
+    } finally {
+      unlinkSpy.mockRestore();
+    }
+
+    expect(unlinkAttempted).toBe(true);
+    // Rows were successfully committed even though unlink failed
+    expect(store.getFile('src/phantom.ts')).toBeUndefined();
+    // Sidecar still remains on disk because unlink failed
+    expect(existsSync(sidecarPath)).toBe(true);
+
+    // Next restart / replay run picks up the remaining sidecar idempotently
+    expect(() => pipeline.replayPendingDeletes()).not.toThrow();
+    // Replay succeeds and safely unlinks the sidecar
+    expect(existsSync(sidecarPath)).toBe(false);
+    expect(store.getFile('src/phantom.ts')).toBeUndefined();
+    expect(store.getFile('src/survivor.ts')).toBeDefined();
+
+    await pipeline.dispose();
+    rawDb.close();
+  });
+
+  it('leaves sidecar intact if row deletion transaction fails before commit', async () => {
+    const rawDb = initializeDatabase(dbPath);
+    const store = new Store(rawDb);
+    const pipeline = makePipeline(store);
+
+    await pipeline.indexAll(false);
+    expect(store.getFile('src/phantom.ts')).toBeDefined();
+
+    // Delete phantom file on disk
+    rmSync(join(workDir, 'src', 'phantom.ts'));
+
+    const sidecarPath = pendingDeletesPathForDb(dbPath);
+    writeFileSync(sidecarPath, JSON.stringify(['src/phantom.ts']));
+    expect(existsSync(sidecarPath)).toBe(true);
+
+    // Mock store.deleteFile to throw an error, simulating crash/failure during transaction
+    const origDeleteFile = store.deleteFile.bind(store);
+    store.deleteFile = () => {
+      throw new Error('Simulated database write failure');
+    };
+
+    try {
+      expect(() => pipeline.replayPendingDeletes()).toThrow('Simulated database write failure');
+    } finally {
+      store.deleteFile = origDeleteFile;
+    }
+
+    // Sidecar MUST remain on disk because transaction did not commit
+    expect(existsSync(sidecarPath)).toBe(true);
+
+    // After resolving the failure, next replay run commits and unlinks sidecar
+    expect(() => pipeline.replayPendingDeletes()).not.toThrow();
+    expect(store.getFile('src/phantom.ts')).toBeUndefined();
+    expect(existsSync(sidecarPath)).toBe(false);
+
+    await pipeline.dispose();
+    rawDb.close();
+  });
+
+  it('preserves newest entries when pending deletes cap is exceeded', async () => {
+    const rawDb = initializeDatabase(dbPath);
+    const store = new Store(rawDb);
+    const pipeline = makePipeline(store);
+
+    rawDb.close();
+    expect(store.db.open).toBe(false);
+
+    const sidecarPath = pendingDeletesPathForDb(dbPath);
+    // Seed sidecar with 10_000 old entries
+    const oldEntries = Array.from({ length: 10_000 }, (_, i) => `src/old_${i}.ts`);
+    writeFileSync(sidecarPath, JSON.stringify(oldEntries));
+
+    // Delete a new file on closed DB
+    pipeline.deleteFiles([join(workDir, 'src', 'new_file.ts')]);
+
+    const content: string[] = JSON.parse(readFileSync(sidecarPath, 'utf-8'));
+    expect(content.length).toBe(10_000);
+    // The newest entry must be present
+    expect(content).toContain('src/new_file.ts');
+    // The oldest entry must have been dropped
+    expect(content).not.toContain('src/old_0.ts');
+
+    await pipeline.dispose();
   });
 });
