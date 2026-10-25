@@ -58,7 +58,7 @@ describe('TRA-2682: storage/framework and storage/logs churn protection', () => 
     expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/storage/framework/**');
     expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/storage/logs/**');
 
-    const isIgnored = picomatch(HOT_CHURN_NATIVE_IGNORE_GLOBS, { dot: true });
+    const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
     expect(isIgnored('storage/framework/sessions/abc123xyz')).toBe(true);
     expect(isIgnored('/var/www/storage/framework/views/template.php')).toBe(true);
     expect(isIgnored('storage/logs/laravel.log')).toBe(true);
