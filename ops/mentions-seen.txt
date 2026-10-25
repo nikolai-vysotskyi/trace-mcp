@@ -354,4 +354,8 @@ w00tzenheimer/feed
 # Automated repo metadata / star history & readme cache crawler:
 nguyenlevel/data_moitruong
 
+# ── Swept 2026-10-25 midday pass (TRA-2675) ──
+# Name collision: agent-trace-mcp / playwright-trace-mcp in Humanswith.ai stack
+damirclaude2-code/C-Users-sabir-OneDrive-CLAUDE-CODE-1
+
 
