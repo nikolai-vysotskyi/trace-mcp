@@ -378,12 +378,24 @@ export class ExtractPool {
     // slot to its 5-failure budget (~20 error lines); mark the slot dead
     // immediately with a single loud line instead and fall back to
     // in-process extraction.
-    // TRA-2687: if the primary worker entry is temporarily missing during an
-    // in-flight update, check for a backup swap directory before declaring dead.
+    // TRA-2687: if current workerEntry is pointing to a temporary swap path,
+    // switch back to canonical entry once canonical is restored. If current
+    // workerEntry is missing (e.g. swap directory was cleaned up after update),
+    // re-resolve canonical entry (fallback to swap if update still in progress).
+    const currentPath = workerEntryPath(this.workerEntry);
+    if (
+      currentPath &&
+      (/trace-mcp\.tmcp-bak-/i.test(currentPath) || /[/\\]\.trace-mcp-/i.test(currentPath))
+    ) {
+      const canonical = new URL('./extract-worker.js', import.meta.url);
+      if (workerEntryFileExists(canonical)) {
+        this.workerEntry = canonical;
+      }
+    }
     if (!workerEntryFileExists(this.workerEntry)) {
-      const swap = findSwapWorkerEntry(this.workerEntry);
-      if (swap && workerEntryFileExists(swap)) {
-        this.workerEntry = swap;
+      const rechecked = resolveWorkerEntry();
+      if (rechecked && workerEntryFileExists(rechecked)) {
+        this.workerEntry = rechecked;
       }
     }
     if (!workerEntryFileExists(this.workerEntry)) {
@@ -675,15 +687,13 @@ export class ExtractPool {
    */
   private tryRecover(): boolean {
     if (!this.poolDisabled || this.terminated) return !this.poolDisabled;
-    let entry = this.workerEntry ?? resolveWorkerEntry();
-    if (!workerEntryFileExists(entry)) {
-      const swap = findSwapWorkerEntry(entry);
-      if (swap && workerEntryFileExists(swap)) {
-        entry = swap;
-      } else {
-        return false;
-      }
+    // TRA-2687: resolve canonical entry first (or backup swap if update still in progress).
+    // In tests with custom workerEntry, fall back to this.workerEntry if valid.
+    let entry = resolveWorkerEntry();
+    if (!workerEntryFileExists(entry) && workerEntryFileExists(this.workerEntry)) {
+      entry = this.workerEntry;
     }
+    if (!workerEntryFileExists(entry)) return false;
     this.workerEntry = entry;
     this.poolDisabled = false;
     this.slots = [];
