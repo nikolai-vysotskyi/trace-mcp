@@ -1627,6 +1627,27 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
     expect(stderr).toContain('trace-mcp package not found');
   });
 
+  it('does not heal launcher.env to app bundle when previous config was npm-based (TRA-2687)', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const { app, cli: bundledCli } = plantAppBundle(home);
+    writeAppLocation(traceHome, app);
+
+    // launcher.env was configured with an npm-installed CLI
+    const npmCli = path.join(home, 'lib', 'node_modules', 'trace-mcp', 'dist', 'cli.js');
+    writeConfig(traceHome, node, npmCli);
+
+    // When the npm CLI is missing, launcher falls back to the app bundle for execution...
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${bundledCli} serve`);
+
+    // ...but heal_config MUST NOT overwrite launcher.env with the app bundle!
+    const config = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+    expect(config).toContain(`TRACE_MCP_CLI="${npmCli}"`);
+    expect(config).not.toContain(bundledCli);
+  });
+
   // The node half needs the machine to have no standard node, or the probe
   // rightly prefers it — same guard the pkg-roots node suite uses.
   describe.skipIf(fs.existsSync('/opt/homebrew/bin/node') || fs.existsSync('/usr/local/bin/node'))(

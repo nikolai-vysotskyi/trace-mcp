@@ -23,7 +23,8 @@
 
 import fs from 'node:fs';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import type { FileRow } from '../db/types.js';
 import { logger } from '../logger.js';
@@ -177,16 +178,6 @@ export interface ExtractPoolOptions {
  * the .js file does not exist; in that case we report unavailable and the
  * caller falls back to in-process extraction.
  */
-function resolveWorkerEntry(): URL | null {
-  const url = new URL('./extract-worker.js', import.meta.url);
-  try {
-    if (fs.existsSync(fileURLToPath(url))) return url;
-  } catch {
-    /* fallthrough */
-  }
-  return null;
-}
-
 /** Filesystem path of a worker entry URL (never throws; for logs/probes). */
 function workerEntryPath(entry: URL | null): string | null {
   if (!entry) return null;
@@ -206,6 +197,57 @@ function workerEntryFileExists(entry: URL | null): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * TRA-2687: check for a backup swap directory (e.g. trace-mcp.tmcp-bak-* or .trace-mcp-*)
+ * left during an update swap window, so a running daemon can continue spawning
+ * workers while the live install tree is mid-unpack.
+ */
+function findSwapWorkerEntry(primary: URL | null): URL | null {
+  const p = workerEntryPath(primary);
+  if (!p) return null;
+  try {
+    const pkgDir = path.resolve(path.dirname(p), '..');
+    const nodeModulesDir = path.dirname(pkgDir);
+    if (!fs.existsSync(nodeModulesDir)) return null;
+
+    const entries = fs.readdirSync(nodeModulesDir);
+    const candidates = entries
+      .filter((e) => e.startsWith('trace-mcp.tmcp-bak-') || e.startsWith('.trace-mcp-'))
+      .sort((a, b) => {
+        const aBak = a.startsWith('trace-mcp.tmcp-bak-') ? 0 : 1;
+        const bBak = b.startsWith('trace-mcp.tmcp-bak-') ? 0 : 1;
+        if (aBak !== bBak) return aBak - bBak;
+        try {
+          const mtimeA = fs.statSync(path.join(nodeModulesDir, a)).mtimeMs;
+          const mtimeB = fs.statSync(path.join(nodeModulesDir, b)).mtimeMs;
+          return mtimeB - mtimeA;
+        } catch {
+          return 0;
+        }
+      });
+
+    for (const cand of candidates) {
+      const candidateWorker = path.join(nodeModulesDir, cand, 'dist', 'extract-worker.js');
+      if (fs.existsSync(candidateWorker) && fs.statSync(candidateWorker).size > 0) {
+        return pathToFileURL(candidateWorker);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function resolveWorkerEntry(): URL | null {
+  const url = new URL('./extract-worker.js', import.meta.url);
+  try {
+    if (fs.existsSync(fileURLToPath(url))) return url;
+  } catch {
+    /* fallthrough */
+  }
+  return findSwapWorkerEntry(url);
 }
 
 /**
@@ -336,6 +378,14 @@ export class ExtractPool {
     // slot to its 5-failure budget (~20 error lines); mark the slot dead
     // immediately with a single loud line instead and fall back to
     // in-process extraction.
+    // TRA-2687: if the primary worker entry is temporarily missing during an
+    // in-flight update, check for a backup swap directory before declaring dead.
+    if (!workerEntryFileExists(this.workerEntry)) {
+      const swap = findSwapWorkerEntry(this.workerEntry);
+      if (swap && workerEntryFileExists(swap)) {
+        this.workerEntry = swap;
+      }
+    }
     if (!workerEntryFileExists(this.workerEntry)) {
       slot.permanentlyDead = true;
       const entryPath = workerEntryPath(this.workerEntry);
@@ -625,8 +675,15 @@ export class ExtractPool {
    */
   private tryRecover(): boolean {
     if (!this.poolDisabled || this.terminated) return !this.poolDisabled;
-    const entry = this.workerEntry ?? resolveWorkerEntry();
-    if (!workerEntryFileExists(entry)) return false;
+    let entry = this.workerEntry ?? resolveWorkerEntry();
+    if (!workerEntryFileExists(entry)) {
+      const swap = findSwapWorkerEntry(entry);
+      if (swap && workerEntryFileExists(swap)) {
+        entry = swap;
+      } else {
+        return false;
+      }
+    }
     this.workerEntry = entry;
     this.poolDisabled = false;
     this.slots = [];
