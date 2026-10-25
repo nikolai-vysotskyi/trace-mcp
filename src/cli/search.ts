@@ -18,7 +18,7 @@ import { Command } from 'commander';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { findProjectRoot, hasRootMarkers } from '../project-root.js';
-import { getProject } from '../registry.js';
+import { getProject, resolveRegisteredAncestor } from '../registry.js';
 import { search } from '../tools/navigation/navigation.js';
 import {
   bucketize,
@@ -88,19 +88,24 @@ export const searchCommand = new Command('search')
 
     const cwd = process.cwd();
     let projectRoot: string;
-    try {
-      projectRoot = findProjectRoot(cwd);
-    } catch {
-      if (hasRootMarkers(cwd)) {
-        projectRoot = cwd;
-      } else {
-        console.error(`No project found in ${cwd}. Run \`trace-mcp add\` first.`);
-        process.exit(1);
-        return;
+    const registered = resolveRegisteredAncestor(cwd);
+    if (registered) {
+      projectRoot = registered.root;
+    } else {
+      try {
+        projectRoot = findProjectRoot(cwd);
+      } catch {
+        if (hasRootMarkers(cwd)) {
+          projectRoot = cwd;
+        } else {
+          console.error(`No project found in ${cwd}. Run \`trace-mcp add\` first.`);
+          process.exit(1);
+          return;
+        }
       }
     }
 
-    const entry = getProject(projectRoot);
+    const entry = registered ?? getProject(projectRoot);
     if (!entry) {
       console.error(`Project not indexed. Run \`trace-mcp add ${projectRoot}\` first.`);
       process.exit(1);
