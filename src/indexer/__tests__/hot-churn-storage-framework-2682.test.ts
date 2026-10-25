@@ -47,6 +47,14 @@ describe('TRA-2682: storage/framework and storage/logs churn protection', () => 
       'tests/Unit/StorageTest.php',
       'packages/storage-s3/index.ts',
       'app/Http/Controllers/StorageController.php',
+      // Regressions from Reviewer B review (TRA-2682):
+      'src/storage/sessions/redis_session_store.ts',
+      'src/storage/framework/adapter.ts',
+      'src/framework/storage/helper.ts',
+      'src/storage/logs/audit_logger.ts',
+      'storage/framework/adapter.ts',
+      'storage/logs/logger.go',
+      'src/storage/db.ts',
     ];
 
     for (const p of legitPaths) {
@@ -63,9 +71,10 @@ describe('TRA-2682: storage/framework and storage/logs churn protection', () => 
     expect(isIgnored('/var/www/storage/framework/views/template.php')).toBe(true);
     expect(isIgnored('storage/logs/laravel.log')).toBe(true);
     expect(isIgnored('app/Services/StorageService.php')).toBe(false);
+    expect(isIgnored('src/storage/sessions/redis.ts')).toBe(false);
   });
 
-  it('retains **/storage/** and **/bootstrap/cache/** in essentialExcludes with custom config', async () => {
+  it('retains storage/framework, storage/logs and bootstrap/cache in essentialExcludes without blocking general storage', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'tra-2682-config-'));
     try {
       // User specifies custom exclude array that overrides defaults
@@ -80,8 +89,10 @@ describe('TRA-2682: storage/framework and storage/logs churn protection', () => 
       expect(configResult.isOk()).toBe(true);
       const config = configResult._unsafeUnwrap();
 
-      expect(config.exclude).toContain('**/storage/**');
+      expect(config.exclude).toContain('**/storage/framework/**');
+      expect(config.exclude).toContain('**/storage/logs/**');
       expect(config.exclude).toContain('**/bootstrap/cache/**');
+      expect(config.exclude).not.toContain('**/storage/**');
       expect(config.exclude).toContain('custom-vendor/**');
     } finally {
       rmSync(dir, { recursive: true, force: true });

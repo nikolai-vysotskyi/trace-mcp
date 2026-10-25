@@ -206,17 +206,53 @@ export function isHotChurnPath(p: string): boolean {
     if (parents.some((s) => ML_WEIGHT_DIRECTORIES.has(s))) return true;
   }
 
-  // TRA-2682: Laravel runtime storage churn (e.g. storage/framework/sessions, storage/logs).
+  // TRA-2682: Laravel runtime storage churn (storage/framework/* and storage/logs/*).
+  // Require `storage` to be immediately followed by `framework` or `logs` as adjacent
+  // directory segments, avoiding false positives on arbitrary source structures like
+  // `src/framework/storage/` or `src/storage/sessions/`.
   {
-    const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
-    if (
-      parents.includes('storage') &&
-      (parents.includes('framework') ||
-        parents.includes('logs') ||
-        parents.includes('sessions') ||
-        base.endsWith('.log'))
-    ) {
-      return true;
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (segments[i].toLowerCase() === 'storage') {
+        const next = segments[i + 1].toLowerCase();
+        if (next === 'framework' || next === 'logs') {
+          // If storage is preceded by source directories (src, lib, packages, internal), it's user code
+          const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
+          if (
+            prefix.includes('src') ||
+            prefix.includes('lib') ||
+            prefix.includes('packages') ||
+            prefix.includes('internal')
+          ) {
+            break;
+          }
+          // Real source code files (.ts, .js, .py, .go, .rs, etc.) in a storage/framework
+          // directory of a non-Laravel project should never be dropped.
+          const ext = base.includes('.') ? base.slice(base.lastIndexOf('.')).toLowerCase() : '';
+          const nonPhpSourceExts = new Set([
+            '.ts',
+            '.tsx',
+            '.js',
+            '.jsx',
+            '.mjs',
+            '.cjs',
+            '.py',
+            '.go',
+            '.rs',
+            '.java',
+            '.c',
+            '.cpp',
+            '.cs',
+            '.rb',
+            '.swift',
+            '.kt',
+            '.scala',
+          ]);
+          if (nonPhpSourceExts.has(ext)) {
+            break;
+          }
+          return true;
+        }
+      }
     }
   }
 
