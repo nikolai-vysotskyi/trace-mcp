@@ -358,4 +358,8 @@ nguyenlevel/data_moitruong
 # Name collision: agent-trace-mcp / playwright-trace-mcp in Humanswith.ai stack
 damirclaude2-code/C-Users-sabir-OneDrive-CLAUDE-CODE-1
 
+# ── Swept 2026-10-25 late pass (TRA-2679) ──
+# Name collision: docs/superpowers/specs/2026-09-04-context-trace-mcp-tools-design.md ("Context Tracing MCP tools" over polytrace)
+Usmansayed/scubiee
+
 
