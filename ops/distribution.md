@@ -7381,3 +7381,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+
+### Outreach pass, 2026-10-26 morning (TRA-2685): mention sweep (clean), haplollc/Vesalius direct competitor & kushvinth/crowbar triage, codegraph unstaged deletes (#2910), graphify warm-tree rebuilds (#4769) & scope isolation (#4767), codebase-memory-mcp Copilot PostToolUse hook (#2801) & relative import fix (#2802), GitNexus AdonisJS/Lucid taint models (#3727)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; final bot reminder step=4 posted 2026-10-25 00:36 UTC ("This is the last follow-up we'll send about this claim"); claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **haplollc/Vesalius** (71★, 2 forks, created 2026-10-22): Major new direct competitor. "A map of your codebase for Claude Code: an on-device code graph with an MCP server, a CLI, a Mac app and a VS Code extension." Built in Swift 6 for Apple Silicon macOS 15+. Eagerly preloads 2 of its 5 MCP tools (`usages`, `feature_map`, `outline`, `architecture`, `dependency_cycles`) into Claude Code prompt to overcome Claude's MCP tool discovery inertia. Includes Homebrew tap (`haplollc/tap/vesalius`), Xcode Mac app with interactive dependency map, and VS Code extension. Contrast: Vesalius is strictly Apple Silicon macOS 15+ only, relies on Apple NaturalLanguage framework, and only resolves call graphs for Swift, TS, JS, and Python (13 other languages lexical only). trace-mcp is fully cross-platform (macOS, Linux, Windows), supports 81 languages and 88 frameworks with deep AST / framework / dependency analysis, high-level navigation/blast-radius tools with concise TOON representation, and zero OS lock-in.
+- **kushvinth/crowbar** (8★, MIT, Python 3.11+ / CLI / MCP): Offline CVE & exploit intelligence engine for codebases (`crowbar-cli` on npm and PyPI). Ingests NVD, CISA KEV, EPSS, SSVC, Exploit-DB, and OSV into a local SQLite + FTS5 database to allow offline vulnerability lookups for AI agents. Relevant security ecosystem utility; complementary to trace-mcp's built-in static taint analysis and security scanners.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Unstaged deleted file skipping (PR #2910, open)*: Fixes full indexing reporting Git-tracked source files deleted from the working tree as unreadable files (spurious ENOENT logs) until their deletion was staged. Uses `lstat` to distinguish missing working tree entries from dangling symlinks.
+- **Graphify-Labs/graphify**:
+  - *Partial/incremental extraction (PR #4769, open)*: Re-extracts only files whose content or mtime changed, addressing high overhead on warm trees (where running all 7 stages took 54.7s on 1,046 files even for minor edits). Contrast: trace-mcp uses an incremental SQLite index + background watcher to invalidate and update AST nodes and reverse blast radii in milliseconds rather than running batch pipeline re-extractions.
+  - *Directory tree child caps (PR #4768, open)*: Caps directory children representation in tree visualizations while retaining full totals.
+  - *Lexical scope isolation for nested JS functions (PR #4767, open)*: Prevents inner function declarations in JS/TS from leaking into file-wide lookup tables and stealing callers of same-named outer or imported functions.
+- **DeusData/codebase-memory-mcp**:
+  - *Copilot PostToolUse hook context injection (PR #2801, open)*: Overcomes GitHub Copilot CLI hook limitation (where `preToolUse` only sets permissions) by using `postToolUse` hook returning top-level `additionalContext` to append graph context to `textResultForLlm`.
+  - *Explicit relative import resolution fix (PR #2802, open)*: Fixes heuristic sibling matching overriding explicit relative `./` and `../` paths (e.g. `../lib/values.nix` wrongly linking to `checks/values.nix`).
+  - *Secret file discovery exclusion (PR #2794, open)*: Excludes secret-bearing files from default indexing.
+- **abhigyanpatwari/GitNexus**:
+  - *AdonisJS & Lucid taint models (PR #3727, open)*: Adds AdonisJS request inputs as taint sources and Lucid ORM `rawQuery` as SQL injection sink.
+  - *Callable metadata reuse (PR #3726, open)*: Reuses callable metadata across extraction paths.
+  - *Named class expression owners (PR #3725, open)*: Preserves named class expressions as qualified owners in AST ingestion.
+
+**Competitor pulse (as of 2026-10-26 02:00 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 197★ (+2), 24 forks (=)
+- yamadashy/repomix: 29,022★ (+4), 1,598 forks (=)
+- oraios/serena: 30,709★ (+6), 2,088 forks (=)
+- DeusData/codebase-memory-mcp: 47,470★ (+9), 3,904 forks (=)
+- tirth8205/code-review-graph: 32,382★ (+1), 2,957 forks (=)
+- colbymchenry/codegraph: 75,303★ (+10), 4,934 forks (+1)
+- abhigyanpatwari/GitNexus: 48,035★ (+2), 5,204 forks (=)
+- jgravelle/jcodemunch-mcp: 2,805★ (=), 373 forks (-1)
+- continuedev/continue: 36,323★ (+2), 5,520 forks (+4)
+- Aider-AI/aider: 49,750★ (+1), 5,107 forks (+1)
+- Graphify-Labs/graphify: 135,149★ (+170), 12,899 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
