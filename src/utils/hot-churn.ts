@@ -93,6 +93,9 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/startupCache/**',
   '**/jumpListCache/**',
   '**/WebKitCache/**',
+  // TRA-2682: Laravel runtime storage churn (sessions, cache, framework, logs).
+  '**/storage/framework/**',
+  '**/storage/logs/**',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
@@ -201,6 +204,20 @@ export function isHotChurnPath(p: string): boolean {
   if (base.endsWith('.log')) {
     const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
     if (parents.some((s) => ML_WEIGHT_DIRECTORIES.has(s))) return true;
+  }
+
+  // TRA-2682: Laravel runtime storage churn (e.g. storage/framework/sessions, storage/logs).
+  {
+    const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
+    if (
+      parents.includes('storage') &&
+      (parents.includes('framework') ||
+        parents.includes('logs') ||
+        parents.includes('sessions') ||
+        base.endsWith('.log'))
+    ) {
+      return true;
+    }
   }
 
   return false;

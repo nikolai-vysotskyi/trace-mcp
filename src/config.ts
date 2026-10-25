@@ -1395,6 +1395,8 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
       '**/vendor/**',
       '**/node_modules/**',
       '**/.git/**',
+      '**/storage/**',
+      '**/bootstrap/cache/**',
       '**/Cache_Data/**',
       '**/Code Cache/**',
       '**/GPUCache/**',
