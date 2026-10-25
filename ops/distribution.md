@@ -7213,3 +7213,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Outreach pass, 2026-10-25 midday (TRA-2675): mention sweep (damirclaude2-code/C-Users-sabir-OneDrive-CLAUDE-CODE-1), codegraph explore maxChars budget (#2891) & text-search gate-hook (#2890), graphify Swift cross-file type resolution (#4758), codebase-memory-mcp secret-file filtering (#2794), GitNexus indirect consumers (#3720), contextrie-mcp & Ghostlab triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 1 hit: `damirclaude2-code/C-Users-sabir-OneDrive-CLAUDE-CODE-1`. Verified as a user project configuration configuring `agent-trace-mcp` and `playwright-trace-mcp` from the Humanswith.ai stack (name collision with trace-mcp under regex search token bounds). Added to `ops/mentions-seen.txt`. Re-run confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **mlgxiii/contextrie-mcp**: Context selector MCP server (`contextrie-mcp`, early 0.1.0) built on `feuersteiner/contextrie`. Coding agents call `select_context("<task>")` which queries an external LLM (requiring `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) to score and rank candidate repository files. Contrast: trace-mcp operates 100% locally and deterministically with native tree-sitter AST parsing across 81 languages without requiring API keys, without leaking proprietary code to third-party model providers, and without incurring per-query LLM costs.
+- **sajjadGG/Ghostlab**: Agent execution, sandbox evaluation, and test generation harness across Claude Code, Codex, GitHub Copilot CLI, and OpenCode in NVIDIA OpenShell (`ghostlab` / `rehearsal`, MIT, Python). Provides multiversion persona/scenario testing sets for MCP tools and automated release gate scoring. Contrast: useful ecosystem harness to keep in view for agent benchmarking and MCP evaluation pipelines.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Character budget for MCP explore (PR #2891, open)*: Adds `maxChars` (clamped 1,000–25,000) to `codegraph_explore` (resolving issue #1701). Previously, filtering by `maxFiles` alone dumped whole symbol bodies and blast-radii (often 18k–19k chars even for 1 file). Contrast: trace-mcp avoids bloated tool dumps by design with concise TOON representation, strict parameter budgets, and focused blast-radius/impact queries.
+  - *Text search gate-hook (PR #2890, open)*: Opt-in `PreToolUse` gate hook on `Grep`, `Glob`, and `Bash` (when search head is `rg`/`grep`/`find`/`fd`/`ag`/`ack`) in Claude Code to deny raw text searches until the model runs at least one CodeGraph query per session (resolving #2313).
+  - *Svelte template scan & worker recycle (PR #2888, open)*: Rolling worker process recycles and single-pass template scans to reduce memory leaks and drop parse phase time by 32%.
+  - *Crystal language support (PR #2887, open)*: Adds grammar and AST extractor for Crystal.
+- **Graphify-Labs/graphify**:
+  - *Cross-file Swift type resolution (PR #4758, open)*: Swift type index for cross-file type resolution.
+  - *Python caller/target isolation (PR #4757, open)*: Member-call pass restricted to Python nodes to avoid cross-language false linkages in polyglot projects.
+  - *Deduplication collision suppression (PR #4756, open)*: Silences warnings on shared module nodes.
+- **DeusData/codebase-memory-mcp**:
+  - *Secret-bearing file filtering (PR #2794, open)*: Discovers and excludes secret-bearing files by default (`.env`, `*.key`, `*.pem`, `*.jks`, `id_rsa*`, `.npmrc`, `.git-credentials`, `credentials.json`, `secrets.yml`, etc.) under issue #2793 with opt-in `index_secret_files`. Contrast: trace-mcp only indexes source code ASTs and respects standard `.gitignore` semantics.
+- **abhigyanpatwari/GitNexus**:
+  - *Indirect consumers in api_impact (PR #3720, open)*: Traverses `CALLS` edges one level up from endpoint-fetching functions to report indirect consumer callables (e.g. React components) under issue #3644.
+  - *Runner shim safety (PR #3721, open)*: Bypasses broken pnpm shims during hook runner selection.
+
+**Competitor pulse (as of 2026-10-25 10:14 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 195★ (+1), 24 forks (=)
+- yamadashy/repomix: 29,014★ (+1), 1,598 forks (=)
+- oraios/serena: 30,692★ (+7), 2,087 forks (+1)
+- DeusData/codebase-memory-mcp: 47,438★ (+19), 3,899 forks (+3)
+- tirth8205/code-review-graph: 32,380★ (+3), 2,957 forks (=)
+- colbymchenry/codegraph: 75,256★ (+25), 4,927 forks (+6)
+- abhigyanpatwari/GitNexus: 48,028★ (+6), 5,203 forks (=)
+- jgravelle/jcodemunch-mcp: 2,805★ (=), 374 forks (=)
+- continuedev/continue: 36,317★ (+3), 5,514 forks (=)
+- Aider-AI/aider: 49,743★ (-1), 5,104 forks (=)
+- Graphify-Labs/graphify: 134,673★ (+133), 12,855 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
