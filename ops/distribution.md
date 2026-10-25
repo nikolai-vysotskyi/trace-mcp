@@ -7270,3 +7270,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+### Outreach pass, 2026-10-25 evening (TRA-2677): mention sweep (clean), codegraph external include paths (#2899) & .NET indexing (#2901), graphify skill security hardening (#4763, #4762), codebase-memory-mcp hybrid BM25+vector RRF (#2783), GitNexus mutation runner (#3686), codemap & axiomcodegraph triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 0 new repos outside `ops/mentions-seen.txt`. Re-run confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **stainless-code/codemap**: Local codebase intelligence MCP server for AI agents (`@stainless-code/codemap`, MIT, JS/TS). Indexes symbols, imports, calls, components, and CSS tokens into SQLite; exposes 21 MCP tools, CLI, HTTP server, and GitHub Action with SQL querying and 71 pre-baked recipes. Direct pitch: "Cut AI-agent token waste ~90% — query a local SQLite structural index instead of 3-5 file reads". Contrast: codemap is restricted to JS/TS/CSS and requires agents to construct raw SQL queries or use static recipes, whereas trace-mcp provides native tree-sitter AST support for 81 languages and 88 frameworks, high-level navigation/blast-radius tools with concise TOON representation, and deep cross-file execution tracing.
+- **AxiomCodeAI/axiomcodegraph**: Formal-methods codebase knowledge graph engine (`axiomcodegraph`, FSL-1.1-Apache-2.0, Datalog/Soufflé + TypeScript/Java/Python). Directly benchmarks against GitNexus, CodeGraph, Code-Review-Graph, and Graphify on call link resolution (claiming 96.5% Java / 88.8% TS accuracy using compiler type checking instead of pure CST). Contrast: formal method solvers like Soufflé require heavyweight compilation and memory footprints, whereas trace-mcp operates in real-time with lightweight local daemon, instant incremental indexing, and zero external engine dependencies.
+- **byensitmagnus/ai-ram-guard**: Windows daemon/CLI to detect duplicate and orphaned MCP servers (Claude Code, Codex, Cursor), clean up stale processes, and prevent RAM exhaustion. Relevant ecosystem utility; trace-mcp already incorporates watchdog memory limits and macOS/Windows process lifecycle management.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Multi-repo / external paths indexing (PR #2899, open)*: Adds `includePaths` array to `codegraph.json` and CLI flags (`codegraph init/index --include <path>`) mounting external directories (sibling repos, microservices, shared packages) under virtual path `__codegraph_external__/<slug>/` so agents working in service A can see service B/C without indexing the common root. Review caught and fixed a path traversal vulnerability (`__codegraph_external__/sibling/../secret.txt`).
+  - *Parent/child multi-project support (PR #2898, open)*: Parent/child project hierarchy support under issue #1822.
+  - *.NET ecosystem indexing (PR #2901, open)*: Adds C# indexing for NuGet dependencies, DI container bindings, EF Core entity models, and AWS Lambda entry points.
+  - *Drupal OOP hooks (PR #2900, open)*: Covers OOP hooks, plugin attributes, and event subscribers in PHP/Drupal.
+- **Graphify-Labs/graphify**:
+  - *Skill consent gate & system python protection (PR #4763, open)*: Completely removes `--break-system-packages` and silent `pip install graphifyy` from `skill.md`. Adds TTY prompt requiring explicit user consent, probes `uv tool` and `pipx` isolated environments, and persists resolved interpreter to `.graphify_python`.
+  - *Skill command injection fix (PR #4762, open)*: Eliminates arbitrary Python code execution vulnerability where repository paths with quotes (e.g. `x');__import__('os').system('...')#`) broke out of string literals in pasted code blocks (`detect(Path('INPUT_PATH'))`). Fix replaces text substitution with atomic file write (`.graphify_input_path`).
+  - *Ollama context sizing for non-English prompts (PR #4761, open)*: Corrects ollama context window calculation for multilingual instructions.
+- **DeusData/codebase-memory-mcp**:
+  - *Hybrid BM25 + vector ranking (PR #2783, open)*: Deep evaluation of Reciprocal Rank Fusion (RRF, k=60, lexical weight 5, vector weight 1) combining FTS5 lexical ranking with random-indexing token vectors. Implements test symbol demotion (tests sorted below production symbols unless query explicitly targets tests) and deterministic ordering.
+- **abhigyanpatwari/GitNexus**:
+  - *Vitest 5 Stryker mutation runner & Test Scenario Map (PR #3686, open)*: Advanced advisory test-quality tooling with PR-time duplicate-test scan, custom Stryker 10 mutation runner for Vitest 5, and weekly scenario map report using V8 block coverage, PDG walks, and semantic value-flow graph.
+
+**Competitor pulse (as of 2026-10-25 14:03 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 195★ (=), 24 forks (=)
+- yamadashy/repomix: 29,014★ (=), 1,598 forks (=)
+- oraios/serena: 30,698★ (+6), 2,088 forks (+1)
+- DeusData/codebase-memory-mcp: 47,445★ (+7), 3,901 forks (+2)
+- tirth8205/code-review-graph: 32,379★ (-1), 2,957 forks (=)
+- colbymchenry/codegraph: 75,276★ (+20), 4,928 forks (+1)
+- abhigyanpatwari/GitNexus: 48,030★ (+2), 5,203 forks (=)
+- jgravelle/jcodemunch-mcp: 2,806★ (+1), 374 forks (=)
+- continuedev/continue: 36,318★ (+1), 5,515 forks (+1)
+- Aider-AI/aider: 49,746★ (+3), 5,106 forks (+2)
+- Graphify-Labs/graphify: 134,793★ (+120), 12,871 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
