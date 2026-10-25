@@ -13,7 +13,43 @@
  * is the single measurement path; `startHeapGuard` wires the interval.
  */
 import v8 from 'node:v8';
+import vm from 'node:vm';
 import { logger } from '../logger.js';
+
+let dynamicGc: (() => void) | null = null;
+
+/**
+ * Attempt to invoke V8 garbage collection (TRA-2682).
+ * Works if global.gc is already exposed, or dynamically exposes it via v8 flags.
+ * Returns true if GC was executed, false if unavailable.
+ */
+export function tryCollectGarbage(): boolean {
+  if (typeof global.gc === 'function') {
+    try {
+      global.gc();
+      return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!dynamicGc) {
+    try {
+      v8.setFlagsFromString('--expose_gc');
+      dynamicGc = vm.runInNewContext('gc');
+    } catch {
+      dynamicGc = null;
+    }
+  }
+  if (typeof dynamicGc === 'function') {
+    try {
+      dynamicGc();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
 
 export interface HeapThresholds {
   /** Warn once per episode at/above this heap_used (MB). */
@@ -110,11 +146,13 @@ export function startHeapGuard(opts: {
   readHeap?: () => HeapSample;
   getContext?: () => Record<string, unknown>;
   onRestart?: (sample: HeapSample) => void;
+  collectGarbage?: () => boolean;
 }): () => void {
   const { thresholds } = opts.thresholds
     ? { thresholds: opts.thresholds }
     : resolveHeapThresholds();
   const readHeap = opts.readHeap ?? readHeapMb;
+  const collectGarbage = opts.collectGarbage ?? tryCollectGarbage;
   let warned = false;
   let restarted = false;
   const tick = (): void => {
@@ -124,7 +162,7 @@ export function startHeapGuard(opts: {
     } catch {
       return;
     }
-    const pressure = evaluateHeapPressure(sample.usedMb, thresholds);
+    let pressure = evaluateHeapPressure(sample.usedMb, thresholds);
     if (pressure === 'ok') {
       warned = false;
       return;
@@ -135,6 +173,68 @@ export function startHeapGuard(opts: {
     } catch {
       /* context must never break the guard */
     }
+
+    // TRA-2682: when pressure reaches restart threshold, V8 may simply not have
+    // triggered a major GC cycle yet (e.g. during heavy indexing / reconcile storms
+    // where 1-2 GB of transient ASTs/edge allocations become uncollected garbage).
+    // Attempt GC first before concluding this is a genuine OOM leak.
+    if (pressure === 'restart') {
+      const beforeUsedMb = sample.usedMb;
+      const collected = collectGarbage();
+      if (collected) {
+        try {
+          sample = readHeap();
+          pressure = evaluateHeapPressure(sample.usedMb, thresholds);
+          if (pressure !== 'restart') {
+            logger.info(
+              {
+                ...ctx,
+                beforeUsedMb,
+                afterUsedMb: sample.usedMb,
+                heapLimitMb: sample.limitMb,
+              },
+              'Heap pressure over restart threshold relieved by garbage collection — restart avoided (TRA-2682)',
+            );
+            if (pressure === 'ok') {
+              warned = false;
+              return;
+            }
+            if (pressure === 'warn') {
+              warned = true;
+              return;
+            }
+          }
+        } catch {
+          // If re-read fails, proceed with the original sample
+        }
+      }
+    } else if (pressure === 'warn' && !warned) {
+      // Opportunistically relieve warn pressure if caused by uncollected garbage
+      const beforeUsedMb = sample.usedMb;
+      if (collectGarbage()) {
+        try {
+          const fresh = readHeap();
+          if (evaluateHeapPressure(fresh.usedMb, thresholds) === 'ok') {
+            logger.info(
+              {
+                ...ctx,
+                beforeUsedMb,
+                afterUsedMb: fresh.usedMb,
+                heapLimitMb: fresh.limitMb,
+              },
+              'Heap pressure over warn threshold relieved by garbage collection (TRA-2682)',
+            );
+            warned = false;
+            return;
+          }
+          sample = fresh;
+          pressure = evaluateHeapPressure(sample.usedMb, thresholds);
+        } catch {
+          // proceed with original sample
+        }
+      }
+    }
+
     if (pressure === 'restart') {
       if (restarted) return;
       restarted = true;
