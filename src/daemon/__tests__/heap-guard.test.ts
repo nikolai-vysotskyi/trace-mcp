@@ -6,7 +6,12 @@
  * the warn-once / restart-once guard behavior.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { evaluateHeapPressure, resolveHeapThresholds, startHeapGuard } from '../heap-guard.js';
+import {
+  evaluateHeapPressure,
+  resolveHeapThresholds,
+  startHeapGuard,
+  tryCollectGarbage,
+} from '../heap-guard.js';
 
 vi.mock('../../logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -78,6 +83,103 @@ describe('startHeapGuard', () => {
       await new Promise((r) => setTimeout(r, 15));
       // Restart fires once even while pressure persists.
       expect(onRestart).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  });
+
+  it('tryCollectGarbage successfully triggers GC in Node environment', () => {
+    const success = tryCollectGarbage();
+    expect(typeof success).toBe('boolean');
+    expect(success).toBe(true);
+  });
+
+  it('recovers from restart pressure when GC drops heap below restart threshold (TRA-2682)', async () => {
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+    let heap = 3600;
+    const onRestart = vi.fn();
+    const collectGarbage = vi.fn(() => {
+      // Simulate GC reclaiming transient AST / walk memory
+      heap = 2400;
+      return true;
+    });
+
+    const stop = startHeapGuard({
+      thresholds: { warnMb: 3000, restartMb: 3500 },
+      intervalMs: 5,
+      readHeap: () => ({ usedMb: heap, totalMb: 3800, limitMb: 4096 }),
+      collectGarbage,
+      onRestart,
+    });
+
+    try {
+      await new Promise((r) => setTimeout(r, 25));
+      expect(collectGarbage).toHaveBeenCalled();
+      expect(onRestart).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('relieved by garbage collection'),
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('proceeds with restart if heap remains above threshold after GC (TRA-2682)', async () => {
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+    let heap = 3600;
+    const onRestart = vi.fn();
+    const collectGarbage = vi.fn(() => {
+      // Memory is truly pinned; GC cannot reclaim enough
+      heap = 3550;
+      return true;
+    });
+
+    const stop = startHeapGuard({
+      thresholds: { warnMb: 3000, restartMb: 3500 },
+      intervalMs: 5,
+      readHeap: () => ({ usedMb: heap, totalMb: 3800, limitMb: 4096 }),
+      collectGarbage,
+      onRestart,
+    });
+
+    try {
+      await new Promise((r) => setTimeout(r, 25));
+      expect(collectGarbage).toHaveBeenCalled();
+      expect(onRestart).toHaveBeenCalledTimes(1);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('requesting graceful restart'),
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('opportunistically invokes GC on entering warn pressure episode (TRA-2682)', async () => {
+    vi.mocked(logger.warn).mockClear();
+    let heap = 100;
+    const onRestart = vi.fn();
+    const collectGarbage = vi.fn(() => true);
+
+    const stop = startHeapGuard({
+      thresholds: { warnMb: 3000, restartMb: 3500 },
+      intervalMs: 5,
+      readHeap: () => ({ usedMb: heap, totalMb: 3800, limitMb: 4096 }),
+      collectGarbage,
+      onRestart,
+    });
+
+    try {
+      heap = 3100;
+      await new Promise((r) => setTimeout(r, 25));
+      expect(collectGarbage).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(onRestart).not.toHaveBeenCalled();
     } finally {
       stop();
     }
