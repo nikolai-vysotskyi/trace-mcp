@@ -7161,3 +7161,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Outreach pass, 2026-10-25 (TRA-2671): mention sweep (nguyenlevel/data_moitruong), codegraph worker thread budget (#2881) & Qwen/Qoder targets (#2880, #2879), graphify error attribution (#4752) & paper quick-scan (#4751), prod-code & tool-guardian architecture triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 1 hit: `nguyenlevel/data_moitruong`. Verified as an automated repository tracking star history and caching README snippets across GitHub repos. Added to `ops/mentions-seen.txt`. Re-run confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **alex09x/prod-code**: Remote code intelligence and build server for AI coding agent fleets (`prod-code`, Apache-2.0, Rust). Offloads language server instances (rust-analyzer, gopls, clangd, pyright, typescript) and compiler/test suites (`cargo test`, `clippy`) to a remote LAN node over MCP and LSP, while the developer's laptop only edits. Contrast: trace-mcp is designed for local-first, zero-setup developer workflows without needing separate build servers, remote daemon infrastructure, or heavyweight language server runtimes; provides native tree-sitter AST indexing across 81 languages and 88 frameworks, off-repo index storage in `~/.trace-mcp/`, and 72.7% token reduction on PR reviews.
+- **LuminariSoftwares/tool-guardian**: Meta-MCP proxy server (`tool-guardian-mcp`, MIT, Python) designed to mitigate MCP tool schema bloat in context windows. Claims 94.6% schema token reduction (compressing 95 tool schemas across 7 MCP servers from 20,005 to 1,084 tokens) by proxying `tools/list` requests. Part of a suite including `code-guardian`, `stack-guardian`, and `context-guardian`. Contrast: while tool-guardian focuses on compressing tool definitions, trace-mcp tackles the far larger token sink — repeated file exploration and context dump loops during agent code comprehension. Furthermore, trace-mcp's own MCP tool schemas are already strictly budget-optimized and support concise TOON representations.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Unified worker-thread pool budget (PR #2881, open)*: Solves issue #2527 where CodeGraph independently sized each worker pool (parser, reference resolution, MCP query server) by machine core count, pegging all CPU cores during index builds on high-core machines. Adds a unified configurable worker-thread ceiling (`--thread-budget`, `CODEGRAPH_THREAD_BUDGET`). Contrast: trace-mcp's daemon and indexer use strictly bounded concurrent workers with SQLite serialization and low priority background scheduling to prevent CPU starvation.
+  - *Installer targets for Qwen Code and Qoder (PR #2880, PR #2879, open)*: Adds `codegraph install --target=qwen-code` (writing to `~/.qwen/settings.json` and `QWEN.md`) and `--target=qoder` (writing to `~/.qoder/settings.json`).
+- **Graphify-Labs/graphify**:
+  - *Parallel chunk error reporting attribution (PR #4752, open)*: Fixes issue #3616 where runtime exceptions during chunk extraction (provider connection drops or missing optional SDKs) were misleadingly logged as model omissions ("The model returned a response but omitted them").
+  - *Paper classification quick-scan in AST rebuilds (PR #4751, open)*: Resolves issue #4750 so that documents classified by `detect()` as `paper` that have valid AST extractors (`.md`, `.mdx`, `.qmd`) are included in watcher AST quick-scans.
+- **DeusData/codebase-memory-mcp**:
+  - *Hybrid BM25 + vector ranking (PR #2783, open)*: Reciprocal Rank Fusion (k=60) combining FTS5 lexical ranking with random-indexing token vectors and test symbol demotion remains in review.
+- **abhigyanpatwari/GitNexus**:
+  - *Evaluation containment & dependency updates (PR #3715, PR #3716, open)*: Bubblewrap runtime isolation to prevent candidate MCP arms reading newer uncommitted code.
+
+**Competitor pulse (as of 2026-10-25 04:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 29,013★ (+2), 1,598 forks (+1)
+- oraios/serena: 30,685★ (+4), 2,086 forks (=)
+- DeusData/codebase-memory-mcp: 47,419★ (+12), 3,896 forks (+4)
+- tirth8205/code-review-graph: 32,377★ (+4), 2,957 forks (=)
+- colbymchenry/codegraph: 75,231★ (+14), 4,921 forks (+3)
+- abhigyanpatwari/GitNexus: 48,022★ (+3), 5,203 forks (=)
+- jgravelle/jcodemunch-mcp: 2,805★ (=), 374 forks (=)
+- continuedev/continue: 36,314★ (+2), 5,514 forks (=)
+- Aider-AI/aider: 49,744★ (+8), 5,104 forks (+2)
+- Graphify-Labs/graphify: 134,540★ (+151), 12,839 forks (+4)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+

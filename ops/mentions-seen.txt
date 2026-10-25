@@ -350,4 +350,8 @@ roy-tong/AgentMeasure
 CrackerCat/feed
 w00tzenheimer/feed
 
+# ── Swept 2026-10-25 outreach pass (TRA-2671) ──
+# Automated repo metadata / star history & readme cache crawler:
+nguyenlevel/data_moitruong
+
 
