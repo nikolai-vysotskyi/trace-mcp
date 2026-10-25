@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.40.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.39.0...v3.40.0) (2026-10-25)
+
+
+### Features
+
+* **analytics:** track prompt-cache hit rate per model and provider (TRA-1681) ([#1676](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1676)) ([98b4979](https://github.com/nikolai-vysotskyi/trace-mcp/commit/98b497975ab41f86789fa666b98890d64373b97d))
+
+
+### Bug Fixes
+
+* **cli:** use registered project for search and ask ([#1733](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1733)) ([9d2a955](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9d2a955189f8fbb78ef1fe70a1e446ea1c1a06c1))
+* **daemon:** reject failed proxy session recovery (TRA-2665) ([#1726](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1726)) ([2b6119e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2b6119e6bf0d86baae3de79746fbf350b589410a))
+* **daemon:** throttle rapid restarts and protect live daemon from auto-spawn kill (TRA-1954) ([#1677](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1677)) ([9f9d331](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9f9d33107df6cdd2db7a13be3c78306f7661f6a5))
+* **docs:** align sitemap lastmod and mark benchmark_lab historical for 3.40.0 (TRA-2673) ([#1729](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1729)) ([94ecfc7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94ecfc7052d2015c224deeb5816a34da73b2657a))
+* **proxy:** exit early on --help/--version without session bootstrap (TRA-1739) ([#1680](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1680)) ([e2c8c6d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e2c8c6d91d0d24e63df81878848be9a336db0ce3))
+
+
+### Documentation
+
+* **ops:** pass 2026-10-25 evening, mention sweep clean, codegraph external paths ([#2899](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2899)), graphify skill security ([#4763](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4763)), GitNexus mutation runner ([#3686](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3686)) (TRA-2677) ([#1731](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1731)) ([4f7f9eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f7f9eb37155a7fa91fe533ca140bdc42eeb7bf7))
+* **ops:** pass 2026-10-25 late, mention sweep (Usmansayed/scubiee collision), codegraph I/O caps ([#2903](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2903)) & date range ([#2902](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2902)), graphify cost.json ([#4765](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4765)) & fact hooks ([#4764](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4764)) (TRA-2679) ([#1732](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1732)) ([8b9e5f4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b9e5f4f60c29a33438ed45e0c41f0e2c8d216b3))
+* **ops:** pass 2026-10-25 midday, mention sweep (damirclaude2-code), codegraph maxChars ([#2891](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2891)) & gate-hook ([#2890](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2890)), graphify Swift ([#4758](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4758)), codebase-memory-mcp secrets ([#2794](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2794)) (TRA-2675) ([#1730](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1730)) ([85c9a29](https://github.com/nikolai-vysotskyi/trace-mcp/commit/85c9a29a06e83d0d36248b2f380203c367617fa3))
+* **ops:** pass 2026-10-25 morning, mention sweep (CrackerCat, w00tzenheimer), graphify pre-extraction skip ([#4748](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4748)) & XAML codebehind ([#4747](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4747)), GitNexus eval isolation ([#3715](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3715)) (TRA-2664) ([#1727](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1727)) ([7c87b51](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7c87b519d4da16d610e68110ac4a9fbbe25f8b96))
+* **ops:** pass 2026-10-25 outreach, mention sweep (nguyenlevel/data_moitruong), codegraph worker thread budget ([#2881](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2881)), graphify error attribution ([#4752](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4752)) (TRA-2671) ([#1728](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1728)) ([30518c4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30518c472b2570cd49486e509b2c90da45207007))
+
 ## [3.39.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.38.0...v3.39.0) (2026-10-24)
 
 
