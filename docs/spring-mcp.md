@@ -1,7 +1,7 @@
 ---
 title: "Spring MCP Server: Code Graph & Context for AI Agents"
 description: "Code graph MCP server for Spring Boot. Indexes controllers, routes, dependency injection beans, and JPA entity relations across Java and Kotlin."
-updated: 2026-10-24
+updated: 2026-10-25
 category: frameworks
 ---
 

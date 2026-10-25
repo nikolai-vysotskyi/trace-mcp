@@ -33,4 +33,4 @@ benchmark_lab:
   data: docs/_data/benchmark_lab.json
   prereg: docs/perf/prereg-benchmark-lab.md
   page: /vs/tokensave.html
-  historical: false # measured at 3.33.0 (TRA-1951)
+  historical: true # measured at 3.33.0 (TRA-1951) — re-measure to clear
