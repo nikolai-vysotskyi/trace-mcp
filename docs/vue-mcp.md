@@ -1,7 +1,7 @@
 ---
 title: "Vue MCP Server: Code Graph & Component Context for AI"
 description: "Code graph MCP server for Vue.js. Indexes Single File Components, script setup symbols, props, emits, and composables for AI coding assistants."
-updated: 2026-10-20
+updated: 2026-10-24
 category: frameworks
 ---
 

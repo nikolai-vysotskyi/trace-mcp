@@ -1,7 +1,7 @@
 ---
 title: "Laravel MCP Server: Code Graph & Context for AI Agents"
 description: "Code graph MCP server for Laravel. Indexes routes, Eloquent relationships, controllers, migrations, and events for precise AI agent code context."
-updated: 2026-10-20
+updated: 2026-10-24
 category: frameworks
 ---
 
