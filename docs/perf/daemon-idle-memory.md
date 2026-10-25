@@ -501,3 +501,34 @@ that unloaded projects are the retained objects, nor is this a controlled idle
 baseline: watcher activity and recent indexing may still influence RSS. A
 heap snapshot or per-project retained-size attribution is needed to identify
 the accumulator. TRA-2061 owns that investigation.
+
+---
+
+## 2026-10-26 — dropped FSEvents during two workspace checkouts
+
+Read-only field observation of the installed v3.37.9 daemon (PID 38969) at
+2026-10-25 22:01–22:02 UTC. Two agent workdirs were being populated; no
+failure was injected and the daemon was not restarted. Each workdir's watcher
+reported two dropped-event errors, 229 ms and 627 ms apart respectively.
+The daemon started a full-walk reconcile for each report, serially within each
+watcher. For each workdir the first walk saw 3,001 files, indexed 3,000, and
+completed with zero errors in 8.7 s / 9.5 s. The trailing walk saw the same
+3,001 files, skipped all of them, and completed with zero errors in 0.8 s /
+0.6 s. The second pass is required by the current pending-rescan rule: a drop
+reported while a walk is running might cover changes after that walk began.
+These logs cannot show whether any such later changes existed here.
+
+The one-minute vitals moved from five loaded projects, 1,112 MB RSS and
+319 MB heap used before the burst to seven loaded projects, 1,648 MB RSS and
+392 MB heap used during it. The next sample was 1,274 MB RSS and 428 MB heap
+used with seven loaded projects. `fs_drops` and `fs_reconciles` each rose by
+four (11→15 and 8→12), `fs_reconcile_suppressed` stayed at four, and
+`GET /health` still returned `ok` for the same PID. This confirms that the
+recovery work ran and finished without an indexing error; it does not prove
+complete index parity with disk. The changing resident-project count and
+recent indexing work make these samples unsuitable for the idle RSS ceiling.
+
+Operationally, a paired FSEvents drop can cost an additional hash-gated full
+walk even when every file is unchanged. Keep the pending pass for correctness;
+quantify its cost separately from idle memory when investigating checkout
+bursts or wake-from-sleep storms.
