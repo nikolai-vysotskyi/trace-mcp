@@ -7326,4 +7326,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+### Outreach pass, 2026-10-25 late pass (TRA-2679): mention sweep (Usmansayed/scubiee collision), codegraph I/O & parse-pool (#2903) & date range (#2902), graphify cost.json (#4765) & fact hooks (#4764), GitNexus class-expression (#3725) & pnpm/Bun (#3721), Drydock & kprun triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 1 hit: `Usmansayed/scubiee`. Inspection of matched file (`docs/superpowers/specs/2026-09-04-context-trace-mcp-tools-design.md`) revealed a name collision ("Context Tracing MCP tools: design" over internal `polytrace` engine), with zero reference to trace-mcp package, domain, or npm artifact. Added to `ops/mentions-seen.txt`.
+- Re-run confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **Lumi-node/Drydock** (Apache-2.0, Python): Agentic toolchest for deconstructing, analyzing, and reconstructing software architectures. Provides CLI and MCP server (`drydock_context`, `drydock_codemap`, `drydock_boundaries`, `drydock_extract`, `drydock_interfaces`, `drydock_dependencies`, `drydock_security`) using pure Python standard library AST/regex with zero external dependencies. Contrast: Drydock relies on basic stdlib AST (Python only) and regex heuristics without cross-file type resolution or multi-language symbol graphs. trace-mcp delivers native tree-sitter AST parsing across 81 languages and 88 frameworks, deep symbol/call/inheritance graphs, cross-file impact analysis, TOON context compression, and an incremental background daemon.
+- **numikel/kprun** (MIT, Rust): Secret management bridge and process spawner for MCP servers and coding agents (v0.7.2). Stores API keys in encrypted KeePass vaults and injects them only into child processes (`mcp.json` / CLI spawns) to prevent credential leakage in plaintext configs and shell histories. Contrast: relevant ecosystem signal on MCP security hygiene. trace-mcp operates 100% locally with zero external API keys or third-party cloud requirements by default, with strict path boundary confinement and isolated execution.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *I/O batching and parse-pool caps (PR #2903, open)*: Increases `FILE_IO_BATCH_SIZE` from 10 to 50 and raises default parse worker cap from 8 to 32 (`clamp(cores - 1, 1, 32)`), with hard ceiling `MAX_PARSE_POOL_SIZE` increased from 16 to 64 for `CODEGRAPH_PARSE_WORKERS` overrides. Adds `__tests__/index-output-determinism.test.ts` asserting deterministic node/edge counts across independent runs. Benchmark analysis noted SQLite multi-row inserts were maintained but large batch transaction commits were intentionally reverted after microbenchmarks showed 100x85-row transactions (19.8ms) outperformed a single 8,500-node transaction (37.7ms) due to deferred WAL checkpoints and memory journals.
+  - *Date-range index filtering (PR #2902, open)*: Adds `modifiedAfter` and `modifiedBefore` configuration fields to `codegraph.json` (resolving issue #1304) to bound file extraction by modification timestamp.
+- **Graphify-Labs/graphify**:
+  - *Extract token tracking in cost ledger (PR #4765, open)*: Updates `graphify extract` to record input/output token usage, file count, and running totals into `graphify-out/cost.json` (previously only recorded by the skill), honoring `--out` and `--no-cluster` while leaving broken logs untouched.
+  - *Hook prompt rephrasing as facts, not orders (PR #4764, open)*: Replaces authoritative prompt-injection-like reminders ("MANDATORY... You MUST run graphify") with factual notifications explaining the presence of `graphify-out/graph.json` and suggested tools (`graphify query`, `explain`, `path`), preventing AI agents from flagging tool reminders as adversarial prompt injections.
+- **abhigyanpatwari/GitNexus**:
+  - *Class-expression owner qualification (PR #3725, open)*: Retains named JS/TS class expressions as qualified owners in AST ingestion, fixing owner-qualification tracking in AST passes.
+  - *Package manager recovery and pnpm/Bun fallback (PR #3721, open)*: Fixes runner selection to automatically fall back when a pnpm shim is missing or Bun skips native install lifecycle scripts.
+- **jgravelle/jcodemunch-mcp**:
+  - *v1.108.398 release (PR #1230, open)*: Pins `filelock` 3.20.3 on Python 3.10 and >=4.2.1 on Python 3.11+ for `[semantic]` and `[all]` extras to mitigate upstream security advisories; adds UTM tracking parameters (`utm_source=cli`, `utm_medium=install`) to printed CLI license links.
+
+**Competitor pulse (as of 2026-10-25 18:03 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 195★ (=), 24 forks (=)
+- yamadashy/repomix: 29,018★ (+4), 1,598 forks (=)
+- oraios/serena: 30,703★ (+5), 2,088 forks (=)
+- DeusData/codebase-memory-mcp: 47,461★ (+16), 3,904 forks (+3)
+- tirth8205/code-review-graph: 32,381★ (+2), 2,957 forks (=)
+- colbymchenry/codegraph: 75,293★ (+17), 4,933 forks (+5)
+- abhigyanpatwari/GitNexus: 48,033★ (+3), 5,204 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,805★ (-1), 374 forks (=)
+- continuedev/continue: 36,321★ (+3), 5,516 forks (+1)
+- Aider-AI/aider: 49,749★ (+3), 5,106 forks (=)
+- Graphify-Labs/graphify: 134,979★ (+186), 12,883 forks (+12)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
 
