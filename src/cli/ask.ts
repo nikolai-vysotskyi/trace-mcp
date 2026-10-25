@@ -29,7 +29,7 @@ import { IndexingPipeline } from '../indexer/pipeline.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
-import { getProject } from '../registry.js';
+import { getProject, resolveRegisteredAncestor } from '../registry.js';
 
 // ---------------------------------------------------------------------------
 // Project resolution (local dir or --repo clone)
@@ -53,18 +53,22 @@ async function resolveProject(repoArg?: string): Promise<ProjectContext> {
 async function resolveLocalProject(): Promise<ProjectContext> {
   const cwd = process.cwd();
   let projectRoot: string;
-
-  try {
-    projectRoot = findProjectRoot(cwd);
-  } catch {
-    if (hasRootMarkers(cwd)) {
-      projectRoot = cwd;
-    } else {
-      throw new Error(`No project found in ${cwd}. Run \`trace-mcp add\` first.`);
+  const registered = resolveRegisteredAncestor(cwd);
+  if (registered) {
+    projectRoot = registered.root;
+  } else {
+    try {
+      projectRoot = findProjectRoot(cwd);
+    } catch {
+      if (hasRootMarkers(cwd)) {
+        projectRoot = cwd;
+      } else {
+        throw new Error(`No project found in ${cwd}. Run \`trace-mcp add\` first.`);
+      }
     }
   }
 
-  const entry = getProject(projectRoot);
+  const entry = registered ?? getProject(projectRoot);
   if (!entry) {
     throw new Error(`Project not indexed. Run \`trace-mcp add ${projectRoot}\` first.`);
   }
