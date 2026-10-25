@@ -1,7 +1,7 @@
 ---
 title: "Nuxt MCP Server: Code Graph & Context for AI Agents"
 description: "Code graph MCP server for Nuxt 3 and 4. Indexes file-based routes, Nitro API endpoints, auto-imports, and composables for AI coding agents."
-updated: 2026-10-21
+updated: 2026-10-24
 category: frameworks
 ---
 
