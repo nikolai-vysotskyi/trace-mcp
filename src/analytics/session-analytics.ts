@@ -1,4 +1,5 @@
 import type { AnalyticsStore } from './analytics-store.js';
+import type { CacheHitRateBreakdown } from './cache-hit-rate.js';
 import { listAllSessions } from './log-parser.js';
 import { analyzeOptimizations, type OptimizationReport } from './rules.js';
 import {
@@ -10,6 +11,13 @@ import {
 } from './sync.js';
 
 export type { OptimizationReport } from './rules.js';
+export type { CacheHitRateBreakdown } from './cache-hit-rate.js';
+
+export interface SessionCacheHitRate {
+  blended: number;
+  byModel: Record<string, number>;
+  byProvider: Record<string, number>;
+}
 
 interface AnalyticsOptions {
   period?: 'today' | 'week' | 'month' | 'all';
@@ -28,6 +36,7 @@ interface SessionAnalytics {
     estimatedCostUsd: number;
     toolCalls: number;
   };
+  cacheHitRate: SessionCacheHitRate;
   byToolServer: Record<string, { calls: number; outputTokensEst: number; pct: number }>;
   topTools: { name: string; calls: number; outputTokensEst: number }[];
   topFiles: { path: string; reads: number; tokensEst: number }[];
@@ -63,6 +72,11 @@ export function getSessionAnalytics(
       cacheCreateTokens: result.totals.cache_create_tokens,
       estimatedCostUsd: result.totals.estimated_cost_usd,
       toolCalls: result.totals.tool_calls,
+    },
+    cacheHitRate: {
+      blended: result.cache_hit_rate.blended,
+      byModel: result.cache_hit_rate.by_model,
+      byProvider: result.cache_hit_rate.by_provider,
     },
     byToolServer: Object.fromEntries(
       Object.entries(result.by_tool_server).map(([k, v]) => [

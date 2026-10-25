@@ -354,7 +354,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // --- Analytics: Session Analytics ---
   _originalTool(
     'get_session_analytics',
-    'Analyze AI agent session logs: token usage, cost breakdown by tool/server, top files, models used. Parses Claude Code JSONL logs automatically. Read-only. For waste detection use get_optimization_report; for cost trends use get_usage_trends. Returns JSON: { sessions, tokens, cost_usd, tools, models, topFiles }.',
+    'Analyze AI agent session logs: token usage, prompt-cache hit rate (blended and split by provider/model), cost breakdown by tool/server, top files, models used. Parses Claude Code JSONL logs automatically. Read-only. For waste detection use get_optimization_report; for cost trends use get_usage_trends. Returns JSON: { sessionsCount, totals, cacheHitRate: { blended, byModel, byProvider }, byToolServer, topTools, topFiles, modelsUsed }.',
     {
       period: z
         .enum(['today', 'week', 'month', 'all'])
@@ -601,7 +601,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // --- Analytics: Usage Trends ---
   _originalTool(
     'get_usage_trends',
-    'Daily token usage time-series: sessions, tokens, estimated cost, tool calls per day. For spotting cost spikes. Read-only. For detailed session breakdown use get_session_analytics instead. Returns JSON: { days, daily: [{ date, sessions, tokens, cost_usd, tool_calls }], totals }.',
+    'Daily token usage time-series: sessions, tokens, estimated cost, tool calls, prompt-cache hit rate per day. For spotting cost spikes. Read-only. For detailed session breakdown use get_session_analytics instead. Returns JSON: { days, daily: [{ date, sessions, tokens, cost_usd, tool_calls, cache_hit_rate, cache_hit_rate_by_provider }], totals }.',
     {
       days: z
         .number()

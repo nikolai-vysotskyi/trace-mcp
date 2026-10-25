@@ -1,7 +1,7 @@
 ---
 title: "Django MCP Server: Code Graph & Context for AI Agents"
 description: "Code graph MCP server for Django. Indexes models, URL patterns, views, admin registrations, and signals for fast, token-efficient AI context."
-updated: 2026-10-20
+updated: 2026-10-24
 category: frameworks
 ---
 

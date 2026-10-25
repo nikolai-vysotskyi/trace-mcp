@@ -3,6 +3,11 @@ import Database from 'better-sqlite3';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import type { ParsedSession, ToolCallEvent } from './log-parser.js';
+import {
+  type CacheHitRateBreakdown,
+  classifyCacheProviderFamily,
+  computeCacheHitRate,
+} from './cache-hit-rate.js';
 
 const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
 
@@ -261,6 +266,7 @@ export class AnalyticsStore {
     top_tools: { name: string; calls: number; output_tokens_est: number }[];
     top_files: { path: string; reads: number; tokens_est: number }[];
     models_used: Record<string, { sessions: number; tokens: number }>;
+    cache_hit_rate: CacheHitRateBreakdown;
   } {
     let dateFilter = '';
     if (opts.sessionId) {
@@ -359,19 +365,63 @@ export class AnalyticsStore {
     `)
       .all() as { path: string; reads: number; tokens_est: number }[];
 
-    // Models used
+    // Models used & cache hit rate per model / provider
     const modelRows = this.db
       .prepare(`
-      SELECT model, COUNT(DISTINCT id) as sessions, COALESCE(SUM(input_tokens + output_tokens),0) as tokens
+      SELECT
+        model,
+        COUNT(DISTINCT id) as sessions,
+        COALESCE(SUM(input_tokens + output_tokens),0) as tokens,
+        COALESCE(SUM(input_tokens),0) as input_tokens,
+        COALESCE(SUM(cache_read_tokens),0) as cache_read_tokens,
+        COALESCE(SUM(cache_create_tokens),0) as cache_create_tokens
       FROM sessions s ${where} AND model IS NOT NULL AND model != ''
       GROUP BY model
     `)
-      .all() as { model: string; sessions: number; tokens: number }[];
+      .all() as {
+      model: string;
+      sessions: number;
+      tokens: number;
+      input_tokens: number;
+      cache_read_tokens: number;
+      cache_create_tokens: number;
+    }[];
 
     const modelsUsed: Record<string, { sessions: number; tokens: number }> = {};
+    const byModelHitRate: Record<string, number> = {};
+    const providerTotals: Record<string, { input: number; read: number; create: number }> = {};
+
     for (const r of modelRows) {
       modelsUsed[r.model] = { sessions: r.sessions, tokens: r.tokens };
+      byModelHitRate[r.model] = computeCacheHitRate({
+        inputTokens: r.input_tokens,
+        cacheReadTokens: r.cache_read_tokens,
+        cacheCreateTokens: r.cache_create_tokens,
+      });
+
+      const family = classifyCacheProviderFamily(r.model);
+      if (!providerTotals[family]) {
+        providerTotals[family] = { input: 0, read: 0, create: 0 };
+      }
+      providerTotals[family].input += r.input_tokens;
+      providerTotals[family].read += r.cache_read_tokens;
+      providerTotals[family].create += r.cache_create_tokens;
     }
+
+    const byProviderHitRate: Record<string, number> = {};
+    for (const [family, tot] of Object.entries(providerTotals)) {
+      byProviderHitRate[family] = computeCacheHitRate({
+        inputTokens: tot.input,
+        cacheReadTokens: tot.read,
+        cacheCreateTokens: tot.create,
+      });
+    }
+
+    const blendedHitRate = computeCacheHitRate({
+      inputTokens: summary.input_tokens,
+      cacheReadTokens: summary.cache_read_tokens,
+      cacheCreateTokens: summary.cache_create_tokens,
+    });
 
     return {
       sessions_count: summary.cnt,
@@ -382,6 +432,11 @@ export class AnalyticsStore {
         cache_create_tokens: summary.cache_create_tokens,
         tool_calls: summary.tool_calls,
         estimated_cost_usd: estimatedCost,
+      },
+      cache_hit_rate: {
+        blended: blendedHitRate,
+        by_model: byModelHitRate,
+        by_provider: byProviderHitRate,
       },
       by_tool_server: byServer,
       top_tools: topTools,
@@ -426,27 +481,138 @@ export class AnalyticsStore {
   }
 
   /** Get usage trends (daily aggregation) */
-  getUsageTrends(
-    days: number = 30,
-  ): { date: string; sessions: number; tokens: number; cost_usd: number; tool_calls: number }[] {
+  getUsageTrends(days: number = 30): {
+    date: string;
+    sessions: number;
+    tokens: number;
+    cost_usd: number;
+    tool_calls: number;
+    cache_hit_rate: number;
+    cache_hit_rate_by_provider: Record<string, number>;
+  }[] {
     const since = new Date(Date.now() - days * 86400000).toISOString();
-    return this.db
+    const rows = this.db
       .prepare(`
       SELECT DATE(started_at) as date,
+        model,
         COUNT(*) as sessions,
-        SUM(input_tokens + output_tokens) as tokens,
-        ROUND((SUM(input_tokens) * 3.0 + SUM(cache_read_tokens) * 0.3 + SUM(cache_create_tokens) * 3.75 + SUM(output_tokens) * 15.0) / 1000000.0, 2) as cost_usd,
-        SUM(tool_call_count) as tool_calls
+        COALESCE(SUM(input_tokens + output_tokens),0) as tokens,
+        COALESCE(SUM(input_tokens),0) as input_tokens,
+        COALESCE(SUM(output_tokens),0) as output_tokens,
+        COALESCE(SUM(cache_read_tokens),0) as cache_read_tokens,
+        COALESCE(SUM(cache_create_tokens),0) as cache_create_tokens,
+        COALESCE(SUM(tool_call_count),0) as tool_calls
       FROM sessions WHERE started_at >= ?
-      GROUP BY DATE(started_at) ORDER BY date
+      GROUP BY DATE(started_at), model ORDER BY date
     `)
       .all(since) as {
+      date: string;
+      model: string | null;
+      sessions: number;
+      tokens: number;
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_tokens: number;
+      cache_create_tokens: number;
+      tool_calls: number;
+    }[];
+
+    const daysMap = new Map<
+      string,
+      {
+        date: string;
+        sessions: number;
+        tokens: number;
+        input_tokens: number;
+        output_tokens: number;
+        cache_read_tokens: number;
+        cache_create_tokens: number;
+        tool_calls: number;
+        providerTotals: Record<string, { input: number; read: number; create: number }>;
+      }
+    >();
+
+    for (const r of rows) {
+      let d = daysMap.get(r.date);
+      if (!d) {
+        d = {
+          date: r.date,
+          sessions: 0,
+          tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_read_tokens: 0,
+          cache_create_tokens: 0,
+          tool_calls: 0,
+          providerTotals: {},
+        };
+        daysMap.set(r.date, d);
+      }
+      d.sessions += r.sessions;
+      d.tokens += r.tokens ?? 0;
+      d.input_tokens += r.input_tokens ?? 0;
+      d.output_tokens += r.output_tokens ?? 0;
+      d.cache_read_tokens += r.cache_read_tokens ?? 0;
+      d.cache_create_tokens += r.cache_create_tokens ?? 0;
+      d.tool_calls += r.tool_calls ?? 0;
+
+      const family = classifyCacheProviderFamily(r.model);
+      if (!d.providerTotals[family]) {
+        d.providerTotals[family] = { input: 0, read: 0, create: 0 };
+      }
+      d.providerTotals[family].input += r.input_tokens ?? 0;
+      d.providerTotals[family].read += r.cache_read_tokens ?? 0;
+      d.providerTotals[family].create += r.cache_create_tokens ?? 0;
+    }
+
+    const result: {
       date: string;
       sessions: number;
       tokens: number;
       cost_usd: number;
       tool_calls: number;
-    }[];
+      cache_hit_rate: number;
+      cache_hit_rate_by_provider: Record<string, number>;
+    }[] = [];
+
+    for (const d of daysMap.values()) {
+      const cost_usd =
+        Math.round(
+          ((d.input_tokens * 3.0 +
+            d.cache_read_tokens * 0.3 +
+            d.cache_create_tokens * 3.75 +
+            d.output_tokens * 15.0) /
+            1000000.0) *
+            100,
+        ) / 100;
+
+      const cache_hit_rate = computeCacheHitRate({
+        inputTokens: d.input_tokens,
+        cacheReadTokens: d.cache_read_tokens,
+        cacheCreateTokens: d.cache_create_tokens,
+      });
+
+      const cache_hit_rate_by_provider: Record<string, number> = {};
+      for (const [family, tot] of Object.entries(d.providerTotals)) {
+        cache_hit_rate_by_provider[family] = computeCacheHitRate({
+          inputTokens: tot.input,
+          cacheReadTokens: tot.read,
+          cacheCreateTokens: tot.create,
+        });
+      }
+
+      result.push({
+        date: d.date,
+        sessions: d.sessions,
+        tokens: d.tokens,
+        cost_usd,
+        tool_calls: d.tool_calls,
+        cache_hit_rate,
+        cache_hit_rate_by_provider,
+      });
+    }
+
+    return result;
   }
 
   /** Get synced session count */

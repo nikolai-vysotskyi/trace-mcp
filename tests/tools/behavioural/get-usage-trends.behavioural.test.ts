@@ -90,7 +90,7 @@ describe('get_usage_trends — AnalyticsStore.getUsageTrends() behavioural contr
     expect(trends).toEqual([]);
   });
 
-  it('each daily entry has the documented { date, sessions, tokens, cost_usd, tool_calls } shape', () => {
+  it('each daily entry has the documented { date, sessions, tokens, cost_usd, tool_calls, cache_hit_rate, cache_hit_rate_by_provider } shape', () => {
     seedSessions(dbPath, [{ id: 's1', started_at: isoDaysAgo(1) }]);
     const trends = store.getUsageTrends(30);
     expect(trends.length).toBeGreaterThan(0);
@@ -101,6 +101,8 @@ describe('get_usage_trends — AnalyticsStore.getUsageTrends() behavioural contr
       expect(typeof day.tokens).toBe('number');
       expect(typeof day.cost_usd).toBe('number');
       expect(typeof day.tool_calls).toBe('number');
+      expect(typeof day.cache_hit_rate).toBe('number');
+      expect(typeof day.cache_hit_rate_by_provider).toBe('object');
     }
   });
 
