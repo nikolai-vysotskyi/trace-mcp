@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-10-24T06:39:07.135Z"
+updated: "2026-10-25T06:39:22.041Z"
 active_users:
-  day: 66
-  week: 176
-  month: 329
+  day: 51
+  week: 178
+  month: 330
   first_ping_date: "2026-08-29"
-  days_observed: 57
+  days_observed: 58
   month_window_full: true
-events_28d: 2509
+events_28d: 2519
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 2509
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 166365963
-  tokens_saved_raw: 194316696
-  usd_saved: 166.37
+  tokens_saved: 167205083
+  tokens_saved_raw: 195232498
+  usd_saved: 167.21
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 49
+  days: 50
   capped_days: 2
   raw_ratio: 1.17
   inflation_suspected: false
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 238
+  new_installs_28d: 239
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 20
+  retention_dau_mau_pct: 15
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,19 +159,19 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1452
-  "upgrade": 712
-  "new": 238
-  "(not set)": 56
-  "downgrade": 50
+  "active": 1478
+  "upgrade": 696
+  "new": 239
+  "(not set)": 55
+  "downgrade": 48
   "unknown": 1
 by_version:
+  "3.38.0": 91
   "3.34.6": 88
-  "3.38.0": 84
   "3.37.10": 57
   "3.34.4": 47
   "3.34.8": 46
@@ -179,20 +179,20 @@ by_version:
   "3.34.7": 43
   "3.37.0": 42
   "3.37.6": 33
-  "3.34.1": 32
   "3.34.3": 32
+  "3.34.1": 29
   "3.37.7": 29
   "3.37.4": 27
+  "3.36.6": 24
   "3.37.9": 24
+  "3.36.0": 23
   "3.36.3": 23
-  "3.36.6": 23
-  "3.36.0": 22
-  "3.33.0": 21
   "3.36.5": 21
-  "3.32.0": 19
   "3.37.3": 16
   "3.34.2": 15
+  "3.32.0": 12
   "3.35.0": 11
+  "3.33.0": 10
   "3.37.2": 8
   "3.31.3": 7
 
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 815
+  at_or_above: 803
   below: 0
   unknown: 0
   pct: 100
@@ -258,37 +258,37 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 113
-  "(not set)": 58
-  "United States": 24
+  "United Arab Emirates": 112
+  "(not set)": 56
+  "United States": 26
   "Russia": 17
   "China": 11
   "Thailand": 9
   "Brazil": 8
   "Germany": 6
-  "Poland": 6
   "Australia": 5
+  "Canada": 5
+  "Chile": 5
   "France": 5
   "Indonesia": 5
+  "Poland": 5
   "South Korea": 5
-  "Canada": 4
-  "Chile": 4
-  "Türkiye": 4
+  "Türkiye": 5
   "Egypt": 3
   "Netherlands": 3
   "Pakistan": 3
   "Sweden": 3
+  "Bangladesh": 2
+  "Iran": 2
   "Italy": 2
   "Norway": 2
-  "Romania": 2
-  "Singapore": 2
 by_client:
   "unknown": 214
-  "claude-code": 82
+  "claude-code": 81
   "codex-mcp-client": 39
   "antigravity-client": 17
-  "opencode": 16
-  "mcp": 13
+  "opencode": 15
+  "mcp": 12
   "cursor-vscode": 5
   "Cursor": 4
   "Visual Studio Code": 4
@@ -296,15 +296,15 @@ by_client:
   "grok-shell-trace-mcp": 4
   "rmcp": 4
   "Trae": 3
-  "cli": 3
   "copilot-cli": 3
   "grok-shell-trace": 3
+  "cli": 2
   "kimi-code": 2
   "local-agent-mode-trace": 2
   "local-agent-mode-trace-mcp": 2
   "pi-mcp-trace-mcp": 2
   "Cline": 1
+  "bb-plugin-trace-mcp": 1
   "count-advertised-tools": 1
   "dev.warp.Warp-Stable": 1
   "dsh-mcp-client": 1
-  "dsh-probe": 1
