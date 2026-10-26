@@ -96,12 +96,39 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   // TRA-2682: Laravel runtime storage churn (sessions, cache, framework, logs).
   '**/storage/framework/**',
   '**/storage/logs/**',
-  // TRA-2640: Codex CLI REPL active executions and process trampolines.
-  '**/node_repl/active_execs/**',
-  '**/tmp/arg0-*/**',
-  // TRA-2581: Codex plugin installation scratch trees.
-  '**/plugins/cache/**/plugin-install-*/**',
+  // TRA-2640, TRA-2718: Codex CLI REPL active executions and process trampolines.
+  // Scoped to root or .codex/ subtrees so user code under app/ or src/ is not ignored natively.
+  'node_repl/active_execs/**',
+  '**/.codex/node_repl/active_execs/**',
+  'tmp/arg0-*/**',
+  '**/.codex/tmp/arg0-*/**',
+  // TRA-2581, TRA-2718: Codex plugin installation scratch trees.
+  'plugins/cache/**/plugin-install-*/**',
+  '**/.codex/plugins/cache/**/plugin-install-*/**',
 ] as const;
+
+/** Source directory segments that protect enclosed files from being treated as runtime churn. */
+const SOURCE_DIR_SEGMENTS = new Set(['src', 'lib', 'packages', 'internal', 'app']);
+
+const NON_PHP_SOURCE_EXTS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.py',
+  '.go',
+  '.rs',
+  '.java',
+  '.c',
+  '.cpp',
+  '.cs',
+  '.rb',
+  '.swift',
+  '.kt',
+  '.scala',
+]);
 
 /** Basenames that are always runtime churn, wherever they live. */
 const HOT_CHURN_BASENAMES = new Set(['gateway.heartbeat', '.tick.lock']);
@@ -220,39 +247,15 @@ export function isHotChurnPath(p: string): boolean {
       if (segments[i].toLowerCase() === 'storage') {
         const next = segments[i + 1].toLowerCase();
         if (next === 'framework' || next === 'logs') {
-          // If storage is preceded by source directories (src, lib, packages, internal), it's user code
+          // If storage is preceded by source directories, it's user code
           const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
-          if (
-            prefix.includes('src') ||
-            prefix.includes('lib') ||
-            prefix.includes('packages') ||
-            prefix.includes('internal')
-          ) {
+          if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
             break;
           }
           // Real source code files (.ts, .js, .py, .go, .rs, etc.) in a storage/framework
           // directory of a non-Laravel project should never be dropped.
           const ext = base.includes('.') ? base.slice(base.lastIndexOf('.')).toLowerCase() : '';
-          const nonPhpSourceExts = new Set([
-            '.ts',
-            '.tsx',
-            '.js',
-            '.jsx',
-            '.mjs',
-            '.cjs',
-            '.py',
-            '.go',
-            '.rs',
-            '.java',
-            '.c',
-            '.cpp',
-            '.cs',
-            '.rb',
-            '.swift',
-            '.kt',
-            '.scala',
-          ]);
-          if (nonPhpSourceExts.has(ext)) {
+          if (NON_PHP_SOURCE_EXTS.has(ext)) {
             break;
           }
           return true;
@@ -261,7 +264,7 @@ export function isHotChurnPath(p: string): boolean {
     }
   }
 
-  // TRA-2640: Codex CLI REPL active executions (node_repl/active_execs/*).
+  // TRA-2640, TRA-2718: Codex CLI REPL active executions (node_repl/active_execs/*).
   // Created and unlinked on every REPL execution; volatile execution state, never source.
   for (let i = 0; i < segments.length - 1; i++) {
     if (
@@ -269,45 +272,30 @@ export function isHotChurnPath(p: string): boolean {
       segments[i + 1].toLowerCase() === 'active_execs'
     ) {
       const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
-      if (
-        prefix.includes('src') ||
-        prefix.includes('lib') ||
-        prefix.includes('packages') ||
-        prefix.includes('internal')
-      ) {
+      if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
         break;
       }
       return true;
     }
   }
 
-  // TRA-2640: Codex CLI command execution trampolines (tmp/arg0-macos/*, tmp/arg0-*/*).
+  // TRA-2640, TRA-2718: Codex CLI command execution trampolines (tmp/arg0-macos/*, tmp/arg0-*/*).
   for (let i = 0; i < segments.length - 1; i++) {
     if (segments[i].toLowerCase() === 'tmp' && segments[i + 1].toLowerCase().startsWith('arg0-')) {
       const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
-      if (
-        prefix.includes('src') ||
-        prefix.includes('lib') ||
-        prefix.includes('packages') ||
-        prefix.includes('internal')
-      ) {
+      if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
         break;
       }
       return true;
     }
   }
 
-  // TRA-2581: Codex plugin installation scratch trees (plugins/cache/**/plugin-install-*).
+  // TRA-2581, TRA-2718: Codex plugin installation scratch trees (plugins/cache/**/plugin-install-*).
   // Atomic unpack directories that disappear after installation.
   for (let i = 0; i < segments.length - 1; i++) {
     if (segments[i].toLowerCase() === 'plugins' && segments[i + 1].toLowerCase() === 'cache') {
       const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
-      if (
-        prefix.includes('src') ||
-        prefix.includes('lib') ||
-        prefix.includes('packages') ||
-        prefix.includes('internal')
-      ) {
+      if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
         break;
       }
       const remainder = segments.slice(i + 2).map((s) => s.toLowerCase());
