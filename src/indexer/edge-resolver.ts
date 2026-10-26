@@ -200,6 +200,7 @@ export class EdgeResolver {
       // rootPath points to the workspace root.
       const scopedCtx: ResolveContext = {
         rootPath: wsRoot,
+        upsertSymbolForFile: resolveContext.upsertSymbolForFile,
         getAllFiles: getWsFiles,
         getSymbolsByFile: resolveContext.getSymbolsByFile,
         getSymbolByFqn: resolveContext.getSymbolByFqn,

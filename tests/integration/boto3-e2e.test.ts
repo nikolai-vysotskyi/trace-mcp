@@ -5,6 +5,8 @@
  * Glue, and Lambda usage, while preserving 0 false positives on unrelated code.
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -13,6 +15,8 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { Boto3Plugin } from '../../src/indexer/plugins/integration/tooling/boto3/index.js';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getCallGraph } from '../../src/tools/framework/call-graph.js';
+import { findReferences } from '../../src/tools/framework/references.js';
 import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/boto3-app');
@@ -28,6 +32,7 @@ function makeConfig(): TraceMcpConfig {
 
 const EXPECTED_ROLES: Record<string, string | null> = {
   's3_service.py': 'boto3_client',
+  's3_secondary.py': 'boto3_client',
   'ssm_service.py': 'boto3_client',
   'glue_service.py': 'boto3_client',
   'lambda_service.py': 'boto3_client',
@@ -86,6 +91,75 @@ describe('AWS Boto3 E2E', () => {
   });
 
   describe('edges — S3 service and resources', () => {
+    it('keeps a shared operation target after its owning file stops calling it', async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-boto-target-'));
+      try {
+        for (const name of ['pyproject.toml', 's3_service.py', 's3_secondary.py']) {
+          fs.copyFileSync(path.join(FIXTURE, name), path.join(root, name));
+        }
+        const incrementalStore = createTestStore();
+        const incrementalRegistry = new PluginRegistry();
+        incrementalRegistry.registerLanguagePlugin(new PythonLanguagePlugin());
+        incrementalRegistry.registerFrameworkPlugin(new Boto3Plugin());
+        const incrementalPipeline = new IndexingPipeline(
+          incrementalStore,
+          incrementalRegistry,
+          { ...makeConfig(), root },
+          root,
+        );
+        await incrementalPipeline.indexAll();
+
+        const target = incrementalStore.getSymbolBySymbolId('aws:s3:PutObject');
+        expect(target).toBeDefined();
+        const owner = incrementalStore.getFileById(target!.file_id)!;
+        const ownerPath = path.join(root, owner.path);
+        fs.writeFileSync(
+          ownerPath,
+          fs.readFileSync(ownerPath, 'utf8').replace(/^.*\.put_object\(.*\)$/m, '    pass'),
+        );
+        await incrementalPipeline.indexFiles([owner.path]);
+
+        const usages = findReferences(incrementalStore, { symbolId: 'aws:s3:PutObject' });
+        expect(usages.isOk()).toBe(true);
+        if (usages.isErr()) return;
+        expect(usages.value.references).toHaveLength(1);
+        expect(usages.value.references[0].symbol?.symbol_id).not.toContain(owner.path);
+
+        const remaining = owner.path === 's3_service.py' ? 's3_secondary.py' : 's3_service.py';
+        const remainingPath = path.join(root, remaining);
+        fs.writeFileSync(
+          remainingPath,
+          fs.readFileSync(remainingPath, 'utf8').replace(/^.*\.put_object\(.*\)$/m, '    pass'),
+        );
+        await incrementalPipeline.indexFiles([remaining]);
+        expect(incrementalStore.getSymbolBySymbolId('aws:s3:PutObject')).toBeUndefined();
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('makes AWS operation targets navigable through find_usages', () => {
+      const usages = findReferences(store, { symbolId: 'aws:s3:PutObject' });
+      expect(usages.isOk()).toBe(true);
+      if (usages.isErr()) return;
+      expect(usages.value.references.map((ref) => ref.symbol?.symbol_id).sort()).toEqual([
+        's3_secondary.py::write_secondary#function',
+        's3_service.py::write_data#function',
+      ]);
+      expect(
+        usages.value.references.every((ref) => ref.symbol?.symbol_id !== 'aws:s3:PutObject'),
+      ).toBe(true);
+    });
+
+    it('shows the direct AWS dependency in get_call_graph', () => {
+      const graph = getCallGraph(store, { symbolId: 's3_service.py::write_data#function' }, 1);
+      expect(graph.isOk()).toBe(true);
+      if (graph.isErr()) return;
+      expect(graph.value.root.calls?.map((callee) => callee.symbol_id)).toContain(
+        'aws:s3:PutObject',
+      );
+    });
+
     it('emits GetObject read edge with bucket and key', () => {
       const edges = loadEdges(store, 'aws_call').filter((e) => e.meta.method === 'get_object');
       expect(edges).toHaveLength(1);

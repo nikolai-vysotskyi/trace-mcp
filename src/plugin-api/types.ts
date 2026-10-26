@@ -284,6 +284,8 @@ export interface FrameworkPlugin {
 
 export interface ResolveContext {
   rootPath: string;
+  /** Re-anchor a shared synthetic target during Pass 2 after file-local symbols were deleted. */
+  upsertSymbolForFile?(fileId: number, symbol: RawSymbol): void;
   getAllFiles(): { id: number; path: string; language: string | null }[];
   getSymbolsByFile(fileId: number): {
     id: number;

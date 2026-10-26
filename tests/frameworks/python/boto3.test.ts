@@ -137,6 +137,8 @@ def upload(payload):
     expect(putCall).toBeDefined();
     expect(putCall?.targetSymbolId).toBe('aws:s3:PutObject');
     expect(putCall?.metadata?.op).toBe('write');
+    expect(r.symbols.map((symbol) => symbol.symbolId)).toContain('aws:s3:PutObject');
+    expect(r.symbols.map((symbol) => symbol.symbolId)).toContain('aws:s3:GetObject');
   });
 
   it('extracts S3 resource Bucket and download_file calls', async () => {
