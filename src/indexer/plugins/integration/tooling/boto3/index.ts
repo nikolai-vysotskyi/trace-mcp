@@ -825,8 +825,8 @@ export class Boto3Plugin implements FrameworkPlugin {
     // A file-local reindex can delete the shared symbol row while another file
     // still calls the operation. Re-anchor it from all current call sites before
     // the resolver persists edges, so no unrelated file needs to be reindexed.
-    for (const owner of operationOwners.values()) {
-      if (!ctx.getSymbolByFqn(owner.symbol.symbolId)) {
+    for (const [targetSymbolId, owner] of operationOwners) {
+      if (!ctx.getSymbolByFqn(targetSymbolId)) {
         ctx.upsertSymbolForFile?.(owner.fileId, owner.symbol);
       }
     }
