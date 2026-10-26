@@ -5,6 +5,8 @@
  * Glue, and Lambda usage, while preserving 0 false positives on unrelated code.
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -89,6 +91,53 @@ describe('AWS Boto3 E2E', () => {
   });
 
   describe('edges — S3 service and resources', () => {
+    it('keeps a shared operation target after its owning file stops calling it', async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-boto-target-'));
+      try {
+        for (const name of ['pyproject.toml', 's3_service.py', 's3_secondary.py']) {
+          fs.copyFileSync(path.join(FIXTURE, name), path.join(root, name));
+        }
+        const incrementalStore = createTestStore();
+        const incrementalRegistry = new PluginRegistry();
+        incrementalRegistry.registerLanguagePlugin(new PythonLanguagePlugin());
+        incrementalRegistry.registerFrameworkPlugin(new Boto3Plugin());
+        const incrementalPipeline = new IndexingPipeline(
+          incrementalStore,
+          incrementalRegistry,
+          { ...makeConfig(), root },
+          root,
+        );
+        await incrementalPipeline.indexAll();
+
+        const target = incrementalStore.getSymbolBySymbolId('aws:s3:PutObject');
+        expect(target).toBeDefined();
+        const owner = incrementalStore.getFileById(target!.file_id)!;
+        const ownerPath = path.join(root, owner.path);
+        fs.writeFileSync(
+          ownerPath,
+          fs.readFileSync(ownerPath, 'utf8').replace(/^.*\.put_object\(.*\)$/m, '    pass'),
+        );
+        await incrementalPipeline.indexFiles([owner.path]);
+
+        const usages = findReferences(incrementalStore, { symbolId: 'aws:s3:PutObject' });
+        expect(usages.isOk()).toBe(true);
+        if (usages.isErr()) return;
+        expect(usages.value.references).toHaveLength(1);
+        expect(usages.value.references[0].symbol?.symbol_id).not.toContain(owner.path);
+
+        const remaining = owner.path === 's3_service.py' ? 's3_secondary.py' : 's3_service.py';
+        const remainingPath = path.join(root, remaining);
+        fs.writeFileSync(
+          remainingPath,
+          fs.readFileSync(remainingPath, 'utf8').replace(/^.*\.put_object\(.*\)$/m, '    pass'),
+        );
+        await incrementalPipeline.indexFiles([remaining]);
+        expect(incrementalStore.getSymbolBySymbolId('aws:s3:PutObject')).toBeUndefined();
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
     it('makes AWS operation targets navigable through find_usages', () => {
       const usages = findReferences(store, { symbolId: 'aws:s3:PutObject' });
       expect(usages.isOk()).toBe(true);

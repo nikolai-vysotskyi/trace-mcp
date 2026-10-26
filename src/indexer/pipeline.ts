@@ -12,6 +12,7 @@ import type {
   ChangeScope,
   FrameworkPlugin,
   ProjectContext,
+  RawSymbol,
   ResolveContext,
 } from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
@@ -3154,6 +3155,9 @@ export class IndexingPipeline {
     return {
       rootPath: this.rootPath,
       changeScope: scope,
+      upsertSymbolForFile: (fileId: number, symbol: RawSymbol) => {
+        store.insertSymbol(fileId, symbol);
+      },
       getAllFiles: () => {
         allFiles ??= store.getAllFiles().map((f) => ({
           id: f.id,
