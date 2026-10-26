@@ -7493,3 +7493,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+
+
+### Outreach pass, 2026-10-26 late (TRA-2701): mention sweep (clean), iamsaquib8/tessera & danweinerdev/code-graph-mcp ecosystem triage, codegraph DB read-only (#2916) & browser globals (#2915), graphify SystemVerilog tasks (#4774), GitNexus bounded previews (#3728), serena planning mode fix (#2214) & negative line index fix (#2213)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; final bot reminder step=4 posted 2026-10-25 00:36 UTC ("This is the last follow-up we'll send about this claim"); claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **iamsaquib8/tessera** (2★, Apache-2.0, Rust / tree-sitter / SQLite, created 2026-10-25): Direct competitor focused on pre-edit blast radius calculation and post-edit verification for AI coding agents (`blast`, `context`, `verify`, `map`). Exposes CLI `tessera`, an MCP server, and agent edit-safety hooks (Claude Code, Codex, Gemini CLI, Cursor, Copilot). Deep tier for 4 languages (TypeScript, TSX, JavaScript, Java) resolving imports and types, standard tier for 8 languages (Python, Go, Rust, C, C++, C#, Ruby, PHP), plus cross-service contract links (HTTP, gRPC, Kafka, SQL). Contrast: trace-mcp provides cross-platform coverage across 81 languages and 88 frameworks (vs 12 languages and ~8 frameworks in Tessera), native TOON compact representation delivering 70.5%–72.7% token reduction, background daemon architecture with memory-mapped ASTs, and 181 comprehensive MCP tools including AST-based refactoring, dead-code analysis, and security taint tracing.
+- **danweinerdev/code-graph-mcp** (0★, MIT, Rust / tree-sitter, updated 2026-10-26): In-memory code graph MCP server exposing 25 query tools (`analyze_codebase`, `get_callers`, `find_path`, `get_class_hierarchy`, `blame_symbol`) and `code-graph` CLI across 6 languages (C++, Rust, Go, Python, C#, Java). Requires compiling from source via Cargo (no prebuilt binaries, no npm package). Contrast: trace-mcp supports 81 languages, zero-build `npx -y trace-mcp` instant setup, persistent SQLite storage with incremental updates and background file watching rather than rebuilding an in-memory graph from scratch on every run.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Database read-only mode for CLI status (PR #2916, open)*: Fixes `SQLITE_BUSY_SNAPSHOT (517)` / `database is locked` during concurrent `codegraph status` queries while an active indexer or bulk edge load is in progress. The issue occurred because `status` opened SQLite in read-write mode, invoking crash recovery and re-creating secondary edge indexes intentionally dropped during bulk loading. Contrast: trace-mcp uses WAL mode with dedicated read-only connections and background daemon IPC queries, eliminating database lock contention during concurrent status inspection.
+  - *Browser global method call resolution (PR #2915, open)*: Fixes DOM method calls on browser host globals (`window.open`, `localStorage.getItem`, `location.reload`, `history.back`) incorrectly linking to project class methods with matching names (`WindowService.open`, `StorageService.getItem`). Adds DOM globals and browser built-ins to `JS_BUILTIN_METHODS`. Contrast: trace-mcp performs lexical scope and receiver qualifier tracking, ensuring host globals never resolve to arbitrary project class definitions.
+- **Graphify-Labs/graphify**:
+  - *SystemVerilog class task modeling (PR #4774, open)*: Adds support for SystemVerilog `task` class methods in `_augment_systemverilog_semantics`. Previously, regex scanning only matched `function` (`_SV_FUNC_RE`), completely dropping all class methods defined as `task` (methods capable of consuming simulation time). Contrast: trace-mcp relies on full tree-sitter AST traversal rather than regex scanning, naturally extracting both functions and tasks.
+- **abhigyanpatwari/GitNexus**:
+  - *Bounded query previews & repo defaults (PR #3728, merged)*: Bounds source previews returned by `include_content: true` to avoid dumping whole multi-megabyte files into LLM contexts (which previously caused context overflow and 14 recovery shell calls in run 40239809351). Also advertises default repository directly in MCP tool schemas. Contrast: trace-mcp outputs concise TOON representations and enforces strict token-budgeted output envelopes by design.
+- **oraios/serena**:
+  - *Exclusion of rename_symbol from planning mode (PR #2214, open)*: Fixes planning mode (advertised as strictly read-only) accidentally including `rename_symbol` in its available toolset, allowing agents to perform file modifications during planning mode. Contrast: trace-mcp strictly enforces mutating tool annotations (`readonly: false`, `dry_run: true` default on `apply_rename`/`apply_codemod`, with safety gates and preset tiers like `dev` vs `read`).
+  - *Rejection of negative line indices in line-level edits (PR #2213, open)*: Fixes negative line indices silently resolving to line 0 and modifying start-of-file. Contrast: trace-mcp's AST-based symbol manipulation operates on concrete AST node spans with bounds checking.
+
+**Competitor pulse (as of 2026-10-26 late pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 24 forks (=)
+- yamadashy/repomix: 29,028★ (+3), 1,599 forks (=)
+- oraios/serena: 30,725★ (+7), 2,089 forks (=)
+- DeusData/codebase-memory-mcp: 47,508★ (+23), 3,908 forks (+3)
+- tirth8205/code-review-graph: 32,387★ (+3), 2,957 forks (=)
+- colbymchenry/codegraph: 75,377★ (+36), 4,940 forks (+3)
+- abhigyanpatwari/GitNexus: 48,044★ (+6), 5,203 forks (=)
+- jgravelle/jcodemunch-mcp: 2,808★ (=), 373 forks (=)
+- continuedev/continue: 36,325★ (+1), 5,523 forks (+1)
+- Aider-AI/aider: 49,756★ (+2), 5,108 forks (=)
+- Graphify-Labs/graphify: 135,649★ (+254), 12,937 forks (+18)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
