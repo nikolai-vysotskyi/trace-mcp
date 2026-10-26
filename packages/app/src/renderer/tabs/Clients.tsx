@@ -636,12 +636,12 @@ function SupportedClientRow({
     <div
       className="flex items-center gap-2.5 px-3"
       style={{
-        /* 44 bare, 48 with a caption — both on the 4pt grid. Padding used to
-           set this height and landed the row on 46, which is off the scale and
-           now sets the rhythm for the whole list: after TRA-479 almost every
-           row carries a caption. TRA-1698: a hook second line counts as a
-           caption for the same reason. */
-        minHeight: caption || showEnableRedirect || showHookActive ? 48 : 44,
+        /* 44 bare, 48 with a caption, 56 with a redirect action — all on the
+           4pt grid. Padding used to set this height and landed the row on 46,
+           which is off the scale and now sets the rhythm for the whole list:
+           after TRA-479 almost every row carries a caption. TRA-1698: a hook
+           second line counts as a caption for the same reason. */
+        minHeight: showEnableRedirect ? 56 : caption || showHookActive ? 48 : 44,
       }}
     >
       {/* TRA-1933: per-file disclosure. Absent entirely when no project is
@@ -690,22 +690,35 @@ function SupportedClientRow({
            A missing hook gets the one-click fix right here; an active one gets
            a quiet confirmation and nothing else. */
         <span className="flex flex-col items-end gap-1 shrink-0">
-          <span
-            className="flex items-center gap-1.5 text-[13px] leading-4"
-            style={{ color: 'var(--label-secondary)' }}
-            title={
-              presenceOnly
-                ? t('configuredHint')
-                : (pickupSentence(t, pickup, label) ??
-                  (hook === 'missing'
-                    ? t('hookMissingHint')
-                    : hook === 'active'
-                      ? t('hookActiveHint')
-                      : undefined))
-            }
-          >
-            <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
-            {presenceOnly ? t('configured') : t('connected')}
+          <span className="flex items-center gap-3">
+            <span
+              className="flex items-center gap-1.5 whitespace-nowrap text-[13px] leading-4"
+              style={{ color: 'var(--label-secondary)' }}
+              title={
+                presenceOnly
+                  ? t('configuredHint')
+                  : (pickupSentence(t, pickup, label) ??
+                    (hook === 'missing'
+                      ? t('hookMissingHint')
+                      : hook === 'active'
+                        ? t('hookActiveHint')
+                        : undefined))
+              }
+            >
+              <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
+              {presenceOnly ? t('configured') : t('connected')}
+            </span>
+            {/* TRA-1932: the reverse path Connect never had. Small and bordered
+                like every row action here — Disconnect is available, never
+                prominent. The confirm popover below guards it. */}
+            <Button
+              size="small"
+              disabled={configuring}
+              onClick={askDisconnect('global')}
+              title={t('disconnectBody')}
+            >
+              {configuring ? t('disconnecting') : t('disconnect')}
+            </Button>
           </span>
           {showHookActive && (
             <span
@@ -726,17 +739,6 @@ function SupportedClientRow({
               {redirectBusy ? t('enablingRedirect') : t('enableRedirect')}
             </Button>
           )}
-          {/* TRA-1932: the reverse path Connect never had. Small and bordered
-              like every row action here — Disconnect is available, never
-              prominent. The confirm popover below guards it. */}
-          <Button
-            size="small"
-            disabled={configuring}
-            onClick={askDisconnect('global')}
-            title={t('disconnectBody')}
-          >
-            {configuring ? t('disconnecting') : t('disconnect')}
-          </Button>
         </span>
       ) : status === 'legacy' ? (
         /* Nothing is broken or drifted here — the entry names the server
