@@ -7549,3 +7549,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+
+### Outreach pass, 2026-10-26 18:00 pass (TRA-2708): mention sweep (clean), manzzaano/leo-code & bernard357/duckdb-graph ecosystem triage, codegraph symbol boundaries (#2914), graphify native OpenCode command (#4776), GitNexus custom host logger (#3729), serena persisted symbol cache scalar strings (#2215)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; final bot reminder step=4 posted 2026-10-25 00:36 UTC ("This is the last follow-up we'll send about this claim"); claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Dokploy/mcp#81: OPEN (community discussions on PR #90 and default preset triage; no action needed).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **manzzaano/leo-code** (leo-mcp, 0★, MIT, Python / tree-sitter / AST, published on PyPI and npm, created 2026-10-18): Direct competitor providing an MCP server for coding agents focused on static call graph queries (`where`, `who_calls`, `impact`, `trace`, `guard`) and compressed context retrieval (`get_context`, claiming 80–97% token reduction vs reading files). Covers Python (ast) and TS/JS (tree-sitter), with regex approximations for other languages. Contrast: trace-mcp provides full AST indexing across 81 languages and 88 frameworks (rather than 2), 181 comprehensive MCP tools, persistent SQLite cache with memory-mapped ASTs, TOON compact representation (70.5%–72.7% token reduction), and refactoring/codemod tools.
+- **bernard357/duckdb-graph** (0★, MIT, Python / DuckDB / tree-sitter, created 2026-10-22): Embeddable code-graph MCP server storing folder/file/AST nodes and edges in a local DuckDB file, answering `impact`, `explain`, and `report` queries. Requires Python and uvx. Contrast: trace-mcp provides zero-build `npx -y trace-mcp`, SQLite WAL storage with background daemon and live fs-watching, across 81 languages.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Respect qualified symbol boundaries (PR #2914, open)*: Fixes symbol resolution matching across partial identifier paths or crossing lexical module boundaries. Contrast: trace-mcp tracks qualified symbol paths and scope chains deterministically in SQLite indices.
+- **Graphify-Labs/graphify**:
+  - *Native OpenCode slash command support (PR #4776, open)*: Adds `.opencode/commands/graphify.md` and `~/.config/opencode/commands/graphify.md` during `graphify install --platform opencode`. OpenCode does not expose skills as slash commands directly, requiring markdown command templates to bridge `/graphify` invocations to the underlying `skill` tool. Contrast: trace-mcp provides direct CLI invocations and unified MCP configuration across clients without requiring per-client command shim wrappers.
+- **abhigyanpatwari/GitNexus**:
+  - *Configurable host logger sink (PR #3729, open)*: Adds `configureLoggerSink({ destination, level, mixin })` allowing embedding hosts and MCP parent processes to redirect GitNexus logger streams and attach correlation IDs and custom fields, resolving issue #3620. Contrast: trace-mcp already exposes configurable structured logging and daemon log endpoints.
+- **oraios/serena**:
+  - *Persisted symbol cache allowed type extension for clangd (PR #2215, merged)*: Fixes cache loading crashes in `SafePickleLoader` when users override `ls_path`, `clangd_version`, or `compile_commands_dir` in YAML configs, because `ruamel.yaml` scalar string wrappers (`SingleQuotedScalarString`, `DoubleQuotedScalarString`) were rejected by the pickle class whitelist. Contrast: trace-mcp uses structured SQLite and JSON schemas for symbol persistence, completely immune to Python `pickle` deserialization issues and type whitelist brittleness.
+
+**Competitor pulse (as of 2026-10-26 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 24 forks (=)
+- yamadashy/repomix: 29,028★ (=), 1,599 forks (=)
+- oraios/serena: 30,730★ (+5), 2,089 forks (=)
+- DeusData/codebase-memory-mcp: 47,528★ (+20), 3,908 forks (=)
+- tirth8205/code-review-graph: 32,398★ (+11), 2,958 forks (+1)
+- colbymchenry/codegraph: 75,400★ (+23), 4,942 forks (+2)
+- abhigyanpatwari/GitNexus: 48,045★ (+1), 5,204 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,808★ (=), 373 forks (=)
+- continuedev/continue: 36,330★ (+5), 5,523 forks (=)
+- Aider-AI/aider: 49,761★ (+5), 5,108 forks (=)
+- Graphify-Labs/graphify: 135,805★ (+156), 12,951 forks (+14)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
