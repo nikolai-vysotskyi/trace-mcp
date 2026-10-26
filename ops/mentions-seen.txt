@@ -362,4 +362,33 @@ damirclaude2-code/C-Users-sabir-OneDrive-CLAUDE-CODE-1
 # Name collision: docs/superpowers/specs/2026-09-04-context-trace-mcp-tools-design.md ("Context Tracing MCP tools" over polytrace)
 Usmansayed/scubiee
 
+# ── Swept 2026-10-27 overnight pass (TRA-2716) ──
+# Genuine third-party competitor & architectural citation:
+# docs/archive/walkthroughs/walkthrough-v1.1.md cites trace-mcp PR reports alongside ops-codegraph diff-impact:
+alperhankendi/Ctxo
+
+# Genuine independent daily research report & architecture evaluation:
+# reports/daily/2026-04-15.md evaluates trace-mcp framework semantics and cross-session graph:
+wbingli/ai-agent-research
+
+# Genuine third-party Claude Code skills / templates catalog mirror:
+# bonus/mcps/devtools/trace-mcp.json mirrors trace-mcp MCP definition:
+artubss/SKILLS-CLAUDE-CODE
+
+# Genuine internal ecosystem adoption (Nikolai & Oleg Beletskii):
+# .claude/commands/tz.md mandates mcp__trace-mcp__get_feature_context, get_outline, get_symbol, find_usages:
+olegbeletskii/fair
+
+# Name collisions: somebody else's "trace", "mcp" or internal trace telemetry:
+LuxiaSL/cx-trace-mcp                  # ChapterX trace inspection MCP server (cx-trace-mcp)
+Mnehmos/mnehmos.trace.mcp              # Mnehmos OpenAPI / tracing MCP server
+Nataraj-EL/creator-os.ai               # internal telemetry trace event bus (trace-mcp-${serverId})
+UiPath/apollo-ui                       # Apollo UI icon AgentTraceMcpServerCall
+ad-an-26/mcp-decision-journal          # "Decision Trace MCP" learning project
+alexdalgleishmorel/budget-trace        # budget-trace-mcp stdio backend for Flutter app
+mcrescenzo/trade-trace                 # trade-trace-mcp local trading journal stdio server
+nyktora/noctrace                       # noctrace-mcp.js Docker/container tracing MCP wrapper
+tenproduct/langfuse-trace-mcp          # Langfuse trace inspection MCP server
+yuzujr/buildfix                        # trace-mcp-%Y%m%d-%H%M%S.jsonl build log file format
+
 
