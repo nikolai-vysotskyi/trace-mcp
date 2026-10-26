@@ -489,6 +489,43 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
     }
   }
 
+  // ── 9. Index truncation check (TRA-2639) ─────────────────────────────
+  if (tableExists(db, 'repo_metadata')) {
+    try {
+      const row = db
+        .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated'")
+        .get() as { value: string } | undefined;
+      if (row?.value === '1') {
+        const foundRow = db
+          .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_found'")
+          .get() as { value: string } | undefined;
+        const limitRow = db
+          .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_limit'")
+          .get() as { value: string } | undefined;
+        const found = foundRow?.value ?? 'unknown';
+        const limit = limitRow?.value ?? 'unknown';
+        checks.push({
+          name: 'index_truncation',
+          status: 'warn',
+          detail: `Index is truncated by security.max_files: ${found} file(s) found on disk, capped at ${limit}`,
+          suggested_repair: 'increase security.max_files in config and run reindex',
+        });
+      } else {
+        checks.push({
+          name: 'index_truncation',
+          status: 'ok',
+          detail: 'Index is complete (not truncated by security.max_files)',
+        });
+      }
+    } catch (e) {
+      checks.push({
+        name: 'index_truncation',
+        status: 'warn',
+        detail: `index_truncation probe failed: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
   const status: VerifyCheckStatus = checks.some((c) => c.status === 'error')
     ? 'error'
     : checks.some((c) => c.status === 'warn')

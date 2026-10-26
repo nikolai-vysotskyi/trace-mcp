@@ -1,6 +1,7 @@
 import { readEmbeddingBreakerState } from '../../ai/embedding-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { IndexStats, Store } from '../../db/store.js';
+import { readIndexTruncation } from '../../indexer/pipeline.js';
 import { getDroppedEventStats } from '../../indexer/watcher.js';
 import { getUnindexableSkipStats } from '../../indexer/unindexable-skip-cache.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
@@ -31,6 +32,10 @@ interface IndexHealthResult {
     excludePatterns: string[];
   };
   warnings: string[];
+  /**
+   * Present when the last full index hit `security.max_files` (TRA-1664, TRA-2639).
+   */
+  truncated?: { found: number; limit: number };
   progress?: ProgressSnapshot;
   /**
    * Present only in a linked git worktree served from the canonical checkout's
@@ -138,6 +143,16 @@ export function getIndexHealth(
     );
   }
 
+  // TRA-2639: Surface security.max_files truncation so user/agent knows the index is partial
+  const truncation = readIndexTruncation(store);
+  if (truncation) {
+    if (status === 'ok') status = 'degraded';
+    warnings.push(
+      `File count exceeds security.max_files limit (${truncation.found} found, capped at ${truncation.limit}). ` +
+        `The index is partial; some subtrees/files are omitted. Increase security.max_files in config to index more.`,
+    );
+  }
+
   const versionRow = store.db
     .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
     .get() as { value: string } | undefined;
@@ -228,6 +243,7 @@ export function getIndexHealth(
     status,
     stats,
     embedding,
+    ...(truncation ? { truncated: truncation } : {}),
     ...(projectRoot ? { projectRoot } : {}),
     ...(unindexable && unindexable.totalEntries > 0
       ? {
