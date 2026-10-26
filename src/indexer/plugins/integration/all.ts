@@ -19,6 +19,7 @@ import { NestJSPlugin } from './framework/nestjs/index.js';
 import { NextJSPlugin } from './framework/nextjs/index.js';
 import { NuxtPlugin } from './framework/nuxt/index.js';
 import { PassportPlugin } from './framework/passport/index.js';
+import { PolarsPlugin } from './framework/polars/index.js';
 import { RailsPlugin } from './framework/rails/index.js';
 import { ReactRouterPlugin } from './framework/react-router/index.js';
 import { SpringPlugin } from './framework/spring/index.js';
@@ -118,6 +119,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new EchoPlugin(),
     new ReactRouterPlugin(),
     new PassportPlugin(),
+    new PolarsPlugin(),
     // orm
     new PrismaPlugin(),
     new TypeORMPlugin(),

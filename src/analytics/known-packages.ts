@@ -1622,7 +1622,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   // --- Python / pip: Data science ---
   numpy: { category: 'framework', priority: 'high', plugin: 'python-scientific' },
   pandas: { category: 'framework', priority: 'high', plugin: null },
-  polars: { category: 'framework', priority: 'high', plugin: null },
+  polars: { category: 'framework', priority: 'high', plugin: 'polars' },
   scipy: { category: 'framework', priority: 'medium', plugin: 'python-scientific' },
   pyarrow: { category: 'infra', priority: 'medium', plugin: null },
   dask: { category: 'framework', priority: 'medium', plugin: null },
