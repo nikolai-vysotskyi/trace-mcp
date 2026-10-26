@@ -106,6 +106,7 @@ export interface StaleTopologyReport {
     name: string;
     repo_root: string;
   }>;
+  missingDbServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
 }
 
 export interface PruneTopologyResult {
@@ -116,8 +117,9 @@ export interface PruneTopologyResult {
 }
 
 /**
- * Scan `topology.db` for subprojects and services whose repo_root or project_root
- * no longer exists on disk.
+ * Scan `topology.db` for deleted roots and service database paths. Missing
+ * databases are reported separately because pruning their service rows would
+ * also delete contracts and endpoints that may still be useful.
  */
 export function findStaleTopology(db: Database.Database): StaleTopologyReport {
   let staleSubprojects: Array<{
@@ -143,18 +145,23 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
   }
 
   let staleServices: Array<{ id: number; name: string; repo_root: string }> = [];
+  let missingDbServices: StaleTopologyReport['missingDbServices'] = [];
   try {
-    const svcRows = db.prepare('SELECT id, name, repo_root FROM services').all() as Array<{
+    const svcRows = db.prepare('SELECT id, name, repo_root, db_path FROM services').all() as Array<{
       id: number;
       name: string;
       repo_root: string;
+      db_path: string;
     }>;
     staleServices = svcRows.filter((r) => !fs.existsSync(r.repo_root));
+    missingDbServices = svcRows.filter(
+      (r) => fs.existsSync(r.repo_root) && !fs.existsSync(r.db_path),
+    );
   } catch {
     /* table may not exist */
   }
 
-  return { staleSubprojects, staleServices };
+  return { staleSubprojects, staleServices, missingDbServices };
 }
 
 /**

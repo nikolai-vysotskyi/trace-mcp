@@ -545,6 +545,7 @@ export interface TopologyHealthReport {
   topologyPath: string;
   topologyExists: boolean;
   staleServices: Array<{ id: number; name: string; repoRoot: string }>;
+  missingDbServices: Array<{ name: string; repoRoot: string; dbPath: string }>;
   staleSubprojects: Array<{ id: number; name: string; repoRoot: string; projectRoot: string }>;
   staleCount: number;
 }
@@ -555,6 +556,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyPath: TOPOLOGY_DB_PATH,
       topologyExists: false,
       staleServices: [],
+      missingDbServices: [],
       staleSubprojects: [],
       staleCount: 0,
     };
@@ -570,6 +572,11 @@ export function diagnoseTopology(): TopologyHealthReport {
           id: s.id,
           name: s.name,
           repoRoot: s.repo_root,
+        })),
+        missingDbServices: stale.missingDbServices.map((s) => ({
+          name: s.name,
+          repoRoot: s.repo_root,
+          dbPath: s.db_path,
         })),
         staleSubprojects: stale.staleSubprojects.map((s) => ({
           id: s.id,
@@ -587,6 +594,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyPath: TOPOLOGY_DB_PATH,
       topologyExists: true,
       staleServices: [],
+      missingDbServices: [],
       staleSubprojects: [],
       staleCount: 0,
     };
@@ -1065,19 +1073,33 @@ function printRegistryReport(r: RegistryHealthReport): void {
 }
 
 function printTopologyReport(t: TopologyHealthReport): void {
-  if (!t.topologyExists || t.staleCount === 0) return;
-  console.log(
-    `Topology: ${t.staleCount} dead entr${t.staleCount === 1 ? 'y' : 'ies'} in topology.db (folder deleted):`,
-  );
-  for (const s of t.staleServices) {
-    console.log(`  [service] ${s.name}  ${shortPath(s.repoRoot)}`);
+  if (!t.topologyExists) return;
+  if (t.staleCount > 0) {
+    console.log(
+      `Topology: ${t.staleCount} dead entr${t.staleCount === 1 ? 'y' : 'ies'} in topology.db (folder deleted):`,
+    );
+    for (const s of t.staleServices) {
+      console.log(`  [service] ${s.name}  ${shortPath(s.repoRoot)}`);
+    }
+    for (const sub of t.staleSubprojects) {
+      console.log(`  [subproject] ${sub.name}  ${shortPath(sub.repoRoot)}`);
+    }
+    console.log(
+      "  Clean up dead topology entries with 'trace-mcp prune --apply' or 'trace-mcp doctor --fix'.\n",
+    );
   }
-  for (const sub of t.staleSubprojects) {
-    console.log(`  [subproject] ${sub.name}  ${shortPath(sub.repoRoot)}`);
+  if (t.missingDbServices.length > 0) {
+    console.log(`Topology: ${t.missingDbServices.length} service index database(s) missing:`);
+    for (const s of t.missingDbServices.slice(0, 20)) {
+      console.log(`  [service] ${s.name}  ${shortPath(s.dbPath)}`);
+    }
+    if (t.missingDbServices.length > 20) {
+      console.log(`  ...and ${t.missingDbServices.length - 20} more (see --json)`);
+    }
+    console.log(
+      "  Re-index affected repositories and run 'trace-mcp subproject sync' to refresh service paths. Missing indexes are not removed by --fix.\n",
+    );
   }
-  console.log(
-    "  Clean up dead topology entries with 'trace-mcp prune --apply' or 'trace-mcp doctor --fix'.\n",
-  );
 }
 
 function printDecisionsReport(d: DecisionsHealthReport): void {

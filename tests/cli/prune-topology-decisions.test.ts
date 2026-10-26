@@ -77,4 +77,18 @@ describe('trace-mcp prune topology & decisions integration (TRA-595)', () => {
     const cleanDec = pruneModule.scanOrPruneDecisions(false);
     expect(cleanDec.staleRoots).toHaveLength(0);
   });
+
+  it('reports missing service databases without deleting the service on apply', () => {
+    const repoRoot = path.join(tmpHome, 'live-app');
+    const dbPath = path.join(tmpHome, 'old-index.db');
+    fs.mkdirSync(repoRoot);
+    const topo = new TopologyStore(path.join(tmpHome, 'topology.db'));
+    topo.upsertService({ name: 'live-service', repoRoot, dbPath });
+    topo.close();
+
+    const report = pruneModule.scanOrPruneTopology(true);
+    expect(report.missingDbServices.map((s) => s.name)).toEqual(['live-service']);
+    expect(report.removedServices).toBe(0);
+    expect(report.staleServices).toEqual([]);
+  });
 });
