@@ -128,6 +128,9 @@ Rules for keeping it honest:
 | [ProSkillsMD/proskills](https://github.com/ProSkillsMD/proskills) | **Yes — third-party catalog, auto-scouted 2026-10-10** (18★, active daily) | Automated scout filed and listed candidates for all 3 repository skills in OpenClaw skill listings: `skills/trace-mcp/SKILL.md` ([issue #8193](https://github.com/ProSkillsMD/proskills/issues/8193), status `groot:published`, verdict `review:pass`), `skills/trace-mcp-codemod/SKILL.md` ([issue #8194](https://github.com/ProSkillsMD/proskills/issues/8194)), and `skills/trace-mcp-pre-commit/SKILL.md` ([issue #8195](https://github.com/ProSkillsMD/proskills/issues/8195)). License MIT pass, static scan passed with no findings. Found via `github_topic:claude-skills` | Nothing to submit — automated deterministic scout updates on new commits to skill directories. Do not ping, no action needed. Discovered via issue audit | 2026-10-18 |
 | [JMartynov/mcp-fingerprints](https://github.com/JMartynov/mcp-fingerprints) + [its Web Directory](https://jmartynov.github.io/mcp-fingerprints/) | **Yes — third-party automated passport & signature catalog, we did not submit it** (0★, active daily) | Auto-indexed server passport `data/fingerprints/nikolai-vysotskyi_trace-mcp.json` (schema 1.1.0, official_registry source) describing `trace-mcp` ("Framework-aware code intelligence: 81 languages, 58 framework integrations, 138 tools, up to 99% token reduction"). Part of open-source knowledge base with 5,058+ indexed MCP server passports | Automated deterministic sync. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-20 | 2026-10-20 |
 | [FlyingWHR/tashan](https://github.com/FlyingWHR/tashan) + [tashan.sh](https://tashan.sh/capability/pkg-trace-mcp) | **Yes — third-party automated capability & security dossier catalog, we did not submit it** (0★, active daily) | Auto-indexed capability dossier `web/capability/pkg-trace-mcp.html` (score 71.0/100, rank 95th percentile) describing `trace-mcp` ("Code graph MCP: 81 languages, 88 frameworks, 72.7% fewer PR-review tokens, comprehension at parity"). Notes active vitality, OSV scan clean, install scripts, and declared permissions (`database`, `filesystem`). Ships live badge and install snippets for Claude Code and Cursor / Claude Desktop | Automated deterministic sync from npm and MCP registry. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-21 | 2026-10-21 |
+| [alperhankendi/Ctxo](https://github.com/alperhankendi/Ctxo) | **Yes — third-party competitor architectural comparison, we did not submit it** (73★, 10 forks, active daily) | Direct competitor MCP server (`@ctxo/cli`). In `docs/archive/walkthroughs/walkthrough-v1.1.md`, cites `trace-mcp PR reports` alongside `ops-codegraph diff-impact` as established benchmark competitors solving multi-round-trip changed symbols and blast radius in one call | Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
+| [wbingli/ai-agent-research](https://github.com/wbingli/ai-agent-research) | **Yes — third-party research report, we did not submit it** (MIT, daily intelligence reports) | Daily AI Agent research evaluation `reports/daily/2026-04-15.md` analyzing `trace-mcp`: "The key innovation is framework semantics, not just static code parsing. It tries to answer 'what actually happens in this app?' across route, controller, ORM, UI, and past decisions... Repo structure is the next battleground. Supermodel and trace-mcp both try to compress architectural understanding into agent-readable form" | Independent research evaluation & external validation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
+| [artubss/SKILLS-CLAUDE-CODE](https://github.com/artubss/SKILLS-CLAUDE-CODE) | **Yes — third-party catalog mirror, we did not submit it** (11★, 3 forks) | Curated Claude Code skills and devtools collection mirroring `bonus/mcps/devtools/trace-mcp.json` with `npx -y trace-mcp@latest` and 81 languages / 60 framework integrations description | Curated community skills mirror. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
 
 
 
@@ -7658,3 +7661,65 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+### Outreach pass, 2026-10-27 02:00 pass (TRA-2716): mention sweep (14 new repos classified, 4 genuine surfaces/ecosystem citations), alperhankendi/Ctxo direct competitor triage, graphify per-file update (#4801), watch contention (#4802) & install platform detect (#4803), serena SSE symbol cache shutdown (#2221), codebase-memory git prefix / runner isolation (#2809), codegraph projects discovery (#2912)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Dokploy/mcp#81: OPEN (community discussions on PR #90 progressing; no action needed).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 14 repos outside previous seen list; all 14 inspected and classified in `ops/mentions-seen.txt`:
+  - `alperhankendi/Ctxo`: Genuine direct competitor & architectural citation (`docs/archive/walkthroughs/walkthrough-v1.1.md` cites `trace-mcp PR reports` alongside `ops-codegraph diff-impact`).
+  - `wbingli/ai-agent-research`: Genuine independent daily research report & architecture evaluation (`reports/daily/2026-04-15.md` evaluates `trace-mcp` framework semantics vs static code parsing).
+  - `artubss/SKILLS-CLAUDE-CODE`: Genuine third-party Claude Code skills / templates catalog mirror (`bonus/mcps/devtools/trace-mcp.json`).
+  - `olegbeletskii/fair`: Genuine internal ecosystem adoption (`.claude/commands/tz.md` mandates `mcp__trace-mcp__get_feature_context`, `get_outline`, `get_symbol`, `find_usages`).
+  - 10 name collisions / internal telemetry references classified and silenced (`LuxiaSL/cx-trace-mcp`, `Mnehmos/mnehmos.trace.mcp`, `Nataraj-EL/creator-os.ai`, `UiPath/apollo-ui`, `ad-an-26/mcp-decision-journal`, `alexdalgleishmorel/budget-trace`, `mcrescenzo/trade-trace`, `nyktora/noctrace`, `tenproduct/langfuse-trace-mcp`, `yuzujr/buildfix`).
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **alperhankendi/Ctxo** (73★, 10 forks, MIT, TypeScript / AST / git hooks / SQLite, npm `@ctxo/cli`): Direct competitor MCP server providing 14 code intelligence tools (`get_blast_radius`, `get_pr_impact`, `get_changed_symbols`, `get_file_tree`, `find_symbol`, etc.) plus domain tools. Claims to replace ripgrep/read loops with deterministic graphs for TypeScript, Java, Go, C#. Explicitly benchmarks against trace-mcp PR reports. Contrast: trace-mcp provides deep AST analysis across 81 languages and 88 frameworks (vs 4 languages), 181 tools (vs 14), TOON compact representation (70.5%–72.7% token reduction), persistent SQLite cache with background daemon, and zero build/install setup via `npx -y trace-mcp`.
+- **wbingli/ai-agent-research** (Daily AI Agent research): Highlights trace-mcp's core differentiation: "The key innovation is framework semantics, not just static code parsing. It tries to answer 'what actually happens in this app?' across route, controller, ORM, UI, and past decisions... Repo structure is the next battleground. Supermodel and trace-mcp both try to compress architectural understanding into agent-readable form."
+- **artubss/SKILLS-CLAUDE-CODE** (11★, 3 forks): Community mirror of Claude Code skills ecosystem, bundling `trace-mcp` devtools configuration.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Re-extract only changed files on update (PR #4801, open)*: Fixes issue #4800 where `graphify update` paid 68.15s full re-index cost whenever a single file changed because the gate was binary ("all unchanged" vs "not all unchanged"). Derives file differences from manifest to scope extraction to changed files only. Contrast: trace-mcp uses `@parcel/watcher` incremental change tracking and per-file AST hashing in SQLite WAL for instant sub-second delta indexing.
+  - *Record contended incremental update requests (PR #4802, open)*: Mitigates lock contention in `_rebuild_code` when watch events fire during active rebuilds, preserving pending changed paths rather than dropping update requests. Contrast: trace-mcp's concurrent reader/writer SQLite WAL design with serialized writer queues eliminates dropped watch notifications and lock contention.
+  - *Platform auto-detection flag for assistant install (PR #4803, open)*: Adds `--detect` flag to auto-detect installed AI coding assistants by scanning config directories instead of hardcoding Claude Code.
+- **oraios/serena**:
+  - *Shut down agent and persist symbol caches on SSE/streamable-HTTP stop (PR #2221, open)*: Fixes unhandled SIGINT/SIGTERM under HTTP transports, which previously killed language server subprocesses and dropped unpersisted symbol caches from memory without writing `.serena/cache/`. Contrast: trace-mcp transactions are committed immediately to persistent SQLite WAL with durable signal handling and graceful daemon worker teardown.
+- **DeusData/codebase-memory-mcp**:
+  - *Isolate validation and handle git mnemonic prefixes (PR #2809, open)*: Fixes `detect_changes` failing when users configure `diff.mnemonicPrefix=true`, which outputs `i/`, `w/`, `c/`, `o/` prefixes and broke their strict `+++ b/` hunk parser (forcing fallback to whole-file seeds). Also isolates XDG environment variables. Contrast: trace-mcp diff parser handles arbitrary git diff outputs and explicitly passes `--no-prefix` or normalizes headers directly.
+- **colbymchenry/codegraph**:
+  - *Cross-project discovery tool `codegraph_projects` (PR #2912, open)*: Adds `codegraph_projects` tool to discover registered projects across roots from a gateway server or monorepo root (fixes #769). Contrast: trace-mcp provides daemon workspace registry, subproject topology, and project listing out of the box.
+
+**Competitor pulse (as of 2026-10-27 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (+1)
+- yamadashy/repomix: 29,036★ (+2), 1,599 forks (=)
+- oraios/serena: 30,736★ (+1), 2,092 forks (+1)
+- DeusData/codebase-memory-mcp: 47,561★ (+15), 3,911 forks (=)
+- tirth8205/code-review-graph: 32,410★ (+4), 2,958 forks (=)
+- colbymchenry/codegraph: 75,438★ (+7), 4,946 forks (+1)
+- abhigyanpatwari/GitNexus: 48,053★ (+4), 5,204 forks (=)
+- jgravelle/jcodemunch-mcp: 2,809★ (+1), 373 forks (=)
+- continuedev/continue: 36,334★ (+1), 5,524 forks (-1)
+- Aider-AI/aider: 49,769★ (+3), 5,107 forks (-1)
+- Graphify-Labs/graphify: 136,073★ (+116), 12,989 forks (+16)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
