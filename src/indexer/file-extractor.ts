@@ -148,7 +148,26 @@ const MAX_CANNOT_READ_ENOENT_KEYS = 1000;
 const cannotReadEnoentCounts = new Map<string, { count: number }>();
 
 function cannotReadEnoentKey(rootPath: string, relPath: string): string {
-  return `${rootPath}\n${atomicWriteTargetPath(relPath) ?? relPath}`;
+  const atomicTarget = atomicWriteTargetPath(relPath);
+  if (atomicTarget) return `${rootPath}\n${atomicTarget}`;
+
+  // TRA-2640 / TRA-2581: group ephemeral paths by prefix if any unhandled
+  // transient files reach logCannotReadFile, preventing unique IDs from
+  // producing hundreds of individual warnings.
+  const normalized = relPath.replace(/\\/g, '/');
+  if (normalized.includes('node_repl/active_execs/')) {
+    return `${rootPath}\nnode_repl/active_execs/*`;
+  }
+  const arg0Match = /(.*tmp\/arg0-[^/]+)/.exec(normalized);
+  if (arg0Match) {
+    return `${rootPath}\n${arg0Match[1]}/*`;
+  }
+  const pluginInstallMatch = /(.*plugin-install-[^/]+)/.exec(normalized);
+  if (pluginInstallMatch) {
+    return `${rootPath}\n${pluginInstallMatch[1]}/*`;
+  }
+
+  return `${rootPath}\n${relPath}`;
 }
 
 /** Test hook — clears the per-process Cannot read file ENOENT dedup state between cases. */
@@ -464,6 +483,16 @@ export class FileExtractor {
         logger.debug(
           { file: relPath, rootPath, code: errno?.code },
           'SQLite sidecar vanished before read (race, not an error)',
+        );
+        return { kind: 'skipped' };
+      }
+      // TRA-2640 / TRA-2581: hot-churn files or temporary scratch trees that
+      // vanished between discovery and read (expected race, not an indexing failure).
+      // Debug, and `skipped` so they neither spam L40 warnings nor break the index with errors.
+      if (errno?.code === 'ENOENT' && isHotChurnPath(relPath)) {
+        logger.debug(
+          { file: relPath, rootPath, code: errno?.code },
+          'Hot-churn runtime state vanished before read (race, not an error)',
         );
         return { kind: 'skipped' };
       }
