@@ -1095,6 +1095,37 @@ const SEED_EDGE_TYPES = [
     category: 'pydantic',
     description: 'Model with from_attributes → ORM model',
   },
+  // Polars edges
+  {
+    name: 'polars_dataframe_flow',
+    category: 'polars',
+    directed: true,
+    description: 'Polars DataFrame transform pipeline flow between stages',
+  },
+  {
+    name: 'polars_udf',
+    category: 'polars',
+    directed: true,
+    description: 'Polars map_elements/apply UDF callable reference',
+  },
+  {
+    name: 'polars_column_ref',
+    category: 'polars',
+    directed: true,
+    description: 'Polars column literal reference (pl.col, select, drop)',
+  },
+  {
+    name: 'polars_column_alias',
+    category: 'polars',
+    directed: true,
+    description: 'Polars column alias or rename mapping (from -> to)',
+  },
+  {
+    name: 'polars_join',
+    category: 'polars',
+    directed: true,
+    description: 'Polars DataFrame join operation',
+  },
   // Async DB edges (asyncpg, databases, aiosqlite, psycopg, tortoise-orm)
   { name: 'async_db_query', category: 'async-db', description: 'Async DB query (SELECT/fetch)' },
   {
