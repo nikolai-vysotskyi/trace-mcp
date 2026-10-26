@@ -92,6 +92,27 @@ function migrateLegacyHomeDir(target: string, legacy: string): boolean {
 }
 
 /**
+ * TRA-2687: resolve canonical user home directory.
+ * When running inside an agent subshell or sandbox (e.g. Antigravity ~/.agy/3),
+ * process.env.HOME (and thus os.homedir()) may point to the agent root.
+ * Normal operations, state dirs and the LaunchAgent plist must target the real user.
+ */
+function resolveUserHome(): string {
+  try {
+    const userDbHome = os.userInfo().homedir;
+    if (userDbHome && fs.existsSync(userDbHome)) {
+      const homedir = os.homedir();
+      if (homedir !== userDbHome && /[/\\]\.agy([/\\]|$)/i.test(homedir)) {
+        return userDbHome;
+      }
+    }
+  } catch {
+    /* fallback to os.homedir() */
+  }
+  return os.homedir();
+}
+
+/**
  * Root of all trace-mcp global state.
  *
  * Default: `~/.trace/`. Override with `TRACE_MCP_DATA_DIR=<path>` for
@@ -109,7 +130,7 @@ const { home: TRACE_MCP_HOME_RESOLVED, migrated: TRACE_MCP_HOME_MIGRATED_RESOLVE
       : override;
     return { home: path.resolve(expanded), migrated: false };
   }
-  const homedir = os.homedir();
+  const homedir = resolveUserHome();
   const target = path.join(homedir, '.trace');
   const legacy = path.join(homedir, '.trace-mcp');
   return { home: target, migrated: migrateLegacyHomeDir(target, legacy) };
@@ -625,7 +646,7 @@ export const RESTART_MARKER_PATH = path.join(TRACE_MCP_HOME, 'daemon-restart.mar
 
 /** launchd plist path for auto-start on macOS. */
 export const LAUNCHD_PLIST_PATH = path.join(
-  os.homedir(),
+  resolveUserHome(),
   'Library',
   'LaunchAgents',
   'com.trace-mcp.server.plist',

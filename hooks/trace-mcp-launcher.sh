@@ -808,10 +808,6 @@ probe_cli() {
     done
   done <<< "$roots"
 
-  # No npm prefix holds us: this is an app-only install (TRA-996). The bundle
-  # ships the same dist/cli.js, so serve that rather than ending the session.
-  cli_from_app_bundle && return 0
-
   return 1
 }
 
@@ -826,6 +822,19 @@ heal_config() {
   # be deleted, so the "fast path" it buys would be a dangling one.
   case "$cli" in
     *trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
+  esac
+  # Never heal an app bundle over an existing npm-configured launcher.env (TRA-2687).
+  # Serving an app bundle when npm is unavailable is an emergency fallback
+  # for the current session, not a persistent downgrade of the user's config.
+  case "$cli" in
+    *.app/*)
+      if [ -f "$CONFIG" ] && [ -r "$CONFIG" ]; then
+        if grep -q 'TRACE_MCP_CLI=.*node_modules' "$CONFIG" 2>/dev/null; then
+          log "heal_config: skipping config rewrite to app bundle $cli because $CONFIG is npm-configured (TRA-2687)"
+          return 0
+        fi
+      fi
+      ;;
   esac
   # A config path that is not a regular file — a directory left by a botched
   # restore or a stray `mkdir`, a socket, a device node — cannot be replaced by
@@ -1063,13 +1072,19 @@ if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
       # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
       # kills the session permanently.
       retry=0
-      while [ "$retry" -lt 5 ]; do
+      while [ "$retry" -lt 10 ]; do
         sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
         retry=$((retry + 1))
         CLI_PATH=$(probe_cli "$ROOTS") && break
       done
-      [ -n "$CLI_PATH" ] || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
     }
+    # No npm prefix holds us: check for an app bundle (app-only install, TRA-996).
+    # This must run AFTER npm roots retry: during a package update, an installed
+    # app bundle must never preempt an in-flight npm directory swap (TRA-2687).
+    if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
+      CLI_PATH=$(cli_from_app_bundle) || CLI_PATH=""
+    fi
+    [ -n "$CLI_PATH" ] || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
     log "probe: cli=$CLI_PATH"
     HEALED=1
   fi

@@ -12,7 +12,7 @@ import { yieldToEventLoopFair } from '../utils/event-loop.js';
 import { throwIfIndexAborted } from './index-abort.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
-import type { ExtractPool, ExtractRequest } from './extract-pool.js';
+import type { ExtractPool, ExtractRequest, ExtractResponse } from './extract-pool.js';
 import { logFrameworkExtractStats, resetFrameworkExtractStats } from '../plugin-api/executor.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -281,6 +281,7 @@ export async function extractAndPersist(
   // incremental write until a manual rebuild — the durability bug this guards
   // against. enableFts5Triggers rebuilds from the current symbols table, so
   // running it on the error path also re-syncs FTS to the partial state.
+  let loggedPoolFallback = false;
   try {
     for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
       // TRA-1017: cooperative cancellation — stop between batches, where the
@@ -308,14 +309,47 @@ export async function extractAndPersist(
               if (!relPath) return;
               const existing = existingFiles.get(relPath) ?? null;
               const gitignored = gitignore?.isIgnored(relPath) ?? false;
-              const r = await pool.extract({
-                relPath,
-                rootPath,
-                force: fileForce(relPath),
-                existing,
-                gitignored,
-                workspaces,
-              } as ExtractRequest);
+              let r: ExtractResponse;
+              try {
+                r = await pool.extract({
+                  relPath,
+                  rootPath,
+                  force: fileForce(relPath),
+                  existing,
+                  gitignored,
+                  workspaces,
+                } as ExtractRequest);
+              } catch (poolErr) {
+                // TRA-2687: fallback to in-process extraction if worker pool fails or becomes unavailable
+                if (!loggedPoolFallback) {
+                  loggedPoolFallback = true;
+                  logger.warn(
+                    { error: poolErr, relPath },
+                    'Extract worker pool error; falling back to in-process extraction',
+                  );
+                }
+                const ext = await extractor.extract(relPath, fileForce(relPath));
+                if (ext.kind === 'skipped') {
+                  result.skipped++;
+                  if (ext.reason === 'binary') {
+                    result.skippedBinary = (result.skippedBinary ?? 0) + 1;
+                  } else if (ext.reason === 'oversize') {
+                    result.skippedOversize = (result.skippedOversize ?? 0) + 1;
+                  }
+                  continue;
+                }
+                if (ext.kind === 'mtime_updated') {
+                  store.updateFileMtime(ext.fileId, ext.newMtimeMs);
+                  result.skipped++;
+                  continue;
+                }
+                if (ext.kind === 'error') {
+                  result.errors++;
+                  continue;
+                }
+                extractions.push(ext.extraction);
+                continue;
+              }
               if (r.kind === 'skipped') {
                 result.skipped++;
                 if (r.reason === 'binary') {

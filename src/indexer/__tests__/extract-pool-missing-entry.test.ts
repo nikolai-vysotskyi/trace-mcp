@@ -142,4 +142,55 @@ describe('ExtractPool — missing worker entry (TRA-1807)', () => {
     expect(internals.poolDisabled).toBe(true);
     expect(pool.available).toBe(false);
   });
+
+  it('re-resolves canonical entry after swap cleanup instead of staying degraded (TRA-2687)', () => {
+    const canonicalUrl = new URL('../extract-worker.js', import.meta.url);
+    const swapUrl = new URL(
+      'file:///tmp/node_modules/trace-mcp.tmcp-bak-9999/dist/extract-worker.js',
+    );
+
+    const pool = new ExtractPool({ keepAlive: true, size: 1, workerEntry: swapUrl });
+    seedSlots(pool, 1);
+    const internals = asInternals(pool);
+
+    // Simulate swap directory removed after update, but canonical entry restored
+    const realExists = fs.existsSync;
+    vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      if (s.includes('tmcp-bak-9999')) return false;
+      if (s.endsWith('extract-worker.js')) return true;
+      return realExists(p);
+    });
+
+    internals.poolDisabled = true;
+    expect(internals.tryRecover()).toBe(true);
+    expect(internals.poolDisabled).toBe(false);
+    expect(internals.workerEntry?.href).toBe(canonicalUrl.href);
+    expect(pool.available).toBe(true);
+  });
+
+  it('switches back to canonical entry in spawn() when swap path is removed (TRA-2687)', () => {
+    const canonicalUrl = new URL('../extract-worker.js', import.meta.url);
+    const swapUrl = new URL(
+      'file:///tmp/node_modules/trace-mcp.tmcp-bak-9999/dist/extract-worker.js',
+    );
+
+    const pool = new ExtractPool({ keepAlive: true, size: 1, workerEntry: swapUrl });
+    seedSlots(pool, 1);
+    const internals = asInternals(pool);
+
+    const realExists = fs.existsSync;
+    vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      if (s.includes('tmcp-bak-9999')) return false;
+      if (s.endsWith('extract-worker.js')) return true;
+      return realExists(p);
+    });
+
+    internals.spawn(0);
+    // Should have switched to canonical and avoided permanentlyDead missing-entry tripwire
+    expect(internals.workerEntry?.href).toBe(canonicalUrl.href);
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(internals.slots[0].permanentlyDead).toBe(false);
+  });
 });

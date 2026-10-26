@@ -158,7 +158,27 @@ async function loadParser(language: string): Promise<TSParser> {
 
   let lang = languageCache.get(language);
   if (!lang) {
-    lang = await Language.load(getWasmPath(grammar));
+    // TRA-2687: during an in-flight global package upgrade (npm install -g),
+    // tree-sitter WASM grammars in node_modules may be transiently unreadable
+    // or unpacking. Retry with a short back-off rather than failing the language
+    // plugin permanently with ENOENT.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        lang = await Language.load(getWasmPath(grammar));
+        break;
+      } catch (err) {
+        lastErr = err;
+        const msg = String((err as Error)?.message || err);
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if (code === 'ENOENT' || /ENOENT|unreadable|not found/i.test(msg)) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!lang) throw lastErr;
     languageCache.set(language, lang);
   }
 

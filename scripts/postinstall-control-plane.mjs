@@ -104,6 +104,59 @@ function migrateLegacyHomeDir(target, legacy) {
   }
 }
 
+// MUST match src/global.ts::isEphemeralInstallPath (TRA-1807). Mirrored here
+// as plain regexes because postinstall runs unbundled with no access to src/.
+// TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`): a stale
+// cached extract downgraded the live daemon 3.33.0 → 3.31.5.
+const EPHEMERAL_INSTALL_PATTERNS = [
+  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i,
+  /[/\\]multica-task-\d+[/\\]/i,
+  /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i,
+  /[/\\]_npx[/\\]/i,
+];
+
+/**
+ * True when this postinstall itself runs from a one-shot agent-run sandbox
+ * or a shared tmp root. Such an install must never adopt the live daemon:
+ * overwriting launcher.env + the shim + kickstarting launchd would pin
+ * :3741 to a directory that vanishes with the run (TRA-1807).
+ */
+function isEphemeralInstallPath(installPath) {
+  const abs = path.resolve(installPath);
+  if (EPHEMERAL_INSTALL_PATTERNS.some((re) => re.test(abs))) return true;
+  // POSIX tmp roots on every OS (TRA-1810): on Windows path.resolve('/tmp/…')
+  // yields `C:\tmp\…`, so compare on forward slashes with drive stripped.
+  const normalized = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
+  for (const tmpRoot of ['/tmp', '/private/tmp']) {
+    if (normalized === tmpRoot || normalized.startsWith(`${tmpRoot}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * TRA-2687: resolve canonical user home directory.
+ * When postinstall runs inside an agent subshell or sandbox, process.env.HOME
+ * (and thus os.homedir()) may point to an ephemeral agent path (e.g. .agy/3).
+ * A global install must still write launcher.env and the LaunchAgent plist
+ * to the real user's home directory so launchd and normal client shells use it.
+ */
+function resolveUserHome() {
+  try {
+    const userDbHome = os.userInfo().homedir;
+    if (userDbHome && fs.existsSync(userDbHome)) {
+      const homedir = os.homedir();
+      if (homedir !== userDbHome && /[/\\]\.agy([/\\]|$)/i.test(homedir)) {
+        return userDbHome;
+      }
+    }
+  } catch {
+    /* fallback to os.homedir() */
+  }
+  return os.homedir();
+}
+
 const TRACE_MCP_HOME = (() => {
   const override = process.env.TRACE_MCP_DATA_DIR || process.env.TRACE_MCP_HOME;
   if (override && override.length > 0) {
@@ -112,7 +165,7 @@ const TRACE_MCP_HOME = (() => {
       : override;
     return path.resolve(expanded);
   }
-  const homedir = os.homedir();
+  const homedir = resolveUserHome();
   const target = path.join(homedir, '.trace');
   const legacy = path.join(homedir, '.trace-mcp');
   migrateLegacyHomeDir(target, legacy);
@@ -129,7 +182,7 @@ const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
 // Opt-out sentinel (#202) — keep in sync with src/global.ts::DAEMON_DISABLED_PATH.
 const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
 const LAUNCHD_PLIST_PATH = path.join(
-  os.homedir(),
+  resolveUserHome(),
   'Library',
   'LaunchAgents',
   'com.trace-mcp.server.plist',
@@ -184,37 +237,6 @@ function isDevCheckout() {
   } catch {
     return false;
   }
-}
-
-// MUST match src/global.ts::isEphemeralInstallPath (TRA-1807). Mirrored here
-// as plain regexes because postinstall runs unbundled with no access to src/.
-// TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`): a stale
-// cached extract downgraded the live daemon 3.33.0 → 3.31.5.
-const EPHEMERAL_INSTALL_PATTERNS = [
-  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i,
-  /[/\\]multica-task-\d+[/\\]/i,
-  /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i,
-  /[/\\]_npx[/\\]/i,
-];
-
-/**
- * True when this postinstall itself runs from a one-shot agent-run sandbox
- * or a shared tmp root. Such an install must never adopt the live daemon:
- * overwriting launcher.env + the shim + kickstarting launchd would pin
- * :3741 to a directory that vanishes with the run (TRA-1807).
- */
-function isEphemeralInstallPath(installPath) {
-  const abs = path.resolve(installPath);
-  if (EPHEMERAL_INSTALL_PATTERNS.some((re) => re.test(abs))) return true;
-  // POSIX tmp roots on every OS (TRA-1810): on Windows path.resolve('/tmp/…')
-  // yields `C:\tmp\…`, so compare on forward slashes with drive stripped.
-  const normalized = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
-  for (const tmpRoot of ['/tmp', '/private/tmp']) {
-    if (normalized === tmpRoot || normalized.startsWith(`${tmpRoot}/`)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Mirror src/init/launcher.ts::quoteEnvValue. The shim strips one pair of

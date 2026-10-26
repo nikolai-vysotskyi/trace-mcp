@@ -449,7 +449,47 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     const runInstall = () =>
       run('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], 120_000);
 
-    let result = await runInstall();
+    // TRA-2687: create a proactive runtime swap backup before invoking npm install,
+    // so running daemons and launcher shims can continue serving requests/spawning
+    // workers from the backup during npm's unpack window.
+    let proactiveBackupDir: string | null = null;
+    const mainDir = npmRoot ? path.join(npmRoot, 'trace-mcp') : '';
+    if (npmRoot && fs.existsSync(path.join(mainDir, 'dist', 'cli.js'))) {
+      const candidateBackup = path.join(npmRoot, `${BACKUP_DIR_PREFIX}${process.pid}`);
+      try {
+        fs.mkdirSync(candidateBackup, { recursive: true });
+        const srcDist = path.join(mainDir, 'dist');
+        const destDist = path.join(candidateBackup, 'dist');
+        fs.cpSync(srcDist, destDist, { recursive: true });
+        const srcPkg = path.join(mainDir, 'package.json');
+        if (fs.existsSync(srcPkg)) {
+          fs.copyFileSync(srcPkg, path.join(candidateBackup, 'package.json'));
+        }
+        proactiveBackupDir = candidateBackup;
+      } catch (err) {
+        logger.debug({ error: err }, 'Auto-update: proactive runtime backup skipped');
+        if (candidateBackup && fs.existsSync(candidateBackup)) {
+          try {
+            fs.rmSync(candidateBackup, { recursive: true, force: true });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+
+    let result: { status: number; stdout: string; stderr: string };
+    try {
+      result = await runInstall();
+    } finally {
+      if (proactiveBackupDir && fs.existsSync(proactiveBackupDir)) {
+        try {
+          fs.rmSync(proactiveBackupDir, { recursive: true, force: true });
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
 
     // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
     // corrupt half-extracted state. Atomic-rename it aside, retry once, and
