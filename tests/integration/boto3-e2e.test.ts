@@ -13,6 +13,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { Boto3Plugin } from '../../src/indexer/plugins/integration/tooling/boto3/index.js';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { findReferences } from '../../src/tools/framework/references.js';
 import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/boto3-app');
@@ -28,6 +29,7 @@ function makeConfig(): TraceMcpConfig {
 
 const EXPECTED_ROLES: Record<string, string | null> = {
   's3_service.py': 'boto3_client',
+  's3_secondary.py': 'boto3_client',
   'ssm_service.py': 'boto3_client',
   'glue_service.py': 'boto3_client',
   'lambda_service.py': 'boto3_client',
@@ -86,6 +88,19 @@ describe('AWS Boto3 E2E', () => {
   });
 
   describe('edges — S3 service and resources', () => {
+    it('makes AWS operation targets navigable through find_usages', () => {
+      const usages = findReferences(store, { symbolId: 'aws:s3:PutObject' });
+      expect(usages.isOk()).toBe(true);
+      if (usages.isErr()) return;
+      expect(usages.value.references.map((ref) => ref.symbol?.symbol_id).sort()).toEqual([
+        's3_secondary.py::write_secondary#function',
+        's3_service.py::write_data#function',
+      ]);
+      expect(
+        usages.value.references.every((ref) => ref.symbol?.symbol_id !== 'aws:s3:PutObject'),
+      ).toBe(true);
+    });
+
     it('emits GetObject read edge with bucket and key', () => {
       const edges = loadEdges(store, 'aws_call').filter((e) => e.meta.method === 'get_object');
       expect(edges).toHaveLength(1);

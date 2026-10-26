@@ -21,6 +21,7 @@ import type {
   PluginManifest,
   ProjectContext,
   RawEdge,
+  RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import { hasAnyPythonDep } from '../../_shared/python-deps.js';
@@ -707,11 +708,28 @@ export class Boto3Plugin implements FrameworkPlugin {
 
     // Also populate result.edges for direct callers (e.g. unit tests)
     const calls = extractBoto3Calls(source);
+    const operationSymbols = new Set<string>();
     for (const call of calls) {
       const line = lineOfIndex(source, call.index);
+      const targetSymbolId = `aws:${call.service}:${call.operation}`;
+      if (!operationSymbols.has(targetSymbolId)) {
+        operationSymbols.add(targetSymbolId);
+        const byteStart = Buffer.byteLength(source.slice(0, call.index), 'utf8');
+        const operationSymbol: RawSymbol = {
+          symbolId: targetSymbolId,
+          name: call.operation,
+          kind: 'function',
+          fqn: targetSymbolId,
+          signature: `${call.service}.${call.operation}`,
+          byteStart,
+          byteEnd: byteStart + Buffer.byteLength(call.method, 'utf8'),
+          metadata: { service: call.service, operation: call.operation, type: 'aws_operation' },
+        };
+        result.symbols.push(operationSymbol);
+      }
       result.edges!.push({
         edgeType: 'aws_call',
-        targetSymbolId: `aws:${call.service}:${call.operation}`,
+        targetSymbolId,
         metadata: {
           service: call.service,
           operation: call.operation,
