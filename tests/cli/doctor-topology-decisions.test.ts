@@ -96,4 +96,18 @@ describe('doctor topology and decisions hygiene (TRA-595)', () => {
     expect(cleanDec.staleRoots).toHaveLength(0);
     expect(cleanDec.staleDecisionsCount).toBe(0);
   });
+
+  it('surfaces missing service databases without marking them for deletion', () => {
+    const repoRoot = path.join(tmpHome, 'live-app');
+    const dbPath = path.join(tmpHome, 'old-index.db');
+    fs.mkdirSync(repoRoot);
+    const topo = new TopologyStore(path.join(tmpHome, 'topology.db'));
+    topo.upsertService({ name: 'live-service', repoRoot, dbPath });
+    topo.close();
+
+    const report = doctor.diagnoseTopology();
+    expect(report.missingDbServices).toEqual([{ name: 'live-service', repoRoot, dbPath }]);
+    expect(report.staleCount).toBe(0);
+    expect(doctor.fixTopologyIssues(report, { dryRun: false }).removedServices).toEqual([]);
+  });
 });

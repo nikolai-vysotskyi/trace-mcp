@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
+import { resolveExistingServiceIndexPath } from './service-index-path.js';
 import type { SubprojectRow } from './topology-types.js';
 
 /**
@@ -106,6 +107,14 @@ export interface StaleTopologyReport {
     name: string;
     repo_root: string;
   }>;
+  missingDbServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
+  staleDbPathServices: Array<{
+    id: number;
+    name: string;
+    repo_root: string;
+    db_path: string;
+    resolved_db_path: string;
+  }>;
 }
 
 export interface PruneTopologyResult {
@@ -116,8 +125,9 @@ export interface PruneTopologyResult {
 }
 
 /**
- * Scan `topology.db` for subprojects and services whose repo_root or project_root
- * no longer exists on disk.
+ * Scan `topology.db` for deleted roots and service database paths. Missing
+ * databases are reported separately because pruning their service rows would
+ * also delete contracts and endpoints that may still be useful.
  */
 export function findStaleTopology(db: Database.Database): StaleTopologyReport {
   let staleSubprojects: Array<{
@@ -143,18 +153,30 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
   }
 
   let staleServices: Array<{ id: number; name: string; repo_root: string }> = [];
+  let missingDbServices: StaleTopologyReport['missingDbServices'] = [];
+  let staleDbPathServices: StaleTopologyReport['staleDbPathServices'] = [];
   try {
-    const svcRows = db.prepare('SELECT id, name, repo_root FROM services').all() as Array<{
+    const svcRows = db.prepare('SELECT id, name, repo_root, db_path FROM services').all() as Array<{
       id: number;
       name: string;
       repo_root: string;
+      db_path: string;
     }>;
     staleServices = svcRows.filter((r) => !fs.existsSync(r.repo_root));
+    for (const row of svcRows) {
+      if (!fs.existsSync(row.repo_root) || fs.existsSync(row.db_path)) continue;
+      const resolvedDbPath = resolveExistingServiceIndexPath(row.repo_root);
+      if (resolvedDbPath) {
+        staleDbPathServices.push({ ...row, resolved_db_path: resolvedDbPath });
+      } else {
+        missingDbServices.push(row);
+      }
+    }
   } catch {
     /* table may not exist */
   }
 
-  return { staleSubprojects, staleServices };
+  return { staleSubprojects, staleServices, missingDbServices, staleDbPathServices };
 }
 
 /**

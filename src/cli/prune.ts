@@ -665,6 +665,14 @@ function toJson(
 
 export interface TopologyPruneSummary {
   staleServices: Array<{ id: number; name: string; repo_root: string }>;
+  missingDbServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
+  staleDbPathServices: Array<{
+    id: number;
+    name: string;
+    repo_root: string;
+    db_path: string;
+    resolved_db_path: string;
+  }>;
   staleSubprojects: Array<{ id: number; name: string; repo_root: string; project_root: string }>;
   removedServices: number;
   removedSubprojects: number;
@@ -683,6 +691,8 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
   if (!fs.existsSync(TOPOLOGY_DB_PATH)) {
     return {
       staleServices: [],
+      missingDbServices: [],
+      staleDbPathServices: [],
       staleSubprojects: [],
       removedServices: 0,
       removedSubprojects: 0,
@@ -701,6 +711,8 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
       }
       return {
         staleServices: stale.staleServices,
+        missingDbServices: stale.missingDbServices,
+        staleDbPathServices: stale.staleDbPathServices,
         staleSubprojects: stale.staleSubprojects,
         removedServices,
         removedSubprojects,
@@ -712,6 +724,8 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
     logger.warn({ err }, 'prune: topology scan/prune failed');
     return {
       staleServices: [],
+      missingDbServices: [],
+      staleDbPathServices: [],
       staleSubprojects: [],
       removedServices: 0,
       removedSubprojects: 0,
@@ -910,6 +924,8 @@ export const pruneCommand = new Command('prune')
               removedEphemeralRoots,
               topology: {
                 staleServices: topoSummary.staleServices,
+                missingDbServices: topoSummary.missingDbServices,
+                staleDbPathServices: topoSummary.staleDbPathServices,
                 staleSubprojects: topoSummary.staleSubprojects,
                 removedServices: topoSummary.removedServices,
                 removedSubprojects: topoSummary.removedSubprojects,
@@ -995,6 +1011,37 @@ export const pruneCommand = new Command('prune')
         for (const sub of topoSummary.staleSubprojects) {
           lines.push(`  [subproject] ${sub.name} (${shortPath(sub.repo_root)})`);
         }
+        p.note(lines.join('\n'), 'Topology');
+      }
+      if (topoSummary.missingDbServices.length > 0) {
+        const lines = [
+          `${topoSummary.missingDbServices.length} service index database(s) missing from topology.db:`,
+          ...topoSummary.missingDbServices
+            .slice(0, 20)
+            .map((s) => `  [service] ${s.name} (${shortPath(s.db_path)})`),
+        ];
+        if (topoSummary.missingDbServices.length > 20) {
+          lines.push(`  ...and ${topoSummary.missingDbServices.length - 20} more (see --json)`);
+        }
+        lines.push(
+          'Re-index affected repositories, then run trace-mcp subproject sync. These services were not pruned.',
+        );
+        p.note(lines.join('\n'), 'Topology');
+      }
+      if (topoSummary.staleDbPathServices.length > 0) {
+        const lines = [
+          `${topoSummary.staleDbPathServices.length} stale service database path(s) with an existing parent index:`,
+          ...topoSummary.staleDbPathServices
+            .slice(0, 20)
+            .map(
+              (s) =>
+                `  [service] ${s.name} (${shortPath(s.db_path)} → ${shortPath(s.resolved_db_path)})`,
+            ),
+        ];
+        if (topoSummary.staleDbPathServices.length > 20) {
+          lines.push(`  ...and ${topoSummary.staleDbPathServices.length - 20} more (see --json)`);
+        }
+        lines.push('Run trace-mcp subproject sync to refresh these paths.');
         p.note(lines.join('\n'), 'Topology');
       }
       if (decisionsSummary.staleRoots.length > 0 || decisionsSummary.removedDecisions > 0) {

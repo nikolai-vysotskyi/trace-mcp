@@ -135,4 +135,32 @@ describe('TopologyStore stale pruning (TRA-595)', () => {
     expect(res.removedServices).toEqual([]);
     expect(res.removedSubprojects).toEqual([]);
   });
+
+  it('reports a missing service index without pruning its topology data', () => {
+    const repoRoot = path.join(tmpDir, 'indexed-repo');
+    const dbPath = path.join(tmpDir, 'removed-index.db');
+    fs.mkdirSync(repoRoot);
+    const serviceId = store.upsertService({
+      name: 'indexed-service',
+      repoRoot,
+      dbPath,
+    });
+    const contractId = store.insertContract(serviceId, {
+      contractType: 'openapi',
+      specPath: 'openapi.json',
+      version: '1.0.0',
+      parsedSpec: '{}',
+    });
+
+    expect(store.findStale().missingDbServices).toEqual([
+      { id: serviceId, name: 'indexed-service', repo_root: repoRoot, db_path: dbPath },
+    ]);
+    expect(store.findStale().staleServices).toEqual([]);
+    expect(store.pruneStale().services).toBe(0);
+    expect(store.getService('indexed-service')).toBeDefined();
+    expect(store.getContractsByService(serviceId).map((c) => c.id)).toEqual([contractId]);
+
+    fs.writeFileSync(dbPath, 'index');
+    expect(store.findStale().missingDbServices).toEqual([]);
+  });
 });
