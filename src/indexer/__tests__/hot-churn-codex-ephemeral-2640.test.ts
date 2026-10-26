@@ -82,6 +82,10 @@ describe('TRA-2640 / TRA-2581: isHotChurnPath and ignore globs', () => {
       'tests/tmp_arg0.test.ts',
       'plugins/installed/my-plugin/index.js',
       'plugins/config.json',
+      // TRA-2718: legitimate application source files under app/...
+      'app/node_repl/active_execs/handler.ts',
+      'app/tmp/arg0-macos/handler.ts',
+      'app/plugins/cache/openai/plugin-install-abc/handler.ts',
     ];
 
     for (const p of legitPaths) {
@@ -90,16 +94,29 @@ describe('TRA-2640 / TRA-2581: isHotChurnPath and ignore globs', () => {
   });
 
   it('includes ephemeral prefixes in HOT_CHURN_NATIVE_IGNORE_GLOBS', () => {
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/node_repl/active_execs/**');
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/tmp/arg0-*/**');
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/plugins/cache/**/plugin-install-*/**');
+    // TRA-2718: Scoped to root or .codex/ subtrees so app/... and src/... are not ignored natively
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('node_repl/active_execs/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/.codex/node_repl/active_execs/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('tmp/arg0-*/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/.codex/tmp/arg0-*/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('plugins/cache/**/plugin-install-*/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain(
+      '**/.codex/plugins/cache/**/plugin-install-*/**',
+    );
 
     const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
     expect(isIgnored('node_repl/active_execs/1.json')).toBe(true);
     expect(isIgnored('tmp/arg0-macos/tramp1')).toBe(true);
     expect(isIgnored('tmp/arg0-linux/tramp1')).toBe(true);
     expect(isIgnored('plugins/cache/openai/plugin-install-123/file.js')).toBe(true);
+    expect(isIgnored('.codex/node_repl/active_execs/1.json')).toBe(true);
+    expect(isIgnored('.codex/tmp/arg0-macos/tramp1')).toBe(true);
+    expect(isIgnored('.codex/plugins/cache/openai/plugin-install-123/file.js')).toBe(true);
     expect(isIgnored('src/node_repl/index.ts')).toBe(false);
+    expect(isIgnored('src/node_repl/active_execs/manager.ts')).toBe(false);
+    expect(isIgnored('app/node_repl/active_execs/handler.ts')).toBe(false);
+    expect(isIgnored('app/tmp/arg0-macos/handler.ts')).toBe(false);
+    expect(isIgnored('app/plugins/cache/openai/plugin-install-123/file.js')).toBe(false);
   });
 });
 
