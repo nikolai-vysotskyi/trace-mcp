@@ -690,22 +690,34 @@ function SupportedClientRow({
            A missing hook gets the one-click fix right here; an active one gets
            a quiet confirmation and nothing else. */
         <span className="flex flex-col items-end gap-1 shrink-0">
-          <span
-            className="flex items-center gap-1.5 text-[13px] leading-4"
-            style={{ color: 'var(--label-secondary)' }}
-            title={
-              presenceOnly
-                ? t('configuredHint')
-                : (pickupSentence(t, pickup, label) ??
-                  (hook === 'missing'
-                    ? t('hookMissingHint')
-                    : hook === 'active'
-                      ? t('hookActiveHint')
-                      : undefined))
-            }
-          >
-            <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
-            {presenceOnly ? t('configured') : t('connected')}
+          <span className="flex items-center gap-2">
+            <span
+              className="flex items-center gap-1.5 text-[13px] leading-4"
+              style={{ color: 'var(--label-secondary)' }}
+              title={
+                presenceOnly
+                  ? t('configuredHint')
+                  : (pickupSentence(t, pickup, label) ??
+                    (hook === 'missing'
+                      ? t('hookMissingHint')
+                      : hook === 'active'
+                        ? t('hookActiveHint')
+                        : undefined))
+              }
+            >
+              <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
+              {presenceOnly ? t('configured') : t('connected')}
+            </span>
+            {/* TRA-1932: Disconnect removes the MCP entry only. The confirm
+                popover below guards it. */}
+            <Button
+              size="small"
+              disabled={configuring}
+              onClick={askDisconnect('global')}
+              title={t('disconnectBody')}
+            >
+              {configuring ? t('disconnecting') : t('disconnect')}
+            </Button>
           </span>
           {showHookActive && (
             <span
@@ -726,17 +738,6 @@ function SupportedClientRow({
               {redirectBusy ? t('enablingRedirect') : t('enableRedirect')}
             </Button>
           )}
-          {/* TRA-1932: the reverse path Connect never had. Small and bordered
-              like every row action here — Disconnect is available, never
-              prominent. The confirm popover below guards it. */}
-          <Button
-            size="small"
-            disabled={configuring}
-            onClick={askDisconnect('global')}
-            title={t('disconnectBody')}
-          >
-            {configuring ? t('disconnecting') : t('disconnect')}
-          </Button>
         </span>
       ) : status === 'legacy' ? (
         /* Nothing is broken or drifted here — the entry names the server
