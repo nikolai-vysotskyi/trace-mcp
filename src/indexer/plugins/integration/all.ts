@@ -43,6 +43,7 @@ import { TestingPlugin } from './testing/index.js';
 import { PytestPlugin } from './testing/pytest/index.js';
 import { AttrsPyPlugin } from './tooling/attrs-py/index.js';
 import { AwsS3Plugin } from './tooling/aws-s3/index.js';
+import { Boto3Plugin } from './tooling/boto3/index.js';
 import { BuildToolsPlugin } from './tooling/build-tools/index.js';
 // --- tooling ---
 import { AnthropicPythonPlugin } from './tooling/anthropic-py/index.js';
@@ -174,6 +175,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new GithubActionsPlugin(),
     new PinoPlugin(),
     new AwsS3Plugin(),
+    new Boto3Plugin(),
     new SupabasePlugin(),
     new CosmiconfigPlugin(),
     new NeverthrowPlugin(),

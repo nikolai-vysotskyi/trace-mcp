@@ -245,6 +245,7 @@ Dedicated architectural deep-dives for specific framework ecosystems:
 | Plugin | What's extracted |
 |---|---|
 | **Celery** | Task definitions, routing, schedules |
+| **AWS Boto3** | Clients, resources, direct AWS service calls (S3, SSM, Glue, Lambda, DynamoDB, SQS, Secrets Manager) with resource names |
 | **n8n** | Workflow nodes, connections, parameters, credentials |
 | **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
 | **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |
