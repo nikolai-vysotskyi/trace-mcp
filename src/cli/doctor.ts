@@ -331,8 +331,12 @@ export const doctorCommand = new Command('doctor')
       if (conflicts.length === 0) {
         if (!opts.json) {
           p.intro('trace-mcp doctor');
-          p.note('No competing tools or conflicting configurations detected.', 'All clear');
-          p.outro('trace-mcp has exclusive control of code intelligence.');
+          p.note('No competing tools or conflicting configurations detected.', 'Conflict scan');
+          p.outro(
+            topology.missingDbServices.length > 0 || topology.staleDbPathServices.length > 0
+              ? 'Topology warnings found; see details above.'
+              : 'trace-mcp has exclusive control of code intelligence.',
+          );
         }
         return;
       }
@@ -546,6 +550,12 @@ export interface TopologyHealthReport {
   topologyExists: boolean;
   staleServices: Array<{ id: number; name: string; repoRoot: string }>;
   missingDbServices: Array<{ name: string; repoRoot: string; dbPath: string }>;
+  staleDbPathServices: Array<{
+    name: string;
+    repoRoot: string;
+    dbPath: string;
+    resolvedDbPath: string;
+  }>;
   staleSubprojects: Array<{ id: number; name: string; repoRoot: string; projectRoot: string }>;
   staleCount: number;
 }
@@ -557,6 +567,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyExists: false,
       staleServices: [],
       missingDbServices: [],
+      staleDbPathServices: [],
       staleSubprojects: [],
       staleCount: 0,
     };
@@ -578,6 +589,12 @@ export function diagnoseTopology(): TopologyHealthReport {
           repoRoot: s.repo_root,
           dbPath: s.db_path,
         })),
+        staleDbPathServices: stale.staleDbPathServices.map((s) => ({
+          name: s.name,
+          repoRoot: s.repo_root,
+          dbPath: s.db_path,
+          resolvedDbPath: s.resolved_db_path,
+        })),
         staleSubprojects: stale.staleSubprojects.map((s) => ({
           id: s.id,
           name: s.name,
@@ -595,6 +612,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyExists: true,
       staleServices: [],
       missingDbServices: [],
+      staleDbPathServices: [],
       staleSubprojects: [],
       staleCount: 0,
     };
@@ -1097,8 +1115,20 @@ function printTopologyReport(t: TopologyHealthReport): void {
       console.log(`  ...and ${t.missingDbServices.length - 20} more (see --json)`);
     }
     console.log(
-      "  Re-index affected repositories and run 'trace-mcp subproject sync' to refresh service paths. Missing indexes are not removed by --fix.\n",
+      "  Re-index affected repositories, then run 'trace-mcp subproject sync'. Missing indexes are not removed by --fix.\n",
     );
+  }
+  if (t.staleDbPathServices.length > 0) {
+    console.log(
+      `Topology: ${t.staleDbPathServices.length} stale service database path(s) with an existing parent index:`,
+    );
+    for (const s of t.staleDbPathServices.slice(0, 20)) {
+      console.log(`  [service] ${s.name}  ${shortPath(s.dbPath)} → ${shortPath(s.resolvedDbPath)}`);
+    }
+    if (t.staleDbPathServices.length > 20) {
+      console.log(`  ...and ${t.staleDbPathServices.length - 20} more (see --json)`);
+    }
+    console.log("  Run 'trace-mcp subproject sync' to refresh these paths.\n");
   }
 }
 

@@ -16,13 +16,14 @@ import path from 'node:path';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
 import { getDbPath } from '../global.js';
 import { logger } from '../logger.js';
-import { isEphemeralProjectRoot } from '../registry.js';
+import { isEphemeralProjectRoot, resolveRegisteredAncestor } from '../registry.js';
 import {
   extractRoutesFromDb,
   parseContracts,
   type ParsedContract,
 } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
+import { resolveExistingServiceIndexPath } from '../topology/service-index-path.js';
 import type { ClientCallRow, TopologyStore } from '../topology/topology-db.js';
 import { reconcileSubprojectIndex } from './reconcile-index.js';
 import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
@@ -35,6 +36,15 @@ import {
 } from './subproject-helpers.js';
 import type { SubprojectSearchResult } from './subproject-search.js';
 import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
+
+function usesParentIndex(repoRoot: string, dbPath: string): boolean {
+  const registered = resolveRegisteredAncestor(repoRoot);
+  return (
+    registered !== null &&
+    registered.root !== path.resolve(repoRoot) &&
+    registered.dbPath === dbPath
+  );
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -233,7 +243,7 @@ export class SubprojectManager {
       const serviceId = this.topoStore.upsertService({
         name: svc.name,
         repoRoot: svc.repoRoot,
-        dbPath: getDbPath(svc.repoRoot),
+        dbPath: resolveExistingServiceIndexPath(svc.repoRoot) ?? getDbPath(svc.repoRoot),
         serviceType: svc.serviceType,
         detectionSource: svc.detectionSource,
         projectGroup: svc.projectGroup,
@@ -294,7 +304,11 @@ export class SubprojectManager {
     // Include previously registered children even if their service marker was
     // removed; detection alone can no longer rediscover those repositories.
     for (const repo of this.topoStore.getSubprojectsByProject(absProjectRoot)) {
-      if (repo.db_path && !reconciledIndexes.has(repo.db_path)) {
+      if (
+        repo.db_path &&
+        !usesParentIndex(repo.repo_root, repo.db_path) &&
+        !reconciledIndexes.has(repo.db_path)
+      ) {
         reconcileSubprojectIndex(repo.repo_root, repo.db_path);
         reconciledIndexes.add(repo.db_path);
       }
@@ -317,9 +331,11 @@ export class SubprojectManager {
 
     for (const svc of detected) {
       const repoName = svc.name;
-      const dbPath = getDbPath(svc.repoRoot);
+      const dbPath = resolveExistingServiceIndexPath(svc.repoRoot) ?? getDbPath(svc.repoRoot);
 
-      if (!reconciledIndexes.has(dbPath)) {
+      // A parent index stores paths relative to the parent; reconciling it
+      // against this child would mistake valid sibling files for deletions.
+      if (!usesParentIndex(svc.repoRoot, dbPath) && !reconciledIndexes.has(dbPath)) {
         reconcileSubprojectIndex(svc.repoRoot, dbPath);
         reconciledIndexes.add(dbPath);
       }
@@ -596,7 +612,11 @@ export class SubprojectManager {
         continue;
       }
 
-      if (repo.db_path && !reconciledIndexes.has(repo.db_path)) {
+      if (
+        repo.db_path &&
+        !usesParentIndex(repo.repo_root, repo.db_path) &&
+        !reconciledIndexes.has(repo.db_path)
+      ) {
         reconcileSubprojectIndex(repo.repo_root, repo.db_path);
         reconciledIndexes.add(repo.db_path);
       }
@@ -608,7 +628,7 @@ export class SubprojectManager {
         const serviceId = this.topoStore.upsertService({
           name: svc.name,
           repoRoot: svc.repoRoot,
-          dbPath: getDbPath(svc.repoRoot),
+          dbPath: resolveExistingServiceIndexPath(svc.repoRoot) ?? getDbPath(svc.repoRoot),
           serviceType: svc.serviceType,
           detectionSource: svc.detectionSource,
           metadata: svc.metadata,
