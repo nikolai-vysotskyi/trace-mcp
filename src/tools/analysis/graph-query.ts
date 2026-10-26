@@ -321,6 +321,8 @@ const ALL_TRAVERSAL_EDGES = new Set([
   'many_to_many',
   'uses_middleware',
   'listens_to',
+  'polars_udf',
+  'polars_dataframe_flow',
 ]);
 
 function symbolToNode(sym: SymbolRow, fileMap: Map<number, FileRow>): GraphNode {
