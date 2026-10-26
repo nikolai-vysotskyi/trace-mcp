@@ -96,6 +96,11 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   // TRA-2682: Laravel runtime storage churn (sessions, cache, framework, logs).
   '**/storage/framework/**',
   '**/storage/logs/**',
+  // TRA-2640: Codex CLI REPL active executions and process trampolines.
+  '**/node_repl/active_execs/**',
+  '**/tmp/arg0-*/**',
+  // TRA-2581: Codex plugin installation scratch trees.
+  '**/plugins/cache/**/plugin-install-*/**',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
@@ -252,6 +257,62 @@ export function isHotChurnPath(p: string): boolean {
           }
           return true;
         }
+      }
+    }
+  }
+
+  // TRA-2640: Codex CLI REPL active executions (node_repl/active_execs/*).
+  // Created and unlinked on every REPL execution; volatile execution state, never source.
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (
+      segments[i].toLowerCase() === 'node_repl' &&
+      segments[i + 1].toLowerCase() === 'active_execs'
+    ) {
+      const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
+      if (
+        prefix.includes('src') ||
+        prefix.includes('lib') ||
+        prefix.includes('packages') ||
+        prefix.includes('internal')
+      ) {
+        break;
+      }
+      return true;
+    }
+  }
+
+  // TRA-2640: Codex CLI command execution trampolines (tmp/arg0-macos/*, tmp/arg0-*/*).
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (segments[i].toLowerCase() === 'tmp' && segments[i + 1].toLowerCase().startsWith('arg0-')) {
+      const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
+      if (
+        prefix.includes('src') ||
+        prefix.includes('lib') ||
+        prefix.includes('packages') ||
+        prefix.includes('internal')
+      ) {
+        break;
+      }
+      return true;
+    }
+  }
+
+  // TRA-2581: Codex plugin installation scratch trees (plugins/cache/**/plugin-install-*).
+  // Atomic unpack directories that disappear after installation.
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (segments[i].toLowerCase() === 'plugins' && segments[i + 1].toLowerCase() === 'cache') {
+      const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
+      if (
+        prefix.includes('src') ||
+        prefix.includes('lib') ||
+        prefix.includes('packages') ||
+        prefix.includes('internal')
+      ) {
+        break;
+      }
+      const remainder = segments.slice(i + 2).map((s) => s.toLowerCase());
+      if (remainder.some((s) => s.startsWith('plugin-install-'))) {
+        return true;
       }
     }
   }
