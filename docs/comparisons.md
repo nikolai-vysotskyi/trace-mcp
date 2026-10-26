@@ -2,7 +2,7 @@
 title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
 description: "Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 89 frameworks, GitHub stars. Pick the one that fits your stack."
 category: vs-comparisons
-updated: 2026-10-19
+updated: 2026-10-26
 ---
 
 # Serena, Repomix and 20+ code graph MCP servers compared

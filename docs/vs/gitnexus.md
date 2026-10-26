@@ -2,7 +2,7 @@
 title: "GitNexus Alternative: trace-mcp vs GitNexus for AI agents"
 description: "GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 89 frameworks, typed tools, and AST refactoring."
 category: vs-comparisons
-updated: 2026-10-19
+updated: 2026-10-26
 ---
 
 # GitNexus alternative: trace-mcp vs GitNexus

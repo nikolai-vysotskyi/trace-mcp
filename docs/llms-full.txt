@@ -901,7 +901,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/comparisons.html">MCP Code-Graph Tools Compared: Serena, Repomix + 20 More</a></h3>
 <p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 89 frameworks, GitHub stars. Pick the one that fits your stack.</p>
@@ -964,7 +964,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/tokensave.html">TokenSave Alternative: trace-mcp vs TokenSave for AI agents</a></h3>
 <p class="article-card-desc">TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 89 framework integrations, AST refactoring, and OWASP taint analysis.</p>
@@ -973,7 +973,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/gitnexus.html">GitNexus Alternative: trace-mcp vs GitNexus for AI agents</a></h3>
 <p class="article-card-desc">GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 89 frameworks, typed tools, and AST refactoring.</p>
@@ -982,7 +982,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/graft.html">Graft Alternative: trace-mcp vs Graft for AI agents</a></h3>
 <p class="article-card-desc">Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 89 frameworks, and AST refactoring.</p>
@@ -991,7 +991,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/narsil-mcp.html">Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents</a></h3>
 <p class="article-card-desc">Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 89 framework integrations, AST refactoring write tools, and OWASP taint analysis.</p>
@@ -1174,7 +1174,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">FRAMEWORKS</span>
-<time class="article-card-date">2026-10-25</time>
+<time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/supported-frameworks.html">Supported Languages &amp; Frameworks — 81 languages, 89 framework integrations</a></h3>
 <p class="article-card-desc">Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages.</p>
