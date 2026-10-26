@@ -1,6 +1,6 @@
 ---
 title: "Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents"
-description: "Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 89 framework integrations, AST refactoring write tools, and OWASP taint analysis."
+description: "Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 91 framework integrations, AST refactoring write tools, and OWASP taint analysis."
 category: vs-comparisons
 updated: 2026-10-26
 ---
@@ -147,7 +147,7 @@ trace-mcp addresses context overhead on both tool and data surfaces:
 - **Dynamic runtime escalation**: Any of the {{ site.data.counts.tools }} tools outside the active preset can be activated on demand in the live session via `load_tools`.
 - **Targeted context slices**: Tools like `get_outline`, `get_symbol`, and `get_change_impact` return exact AST slices and blast-radius summaries rather than requiring the agent to parse megabytes of raw RDF triples.
 
-### 3. Language Breadth vs. 88 Framework Semantic Integrations
+### 3. Language Breadth vs. 90 Framework Semantic Integrations
 
 Both engines parse source code using tree-sitter grammars. Where they diverge is how syntax trees are elevated into software architecture.
 

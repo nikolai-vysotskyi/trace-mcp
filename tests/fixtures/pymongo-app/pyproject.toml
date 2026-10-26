@@ -1,0 +1,6 @@
+[project]
+name = "pymongo-fixture-app"
+version = "0.1.0"
+dependencies = [
+    "pymongo>=4.14.0",
+]

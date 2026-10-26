@@ -1403,7 +1403,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   peewee: { category: 'orm', priority: 'medium', plugin: null },
   mongoengine: { category: 'orm', priority: 'medium', plugin: null },
   motor: { category: 'orm', priority: 'medium', plugin: null },
-  pymongo: { category: 'orm', priority: 'medium', plugin: null },
+  pymongo: { category: 'orm', priority: 'medium', plugin: 'pymongo' },
   beanie: { category: 'orm', priority: 'medium', plugin: null },
   odmantic: { category: 'orm', priority: 'low', plugin: null },
   // redis — already in npm section (same name, both ecosystems)
