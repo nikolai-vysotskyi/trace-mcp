@@ -168,45 +168,211 @@ function findBalancedParens(source: string, openParenIndex: number): number {
   return -1;
 }
 
-/**
- * Scan a Python file and discover all client, resource, and session bindings.
- */
-export function discoverBindings(source: string): Map<string, Boto3ClientBinding> {
-  const bindings = new Map<string, Boto3ClientBinding>();
+export interface PythonScope {
+  id: string;
+  type: 'module' | 'class' | 'function';
+  name: string;
+  startOffset: number;
+  endOffset: number;
+  startLine: number;
+  endLine: number;
+  indent: number;
+  parent: PythonScope | null;
+  baseClassName?: string;
+  bindings: Map<string, Boto3ClientBinding>;
+}
 
+/**
+ * Parse Python source into lexical scopes (module, class, def/async def)
+ * based on indentation blocks.
+ */
+export function parsePythonScopes(source: string): PythonScope[] {
+  const lineStarts: number[] = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '\n') {
+      lineStarts.push(i + 1);
+    }
+  }
+
+  const totalLength = source.length;
+  const moduleScope: PythonScope = {
+    id: 'scope:module',
+    type: 'module',
+    name: '<module>',
+    startOffset: 0,
+    endOffset: totalLength,
+    startLine: 1,
+    endLine: lineStarts.length,
+    indent: -1,
+    parent: null,
+    bindings: new Map(),
+  };
+
+  const allScopes: PythonScope[] = [moduleScope];
+  const stack: PythonScope[] = [moduleScope];
+
+  for (let i = 0; i < lineStarts.length; i++) {
+    const lineStart = lineStarts[i];
+    let lineEnd = i + 1 < lineStarts.length ? lineStarts[i + 1] - 1 : totalLength;
+    if (lineEnd > lineStart && source[lineEnd - 1] === '\r') {
+      lineEnd--;
+    }
+    const rawLine = source.slice(lineStart, lineEnd);
+    const matchWs = rawLine.match(/^(\s*)/);
+    const leadingWs = matchWs ? matchWs[1] : '';
+    const trimmed = rawLine.trim();
+
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    let indent = 0;
+    for (const ch of leadingWs) {
+      if (ch === '\t') indent += 4;
+      else indent += 1;
+    }
+
+    const lineNumber = i + 1;
+
+    // Pop any scopes whose indentation is >= current line's indentation
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+      const popped = stack.pop()!;
+      popped.endOffset = lineStart > 0 ? lineStart - 1 : 0;
+      popped.endLine = lineNumber - 1;
+    }
+
+    const currentParent = stack[stack.length - 1];
+
+    const classMatch = trimmed.match(/^class\s+([a-zA-Z_]\w*)(?:\s*\(\s*([a-zA-Z_]\w*))?/);
+    const defMatch = trimmed.match(/^(?:async\s+)?def\s+([a-zA-Z_]\w*)/);
+
+    if (classMatch) {
+      const scope: PythonScope = {
+        id: `scope:class:${classMatch[1]}:${lineNumber}`,
+        type: 'class',
+        name: classMatch[1],
+        baseClassName: classMatch[2],
+        startOffset: lineStart,
+        endOffset: totalLength,
+        startLine: lineNumber,
+        endLine: lineStarts.length,
+        indent,
+        parent: currentParent,
+        bindings: new Map(),
+      };
+      stack.push(scope);
+      allScopes.push(scope);
+    } else if (defMatch) {
+      const scope: PythonScope = {
+        id: `scope:func:${defMatch[1]}:${lineNumber}`,
+        type: 'function',
+        name: defMatch[1],
+        startOffset: lineStart,
+        endOffset: totalLength,
+        startLine: lineNumber,
+        endLine: lineStarts.length,
+        indent,
+        parent: currentParent,
+        bindings: new Map(),
+      };
+      stack.push(scope);
+      allScopes.push(scope);
+    }
+  }
+
+  return allScopes;
+}
+
+/** Find the deepest (innermost) scope containing the given source offset. */
+export function findInnermostScope(scopes: PythonScope[], offset: number): PythonScope {
+  let matched: PythonScope = scopes[0];
+  for (const s of scopes) {
+    if (offset >= s.startOffset && offset <= s.endOffset) {
+      if (s.indent > matched.indent) {
+        matched = s;
+      }
+    }
+  }
+  return matched;
+}
+
+/**
+ * Resolve a client/resource binding at a specific call offset.
+ * When isSelfOrCls is true (e.g. self.s3), looks strictly in the enclosing class scope.
+ * Otherwise, climbs the lexical scope chain from innermost to module scope.
+ */
+export function resolveBindingInScope(
+  scopes: PythonScope[],
+  callOffset: number,
+  varName: string,
+  isSelfOrCls: boolean,
+): Boto3ClientBinding | undefined {
+  const scope = findInnermostScope(scopes, callOffset);
+
+  if (isSelfOrCls) {
+    let curr: PythonScope | null = scope;
+    while (curr && curr.type !== 'class') {
+      curr = curr.parent;
+    }
+    if (curr) {
+      return curr.bindings.get(varName);
+    }
+    return undefined;
+  }
+
+  let curr: PythonScope | null = scope;
+  while (curr) {
+    const b = curr.bindings.get(varName);
+    if (b) return b;
+    curr = curr.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Discover client, resource, and session bindings populated into their respective scopes.
+ */
+export function discoverScopedBindings(source: string, scopes: PythonScope[]): void {
   // 1. Session variables: `sess = boto3.Session(...)` or `self.sess = boto3.Session(...)`
   const sessionRe =
     /(?:(?:self|cls)\s*\.\s*)?([a-zA-Z_]\w*)\s*=\s*(?:boto3(?:\.session)?|session)?\s*\.\s*Session\s*\(/g;
   let sm: RegExpExecArray | null;
   while ((sm = sessionRe.exec(source)) !== null) {
     const varName = sm[1];
+    const isSelfOrCls = /^(?:self|cls)\s*\./.test(sm[0]);
     const openParen = sm.index + sm[0].length - 1;
     const closeParen = findBalancedParens(source, openParen);
     const body = closeParen !== -1 ? source.slice(openParen + 1, closeParen) : '';
     const region = extractKeywordLiteral(body, 'region_name');
     const envVars = extractEnvVarNames(body);
-    bindings.set(varName, {
+
+    const binding: Boto3ClientBinding = {
       variable: varName,
       service: '',
       kind: 'session',
       region,
       envVars,
-    });
+    };
+
+    const scope = findInnermostScope(scopes, sm.index);
+    let targetScope = scope;
+    if (isSelfOrCls) {
+      let curr: PythonScope | null = scope;
+      while (curr && curr.type !== 'class') {
+        curr = curr.parent;
+      }
+      if (curr) targetScope = curr;
+    }
+    targetScope.bindings.set(varName, binding);
   }
 
   // 2. Direct client & resource assignments:
-  // e.g.:
-  // `s3 = boto3.client('s3', ...)`
-  // `self.s3_client = boto3.client("s3", ...)`
-  // `ssm = session.client('ssm', ...)`
-  // `s3 = session.create_client('s3', ...)`
-  // `dynamo = boto3.resource('dynamodb', ...)`
-  // `client = botocore.session.get_session().create_client('s3')`
   const clientAssignRe =
     /(?:(?:self|cls)\s*\.\s*)?([a-zA-Z_]\w*)\s*=\s*(?:(?:boto3|[a-zA-Z_]\w*)\s*\.\s*(client|resource|create_client)|botocore(?:\.session)?\.(?:get_session\(\)\.)?create_client|(client|resource))\s*\(\s*['"]([a-zA-Z0-9_-]+)['"]/g;
   let cm: RegExpExecArray | null;
   while ((cm = clientAssignRe.exec(source)) !== null) {
     const varName = cm[1];
+    const isSelfOrCls = /^(?:self|cls)\s*\./.test(cm[0]);
     const rawKind = cm[2] || cm[3] || 'client';
     const kind = rawKind === 'resource' ? 'resource' : 'client';
     const service = cm[4].toLowerCase();
@@ -219,76 +385,129 @@ export function discoverBindings(source: string): Map<string, Boto3ClientBinding
       region = extractKeywordLiteral(body, 'region_name');
       envVars = extractEnvVarNames(body);
     }
-    bindings.set(varName, {
+    const binding: Boto3ClientBinding = {
       variable: varName,
       service,
       kind,
       region,
       envVars,
-    });
+    };
+
+    const scope = findInnermostScope(scopes, cm.index);
+    let targetScope = scope;
+    if (isSelfOrCls) {
+      let curr: PythonScope | null = scope;
+      while (curr && curr.type !== 'class') {
+        curr = curr.parent;
+      }
+      if (curr) targetScope = curr;
+    }
+    targetScope.bindings.set(varName, binding);
   }
 
-  // 3. Sub-resources: e.g. `bucket = s3.Bucket('my-bucket')` or `table = dynamodb.Table('users')`
-  for (const [parentVar, parentBinding] of Array.from(bindings.entries())) {
-    if (parentBinding.kind === 'resource') {
-      const subResRe = new RegExp(
-        `(?:(?:self|cls)\\s*\\.\\s*)?([a-zA-Z_]\\w*)\\s*=\\s*(?:(?:self|cls)\\s*\\.\\s*)?${parentVar}\\s*\\.\\s*(Bucket|Table|Queue)\\s*\\(\\s*['"]([^'"]+)['"]`,
-        'g',
-      );
-      let subM: RegExpExecArray | null;
-      while ((subM = subResRe.exec(source)) !== null) {
-        const subVar = subM[1];
-        bindings.set(subVar, {
-          variable: subVar,
-          service: parentBinding.service,
-          kind: 'resource',
-          region: parentBinding.region,
-          envVars: [subM[3]],
-        });
+  // 3. Sub-resources: e.g. `bucket = s3.Bucket('my-bucket')` or `self.table = self.dynamodb.Table('users')`
+  const subResRe =
+    /(?:(?:self|cls)\s*\.\s*)?([a-zA-Z_]\w*)\s*=\s*(?:(?:self|cls)\s*\.\s*)?([a-zA-Z_]\w*)\s*\.\s*(Bucket|Table|Queue)\s*\(\s*['"]([^'"]+)['"]/g;
+  let subM: RegExpExecArray | null;
+  while ((subM = subResRe.exec(source)) !== null) {
+    const subVar = subM[1];
+    const parentVar = subM[2];
+    const resName = subM[4];
+    const isSelfOrCls = /^(?:self|cls)\s*\./.test(subM[0]);
+    const isParentSelfOrCls = /=\s*(?:self|cls)\s*\./.test(subM[0]);
+
+    const parentBinding = resolveBindingInScope(scopes, subM.index, parentVar, isParentSelfOrCls);
+    if (parentBinding && parentBinding.kind === 'resource') {
+      const subBinding: Boto3ClientBinding = {
+        variable: subVar,
+        service: parentBinding.service,
+        kind: 'resource',
+        region: parentBinding.region,
+        envVars: [resName],
+      };
+      const scope = findInnermostScope(scopes, subM.index);
+      let targetScope = scope;
+      if (isSelfOrCls) {
+        let curr: PythonScope | null = scope;
+        while (curr && curr.type !== 'class') {
+          curr = curr.parent;
+        }
+        if (curr) targetScope = curr;
       }
+      targetScope.bindings.set(subVar, subBinding);
     }
   }
 
-  return bindings;
+  // 4. Class inheritance: inherit bindings from base class defined in same file
+  for (const s of scopes) {
+    if (s.type === 'class' && s.baseClassName) {
+      const base = scopes.find((cand) => cand.type === 'class' && cand.name === s.baseClassName);
+      if (base) {
+        for (const [k, v] of base.bindings.entries()) {
+          if (!s.bindings.has(k)) {
+            s.bindings.set(k, v);
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
- * Scan a Python file for direct method calls on tracked boto3 clients/resources.
+ * Scan a Python file and discover all client, resource, and session bindings across scopes.
  */
-export function extractBoto3Calls(source: string): Boto3CallMatch[] {
-  const bindings = discoverBindings(source);
-  const calls: Boto3CallMatch[] = [];
-
-  // Match:
-  // 1. Calls on tracked client variables: `var.method(...)` or `self.var.method(...)`
-  // 2. Chained direct calls: `boto3.client('service').method(...)` or `boto3.resource('service').method(...)`
-  for (const [varName, binding] of bindings.entries()) {
-    if (binding.kind === 'session') continue; // session itself is not a service client
-
-    const methodCallRe = new RegExp(
-      `(?:(?:self|cls)\\s*\\.\\s*)?\\b${varName}\\s*\\.\\s*([a-zA-Z_]\\w*)\\s*\\(`,
-      'g',
-    );
-    let m: RegExpExecArray | null;
-    while ((m = methodCallRe.exec(source)) !== null) {
-      const method = m[1];
-      // Skip meta or exceptions property accesses
-      if (['meta', 'exceptions', 'get_paginator', 'get_waiter'].includes(method)) continue;
-
-      const openParen = m.index + m[0].length - 1;
-      const closeParen = findBalancedParens(source, openParen);
-      const callArgs = closeParen !== -1 ? source.slice(openParen + 1, closeParen) : '';
-
-      const match = parseCallDetails(binding.service, method, callArgs, varName, m.index);
-      // Inherit client-level env vars if any
-      for (const ev of binding.envVars) {
-        if (!match.envVars.includes(ev)) match.envVars.push(ev);
+export function discoverBindings(source: string): Map<string, Boto3ClientBinding> {
+  const scopes = parsePythonScopes(source);
+  discoverScopedBindings(source, scopes);
+  const allBindings = new Map<string, Boto3ClientBinding>();
+  for (const s of scopes) {
+    for (const [k, v] of s.bindings.entries()) {
+      if (!allBindings.has(k)) {
+        allBindings.set(k, v);
       }
-      calls.push(match);
     }
   }
+  return allBindings;
+}
 
-  // Chained direct calls: `boto3.client('service').method(...)`
+/**
+ * Scan a Python file for direct method calls on tracked boto3 clients/resources,
+ * enforcing lexical scope boundaries to prevent cross-scope false positive edges.
+ */
+export function extractBoto3Calls(source: string): Boto3CallMatch[] {
+  const scopes = parsePythonScopes(source);
+  discoverScopedBindings(source, scopes);
+  const calls: Boto3CallMatch[] = [];
+
+  // 1. Method calls on variables: `var.method(...)` or `self.var.method(...)`
+  const methodCallRe = /(?:(self|cls)\s*\.\s*)?([a-zA-Z_]\w*)\s*\.\s*([a-zA-Z_]\w*)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = methodCallRe.exec(source)) !== null) {
+    const isSelfOrCls = Boolean(m[1]);
+    const varName = m[2];
+    const method = m[3];
+
+    // Skip non-service properties / methods and standard collection builtins
+    if (['meta', 'exceptions', 'get_paginator', 'get_waiter'].includes(method)) continue;
+    if (['append', 'extend', 'split', 'strip', 'join', 'keys', 'values', 'items'].includes(method))
+      continue;
+
+    // Resolve binding in the current lexical scope
+    const binding = resolveBindingInScope(scopes, m.index, varName, isSelfOrCls);
+    if (!binding || binding.kind === 'session') continue;
+
+    const openParen = m.index + m[0].length - 1;
+    const closeParen = findBalancedParens(source, openParen);
+    const callArgs = closeParen !== -1 ? source.slice(openParen + 1, closeParen) : '';
+
+    const match = parseCallDetails(binding.service, method, callArgs, varName, m.index);
+    for (const ev of binding.envVars) {
+      if (!match.envVars.includes(ev)) match.envVars.push(ev);
+    }
+    calls.push(match);
+  }
+
+  // 2. Chained direct calls: `boto3.client('service').method(...)`
   const directRe =
     /\bboto3\s*\.\s*(client|resource)\s*\(\s*['"]([a-zA-Z0-9_-]+)['"][^)]*\)\s*\.\s*([a-zA-Z_]\w*)\s*\(/g;
   let dm: RegExpExecArray | null;

@@ -305,4 +305,47 @@ class Repository:
     const r = await extract(code);
     expect(r.edges).toHaveLength(0);
   });
+
+  it('prevents false positives on unrelated classes reusing the same attribute name in the same file', async () => {
+    const code = `
+import boto3
+
+class S3Writer:
+    def __init__(self):
+        self.s3 = boto3.client('s3')
+
+    def write(self, bucket, key, body):
+        self.s3.put_object(Bucket=bucket, Key=key, Body=body)
+
+class CacheClient:
+    """Unrelated in-memory cache wrapper — nothing to do with AWS."""
+    def __init__(self, backend):
+        self.s3 = backend
+
+    def write(self, bucket, key, body):
+        self.s3.put_object(Bucket=bucket, Key=key, Body=body)
+`;
+    const r = await extract(code);
+    expect(r.edges).toHaveLength(1);
+    expect(r.edges![0].targetSymbolId).toBe('aws:s3:PutObject');
+    expect(r.edges![0].metadata?.line).toBe(9);
+  });
+
+  it('prevents false positives on unrelated functions reusing the same variable name in the same file', async () => {
+    const code = `
+import boto3
+
+def sync_s3():
+    client = boto3.client('s3')
+    client.put_object(Bucket='my-bucket', Key='k')
+
+def sync_cache():
+    client = MemoryCache()
+    client.put_object(Bucket='my-bucket', Key='k')
+`;
+    const r = await extract(code);
+    expect(r.edges).toHaveLength(1);
+    expect(r.edges![0].targetSymbolId).toBe('aws:s3:PutObject');
+    expect(r.edges![0].metadata?.line).toBe(6);
+  });
 });
