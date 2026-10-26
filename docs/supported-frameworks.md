@@ -1,5 +1,5 @@
 ---
-title: "Supported Languages & Frameworks — 81 languages, 88 framework integrations"
+title: "Supported Languages & Frameworks — 81 languages, 89 framework integrations"
 description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages."
 category: frameworks
 updated: 2026-10-25
@@ -244,6 +244,7 @@ Dedicated architectural deep-dives for specific framework ecosystems:
 | Plugin | What's extracted |
 |---|---|
 | **Celery** | Task definitions, routing, schedules |
+| **AWS Boto3** | Clients, resources, direct AWS service calls (S3, SSM, Glue, Lambda, DynamoDB, SQS, Secrets Manager) with resource names |
 | **n8n** | Workflow nodes, connections, parameters, credentials |
 | **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
 | **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |
