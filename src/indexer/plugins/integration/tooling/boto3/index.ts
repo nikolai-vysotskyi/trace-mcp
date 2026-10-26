@@ -21,6 +21,7 @@ import type {
   PluginManifest,
   ProjectContext,
   RawEdge,
+  RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import { hasAnyPythonDep } from '../../_shared/python-deps.js';
@@ -650,6 +651,21 @@ function parseCallDetails(
   };
 }
 
+function awsOperationSymbol(call: Boto3CallMatch, source: string): RawSymbol {
+  const targetSymbolId = `aws:${call.service}:${call.operation}`;
+  const byteStart = Buffer.byteLength(source.slice(0, call.index), 'utf8');
+  return {
+    symbolId: targetSymbolId,
+    name: call.operation,
+    kind: 'function',
+    fqn: targetSymbolId,
+    signature: `${call.service}.${call.operation}`,
+    byteStart,
+    byteEnd: byteStart + Buffer.byteLength(call.method, 'utf8'),
+    metadata: { service: call.service, operation: call.operation, type: 'aws_operation' },
+  };
+}
+
 export class Boto3Plugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'boto3',
@@ -707,11 +723,17 @@ export class Boto3Plugin implements FrameworkPlugin {
 
     // Also populate result.edges for direct callers (e.g. unit tests)
     const calls = extractBoto3Calls(source);
+    const operationSymbols = new Set<string>();
     for (const call of calls) {
       const line = lineOfIndex(source, call.index);
+      const targetSymbolId = `aws:${call.service}:${call.operation}`;
+      if (!operationSymbols.has(targetSymbolId)) {
+        operationSymbols.add(targetSymbolId);
+        result.symbols.push(awsOperationSymbol(call, source));
+      }
       result.edges!.push({
         edgeType: 'aws_call',
-        targetSymbolId: `aws:${call.service}:${call.operation}`,
+        targetSymbolId,
         metadata: {
           service: call.service,
           operation: call.operation,
@@ -741,6 +763,7 @@ export class Boto3Plugin implements FrameworkPlugin {
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
     const edges: RawEdge[] = [];
+    const operationOwners = new Map<string, { fileId: number; path: string; symbol: RawSymbol }>();
 
     for (const file of ctx.getAllFiles()) {
       if (file.language !== 'python') continue;
@@ -759,11 +782,21 @@ export class Boto3Plugin implements FrameworkPlugin {
         const encl = findEnclosingSymbol(symbols, line);
         if (!encl) continue;
 
+        const targetSymbolId = `aws:${call.service}:${call.operation}`;
+        const owner = operationOwners.get(targetSymbolId);
+        if (!owner || file.path < owner.path) {
+          operationOwners.set(targetSymbolId, {
+            fileId: file.id,
+            path: file.path,
+            symbol: awsOperationSymbol(call, source),
+          });
+        }
+
         edges.push({
           edgeType: 'aws_call',
           sourceNodeType: 'symbol',
           sourceRefId: encl.id,
-          targetSymbolId: `aws:${call.service}:${call.operation}`,
+          targetSymbolId,
           metadata: {
             service: call.service,
             operation: call.operation,
@@ -786,6 +819,15 @@ export class Boto3Plugin implements FrameworkPlugin {
           },
           resolution: 'text_matched',
         });
+      }
+    }
+
+    // A file-local reindex can delete the shared symbol row while another file
+    // still calls the operation. Re-anchor it from all current call sites before
+    // the resolver persists edges, so no unrelated file needs to be reindexed.
+    for (const [targetSymbolId, owner] of operationOwners) {
+      if (!ctx.getSymbolByFqn(targetSymbolId)) {
+        ctx.upsertSymbolForFile?.(owner.fileId, owner.symbol);
       }
     }
 
