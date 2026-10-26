@@ -2,7 +2,7 @@
 title: "Graft Alternative: trace-mcp vs Graft for AI agents"
 description: "Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 89 frameworks, and AST refactoring."
 category: vs-comparisons
-updated: 2026-10-19
+updated: 2026-10-26
 ---
 
 # Graft alternative: trace-mcp vs Graft
