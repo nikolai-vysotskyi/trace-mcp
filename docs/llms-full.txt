@@ -904,7 +904,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/comparisons.html">MCP Code-Graph Tools Compared: Serena, Repomix + 20 More</a></h3>
-<p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 89 frameworks, GitHub stars. Pick the one that fits your stack.</p>
+<p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 91 frameworks, GitHub stars. Pick the one that fits your stack.</p>
 </div>
 
 <div class="article-card">
@@ -967,7 +967,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/tokensave.html">TokenSave Alternative: trace-mcp vs TokenSave for AI agents</a></h3>
-<p class="article-card-desc">TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 89 framework integrations, AST refactoring, and OWASP taint analysis.</p>
+<p class="article-card-desc">TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 91 framework integrations, AST refactoring, and OWASP taint analysis.</p>
 </div>
 
 <div class="article-card">
@@ -976,7 +976,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/gitnexus.html">GitNexus Alternative: trace-mcp vs GitNexus for AI agents</a></h3>
-<p class="article-card-desc">GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 89 frameworks, typed tools, and AST refactoring.</p>
+<p class="article-card-desc">GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 91 frameworks, typed tools, and AST refactoring.</p>
 </div>
 
 <div class="article-card">
@@ -985,7 +985,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/graft.html">Graft Alternative: trace-mcp vs Graft for AI agents</a></h3>
-<p class="article-card-desc">Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 89 frameworks, and AST refactoring.</p>
+<p class="article-card-desc">Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 91 frameworks, and AST refactoring.</p>
 </div>
 
 <div class="article-card">
@@ -994,7 +994,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <time class="article-card-date">2026-10-26</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/narsil-mcp.html">Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents</a></h3>
-<p class="article-card-desc">Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 89 framework integrations, AST refactoring write tools, and OWASP taint analysis.</p>
+<p class="article-card-desc">Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 91 framework integrations, AST refactoring write tools, and OWASP taint analysis.</p>
 </div>
 
 <div class="article-card">
@@ -1176,7 +1176,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <span class="article-card-category">FRAMEWORKS</span>
 <time class="article-card-date">2026-10-26</time>
 </div>
-<h3 class="article-card-title"><a href="/supported-frameworks.html">Supported Languages &amp; Frameworks — 81 languages, 89 framework integrations</a></h3>
+<h3 class="article-card-title"><a href="/supported-frameworks.html">Supported Languages &amp; Frameworks — 81 languages, 91 framework integrations</a></h3>
 <p class="article-card-desc">Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages.</p>
 </div>
 
@@ -2032,7 +2032,7 @@ Four mechanisms were read and evaluated:
 Five mechanisms were read at source and each got a decision:
 
 - **Leiden community detection with cohesion score (`calculateCohesion`): taking the cohesion score into subsystem metrics.** GitNexus uses Leiden graph clustering over `CALLS` edges to partition symbols into communities, calculating `cohesion = internalEdges / totalEdges` (sampling up to 50 nodes). In trace-mcp, rather than requiring an external native clustering engine or non-deterministic partition drift, calculating the intra-subsystem cohesion score for folders and modules gives agents an objective, deterministic modularity and coupling metric (0.0–1.0) directly from our symbol graph.
-- **API response shape drift detection (`shape_check` and `api_impact`): taking the concept for framework edges.** GitNexus parses `.json({...})` return shapes from route handlers to extract top-level keys, compares them with client property accesses, and flags `MISMATCH` when consumers access properties not present in the route handler's shape. trace-mcp maps route-to-handler relationships across 89 frameworks; extending our AST extractor to compare route response object keys against frontend client usages is a high-value static contract check.
+- **API response shape drift detection (`shape_check` and `api_impact`): taking the concept for framework edges.** GitNexus parses `.json({...})` return shapes from route handlers to extract top-level keys, compares them with client property accesses, and flags `MISMATCH` when consumers access properties not present in the route handler's shape. trace-mcp maps route-to-handler relationships across 91 frameworks; extending our AST extractor to compare route response object keys against frontend client usages is a high-value static contract check.
 - **Shortest directed call tracing (`trace`): passing, we already do better.** GitNexus exposes a standalone `trace(from, to)` tool to find shortest call chains between two symbols. trace-mcp's `get_change_impact` and graph exploration already traverse transitive reachability across multi-tier resolution edges and framework boundaries; adding a dedicated single-pair path tool adds redundant surface.
 - **Raw Cypher graph querying (`cypher`): passing, typed tools are safer for LLMs.** Allowing LLMs to write raw Cypher queries leads to severe prompt overhead, syntax errors, and hallucinations. Typed, schema-validated tools (`get_callers`, `get_change_impact`, `get_symbol`) provide deterministic context at a fraction of the token cost.
 - **Proprietary PolyForm license and native build fragility: noting positioning.** PolyForm Noncommercial 1.0.0 forbids commercial deployment and enterprise adoption, whereas trace-mcp is 100% permissive MIT. Native C++ Tree-sitter bindings risk build failures across platforms, whereas trace-mcp uses WASM-sandboxed `web-tree-sitter` for universal portability.
@@ -2051,7 +2051,7 @@ Four mechanisms were read at source and each got a decision:
 Four mechanisms were read at source and each got a decision:
 
 - **Static quality canaries: Stub and tautology detection (`grafel_stub_detector`, `grafel_tautology_detector`): taking into quality gates.** grafel includes dedicated AST canaries to detect unimplemented stub functions (TODOs, empty blocks, panic/throw stubs) and tautological logic (`x == x`, redundant self-assignments, useless boolean branches). Adding static stub and tautology checks to trace-mcp's `check_quality_gates` and `detect_antipatterns` gives coding agents an immediate automated sanity check to catch placeholder code before committing.
-- **Cross-repo payload drift (`grafel_response_shape_diff`, `grafel_payload_drift`): taking concept for multi-package monorepos.** grafel compares route handler return dictionaries/structs against API client field accesses across multiple repositories, flagging breaking contract drift. trace-mcp already tracks 89 frameworks; extending our AST extractor to compare route response shape keys against consumer fetch/axios/RPC callers across workspaces bridges frontend and backend contracts.
+- **Cross-repo payload drift (`grafel_response_shape_diff`, `grafel_payload_drift`): taking concept for multi-package monorepos.** grafel compares route handler return dictionaries/structs against API client field accesses across multiple repositories, flagging breaking contract drift. trace-mcp already tracks 91 frameworks; extending our AST extractor to compare route response shape keys against consumer fetch/axios/RPC callers across workspaces bridges frontend and backend contracts.
 - **Multi-repo workspace topology (`internal/repowalk/`, `internal/repolock/`, `internal/routing/`): taking into monorepo and workspace roadmap.** grafel links multiple git repositories into a unified knowledge graph, tracking endpoints in backend services to API client callers in frontend/mobile repos. Adding multi-workspace graph linking enables agents in distributed microservice architectures to trace API callers across repo boundaries.
 - **cgo Tree-sitter daemon with in-memory/mmap storage vs. portable SQLite WASM: passing.** grafel runs a Go daemon compiling C Tree-sitter grammars with cgo (`grammars.lock`), introducing native compiler dependencies and build fragility across platforms. trace-mcp's WASM sandbox guarantees memory safety and crash isolation with zero native compilation. Additionally, trace-mcp provides full AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and code-anchored decision memory, neither of which exists in grafel.
 
@@ -2773,7 +2773,7 @@ trace-mcp addresses context overhead architecturally through **Adaptive Task Pre
 - **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
-### 2. Pure Syntax Parsing vs. 89 Framework Semantic Integrations
+### 2. Pure Syntax Parsing vs. 90 Framework Semantic Integrations
 
 Both trace-mcp and TokenSave parse source code using tree-sitter grammars. Where they diverge is how structural syntax is translated into architectural comprehension.
 
@@ -2954,7 +2954,7 @@ trace-mcp intentionally avoids raw graph query languages in favor of **typed, sc
 - Output shapes are calibrated for minimal token consumption (TOON format or compact JSON).
 - The agent simply requests "who calls `processPayment`", and trace-mcp traverses multi-tier edges in SQLite without the agent ever needing to know the database query language.
 
-### 3. Framework Awareness: 89 Web Framework Integrations vs. Generic Syntax
+### 3. Framework Awareness: 90 Web Framework Integrations vs. Generic Syntax
 
 Both tools parse source code using Tree-sitter. However, parsing raw syntax into AST nodes is only the first step of codebase comprehension.
 
@@ -3108,7 +3108,7 @@ trace-mcp pairs comprehensive graph navigation with **production-grade AST refac
 - `refactor_codemod`: Executes structural AST transformations with compiler validation.
 - `taint_analysis`: Tracks untrusted user input to security-sensitive sinks across the call graph and exports SARIF 2.1.0 reports.
 
-### 4. Framework Awareness: 89 Web Framework Integrations vs. Generic Syntax
+### 4. Framework Awareness: 90 Web Framework Integrations vs. Generic Syntax
 
 Graft extracts syntactic symbols (classes, functions, calls) from raw language grammars. It does not model web application frameworks or cross-tier abstractions:
 - It cannot link an HTTP route declared in a router file to its controller action and underlying database model.
@@ -3231,7 +3231,7 @@ trace-mcp addresses context overhead on both tool and data surfaces:
 - **Dynamic runtime escalation**: Any of the {{ site.data.counts.tools }} tools outside the active preset can be activated on demand in the live session via `load_tools`.
 - **Targeted context slices**: Tools like `get_outline`, `get_symbol`, and `get_change_impact` return exact AST slices and blast-radius summaries rather than requiring the agent to parse megabytes of raw RDF triples.
 
-### 3. Language Breadth vs. 89 Framework Semantic Integrations
+### 3. Language Breadth vs. 90 Framework Semantic Integrations
 
 Both engines parse source code using tree-sitter grammars. Where they diverge is how syntax trees are elevated into software architecture.
 
@@ -6323,6 +6323,7 @@ Dedicated architectural deep-dives for specific framework ecosystems:
 | **Sequelize** | Models, associations, migrations |
 | **Mongoose** | Schemas, models, middleware |
 | **SQLAlchemy** | ORM models, relationships, columns, constraints |
+| **Polars** | DataFrames, LazyFrames, expressions, column aliases, joins, UDF callables |
 | **PyMongo** | MongoDB collections, read/write operation edges, client handles, wrapper helpers |
 
 ---
