@@ -77,6 +77,7 @@ const CALL_EDGE_TYPES = new Set([
   'validates_with',
   'nest_injects',
   'graphql_resolves',
+  'aws_call',
   'polars_udf',
   'polars_dataframe_flow',
   // Import-based edges (fallback when no call edges exist)

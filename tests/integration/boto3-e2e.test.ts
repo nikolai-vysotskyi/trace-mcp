@@ -13,6 +13,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { Boto3Plugin } from '../../src/indexer/plugins/integration/tooling/boto3/index.js';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 import { findReferences } from '../../src/tools/framework/references.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -99,6 +100,15 @@ describe('AWS Boto3 E2E', () => {
       expect(
         usages.value.references.every((ref) => ref.symbol?.symbol_id !== 'aws:s3:PutObject'),
       ).toBe(true);
+    });
+
+    it('shows the direct AWS dependency in get_call_graph', () => {
+      const graph = getCallGraph(store, { symbolId: 's3_service.py::write_data#function' }, 1);
+      expect(graph.isOk()).toBe(true);
+      if (graph.isErr()) return;
+      expect(graph.value.root.calls?.map((callee) => callee.symbol_id)).toContain(
+        'aws:s3:PutObject',
+      );
     });
 
     it('emits GetObject read edge with bucket and key', () => {
