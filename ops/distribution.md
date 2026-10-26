@@ -7604,3 +7604,57 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+
+
+### Outreach pass, 2026-10-26 22:00 pass (TRA-2710): mention sweep (clean), isaim0011/blastcode & kerbart/documentum ecosystem triage, codegraph read-only status (#2916) & browser globals (#2915), graphify tagged templates (#4794) & kilo references (#4789), GitNexus AdonisJS taint (#3727), codebase-memory ZCode surface (#2808) & daemon reconnect (#2803)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Dokploy/mcp#81: OPEN (community discussion between moataz-hjaiji and zaguiini advancing on PR #90 and defaulting preset to `deploy`; our feedback on meta-tool already incorporated; no action needed).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **isaim0011/blastcode** (0★, MIT, Rust / tree-sitter / SQLite, published on crates.io, PyPI, npm `npx blastcode serve .`, brew, and Open VSX `isaim0011/blastcode-vscode`, created 2026-10-08): Fast incremental code-graph MCP server and blast-radius analyzer for AI coding agents. Provides 15 CLI subcommands (`blast index`, `blast map`, `blast context`, `blast skeleton`, `blast trace`, `blast impact`, `blast tests`, `blast verify`, `blast dead`, `blast watch`) and an MCP server. Claims 90–98% token reduction via file skeletons and pre-edit blast radius checks across 16 languages/web formats. Contrast: trace-mcp indexes 81 languages and 88 frameworks (vs 16), provides 181 comprehensive MCP tools (including semantic search, TOON encoding, AST refactoring/codemods with dry-run protection, symbol renaming, type hierarchy, circular dependency analysis, git history change graph) vs ~15 tools, TOON compact representation (70.5%–72.7% token reduction) with persistent SQLite cache and memory-mapped ASTs, and zero external build/binary setup via `npx -y trace-mcp`.
+- **kerbart/documentum** (0★, MIT, Rust / SQLite / Qdrant, created 2026-10-23): Hybrid search and code graph MCP server in a single Rust binary. Combines dense vector embeddings with global BM25 ranking for docs and code, exposing `code_symbol`, `code_callers`, `code_callees`, `code_path`, and `code_impact` across 7 languages (Rust, TS/JS, Python, Go, Java, Kotlin, C#). Contrast: trace-mcp is purpose-built for coding agents with deep AST indexing across 81 languages and 88 frameworks, 181 comprehensive tools, subproject topology, call chains, codemods, and zero external embedding/vector infrastructure requirements.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Read-only database mode for status command (PR #2916, open)*: Fixes `SQLITE_BUSY_SNAPSHOT (517)` / `database is locked` during concurrent index rebuilds. `codegraph status` previously opened the SQLite database in read-write mode without `{ readOnly: true }`, triggering open-time secondary index auto-healing schema changes while bulk loading was in progress. Fixed by passing `{ readOnly: true }` in `status`. Contrast: trace-mcp isolates read queries from writer transactions using SQLite WAL mode with dedicated read-only connection pools and explicit transaction boundaries.
+  - *Browser global method call resolution guard (PR #2915, open)*: Fixes DOM host global calls (`window.open`, `localStorage.getItem`, `location.reload`, `history.back`) incorrectly resolving to project class methods sharing the same method name. Caused by missing browser globals in `JS_BUILTIN_METHODS` and falling through to naive name-similarity matching. Contrast: trace-mcp leverages full AST syntax nodes, receiver scope resolution, and environment definitions, avoiding loose name-based global fallthroughs.
+- **Graphify-Labs/graphify**:
+  - *Preserve parallel relation variants and valid TypeScript tagged templates (PR #4794, open)*: Preserves parallel relation variants across extraction and rebuilds, marks raw graphs as multigraphs when parallel links are present, and masks only parser-error-adjacent generic tagged-template type arguments.
+  - *Clean removal of skill references directory on Kilo uninstall (PR #4789, open)*: Fixes `graphify kilo uninstall` failing to remove `~/.config/kilo/skills/graphify/references/`, causing `rmdir` to fail and leaving 8 reference files behind.
+- **abhigyanpatwari/GitNexus**:
+  - *AdonisJS request methods and Lucid SQL taint models (PR #3727, open)*: Seeds TypeScript/JavaScript taint flows from AdonisJS request methods (`input`, `qs`, `header`, `param`, `cookie`, `all`, `body`, `validateUsing`) on `req`/`request`/`ctx.request` receivers, and recognizes Lucid `rawQuery` argument 0 as a SQL injection sink. Contrast: trace-mcp tracks AST syntax paths and framework call semantics across 88 frameworks without requiring manual per-framework receiver hardcoding.
+- **DeusData/codebase-memory-mcp**:
+  - *ZCode client integration (PR #2808, open)*: Adds ZCode as the 46th detected client surface, registering the MCP server in nested `mcp.servers` object in `~/.zcode/cli/config.json`, along with durable instructions and skill files.
+  - *Daemon reconnect and interrupted request replay (PR #2803, open)*: Recovers from daemon death under a live MCP frontend by catching transport errors on the worker and re-issuing the interrupted request against a replacement daemon (bounded to 3 reconnects with at-least-once semantics), avoiding fatal frontend `_Exit(EXIT_FAILURE)` teardowns on Windows process reaping. Contrast: trace-mcp includes a resilient background daemon architecture with heartbeat monitoring, graceful reconnects, and fallback proxying.
+
+**Competitor pulse (as of 2026-10-26 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 24 forks (=)
+- yamadashy/repomix: 29,034★ (+6), 1,599 forks (=)
+- oraios/serena: 30,735★ (+5), 2,091 forks (+2)
+- DeusData/codebase-memory-mcp: 47,546★ (+18), 3,911 forks (+3)
+- tirth8205/code-review-graph: 32,406★ (+8), 2,958 forks (=)
+- colbymchenry/codegraph: 75,431★ (+31), 4,945 forks (+3)
+- abhigyanpatwari/GitNexus: 48,049★ (+4), 5,204 forks (=)
+- jgravelle/jcodemunch-mcp: 2,808★ (=), 373 forks (=)
+- continuedev/continue: 36,333★ (+3), 5,525 forks (+2)
+- Aider-AI/aider: 49,766★ (+5), 5,108 forks (=)
+- Graphify-Labs/graphify: 135,957★ (+152), 12,973 forks (+22)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
