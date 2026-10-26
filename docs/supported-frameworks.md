@@ -211,6 +211,7 @@ Dedicated architectural deep-dives for specific framework ecosystems:
 | **Mongoose** | Schemas, models, middleware |
 | **SQLAlchemy** | ORM models, relationships, columns, constraints |
 | **Polars** | DataFrames, LazyFrames, expressions, column aliases, joins, UDF callables |
+| **PyMongo** | MongoDB collections, read/write operation edges, client handles, wrapper helpers |
 
 ---
 

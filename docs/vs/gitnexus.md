@@ -152,7 +152,7 @@ trace-mcp intentionally avoids raw graph query languages in favor of **typed, sc
 - Output shapes are calibrated for minimal token consumption (TOON format or compact JSON).
 - The agent simply requests "who calls `processPayment`", and trace-mcp traverses multi-tier edges in SQLite without the agent ever needing to know the database query language.
 
-### 3. Framework Awareness: 88 Web Framework Integrations vs. Generic Syntax
+### 3. Framework Awareness: 89 Web Framework Integrations vs. Generic Syntax
 
 Both tools parse source code using Tree-sitter. However, parsing raw syntax into AST nodes is only the first step of codebase comprehension.
 

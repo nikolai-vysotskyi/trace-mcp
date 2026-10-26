@@ -73,7 +73,7 @@ updated: 2026-10-26
           "name": "How do their framework integrations and build portability compare?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Graft extracts generic language syntax and relies on native C++ Tree-sitter node-gyp compilation. trace-mcp models semantic relationships across 88 web frameworks (HTTP routes to handlers, ORM models to database tables, controllers to templates) and runs entirely in sandboxed WASM with zero native compiler dependencies."
+            "text": "Graft extracts generic language syntax and relies on native C++ Tree-sitter node-gyp compilation. trace-mcp models semantic relationships across 89 web frameworks (HTTP routes to handlers, ORM models to database tables, controllers to templates) and runs entirely in sandboxed WASM with zero native compiler dependencies."
           }
         }
       ]
@@ -161,7 +161,7 @@ trace-mcp pairs comprehensive graph navigation with **production-grade AST refac
 - `refactor_codemod`: Executes structural AST transformations with compiler validation.
 - `taint_analysis`: Tracks untrusted user input to security-sensitive sinks across the call graph and exports SARIF 2.1.0 reports.
 
-### 4. Framework Awareness: 88 Web Framework Integrations vs. Generic Syntax
+### 4. Framework Awareness: 89 Web Framework Integrations vs. Generic Syntax
 
 Graft extracts syntactic symbols (classes, functions, calls) from raw language grammars. It does not model web application frameworks or cross-tier abstractions:
 - It cannot link an HTTP route declared in a router file to its controller action and underlying database model.

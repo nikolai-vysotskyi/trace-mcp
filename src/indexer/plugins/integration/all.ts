@@ -28,6 +28,7 @@ import { DrizzlePlugin } from './orm/drizzle/index.js';
 import { MongoosePlugin } from './orm/mongoose/index.js';
 // --- orm ---
 import { PrismaPlugin } from './orm/prisma/index.js';
+import { PyMongoPlugin } from './orm/pymongo/index.js';
 import { RawSqlPlugin } from './orm/raw-sql/index.js';
 import { SequelizePlugin } from './orm/sequelize/index.js';
 import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
@@ -130,6 +131,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new DrizzlePlugin(),
     new RawSqlPlugin(),
     new AsyncDbPlugin(),
+    new PyMongoPlugin(),
     // view
     new ReactPlugin(),
     new VueFrameworkPlugin(),
