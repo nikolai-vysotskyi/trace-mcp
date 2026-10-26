@@ -1,6 +1,6 @@
 ---
 title: "Graft Alternative: trace-mcp vs Graft for AI agents"
-description: "Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 89 frameworks, and AST refactoring."
+description: "Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 91 frameworks, and AST refactoring."
 category: vs-comparisons
 updated: 2026-10-26
 ---
@@ -41,7 +41,7 @@ updated: 2026-10-26
           "name": "What is the core difference between Graft and trace-mcp?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Graft generates a plain-language knowledge graph by calling external LLMs (Anthropic Claude or OpenAI) and saving summaries as loose markdown files on disk. trace-mcp is a 100% local, deterministic code intelligence engine that indexes code in seconds using embedded Tree-sitter WASM and relational SQLite, with zero external API calls, zero token costs, 89 framework integrations, and AST refactoring write tools."
+            "text": "Graft generates a plain-language knowledge graph by calling external LLMs (Anthropic Claude or OpenAI) and saving summaries as loose markdown files on disk. trace-mcp is a 100% local, deterministic code intelligence engine that indexes code in seconds using embedded Tree-sitter WASM and relational SQLite, with zero external API calls, zero token costs, 91 framework integrations, and AST refactoring write tools."
           }
         },
         {
@@ -73,7 +73,7 @@ updated: 2026-10-26
           "name": "How do their framework integrations and build portability compare?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Graft extracts generic language syntax and relies on native C++ Tree-sitter node-gyp compilation. trace-mcp models semantic relationships across 88 web frameworks (HTTP routes to handlers, ORM models to database tables, controllers to templates) and runs entirely in sandboxed WASM with zero native compiler dependencies."
+            "text": "Graft extracts generic language syntax and relies on native C++ Tree-sitter node-gyp compilation. trace-mcp models semantic relationships across 90 web frameworks (HTTP routes to handlers, ORM models to database tables, controllers to templates) and runs entirely in sandboxed WASM with zero native compiler dependencies."
           }
         }
       ]
@@ -161,7 +161,7 @@ trace-mcp pairs comprehensive graph navigation with **production-grade AST refac
 - `refactor_codemod`: Executes structural AST transformations with compiler validation.
 - `taint_analysis`: Tracks untrusted user input to security-sensitive sinks across the call graph and exports SARIF 2.1.0 reports.
 
-### 4. Framework Awareness: 88 Web Framework Integrations vs. Generic Syntax
+### 4. Framework Awareness: 90 Web Framework Integrations vs. Generic Syntax
 
 Graft extracts syntactic symbols (classes, functions, calls) from raw language grammars. It does not model web application frameworks or cross-tier abstractions:
 - It cannot link an HTTP route declared in a router file to its controller action and underlying database model.
