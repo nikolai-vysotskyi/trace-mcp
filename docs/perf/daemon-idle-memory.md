@@ -532,3 +532,31 @@ Operationally, a paired FSEvents drop can cost an additional hash-gated full
 walk even when every file is unchanged. Keep the pending pass for correctness;
 quantify its cost separately from idle memory when investigating checkout
 bursts or wake-from-sleep storms.
+
+---
+
+## 2026-10-27 — high RSS with a small JS heap on v3.41.0
+
+Read-only observation of the installed v3.41.0 daemon (PID 65296) from
+`~/.trace/daemon.log`. Six consecutive one-minute vitals at 21:54:35–21:59:35
+UTC reported eight loaded projects, `projects_indexing: 0`, and exactly
+1,777 MB RSS. Heap used stayed at 273–279 MB. The same interval contained
+36 `reindex-file telemetry` records with `indexed: 0`, two `Deleted files
+from index` records, and no `Project indexAll starting` record. This is a
+quiet field window, although it is not the isolated 0% CPU setup used to set
+the idle ceiling. The eight-project ceiling is 850 MB, so observed RSS was
+927 MB above it.
+
+A later read-only `/debug/memory` sample, after the loaded count had risen
+to ten, reported 1,953 MB RSS, 309 MB heap used, about 40 MB external, a
+5 MB tree cache, and about 21 KB of compact session-journal data. Do not
+compare its absolute RSS to the eight-project plateau as a leak rate: the
+project mix changed. It does establish that neither the reported JS heap
+nor these visible caches account for most of the process RSS at that point.
+
+`vmmap -summary` on the same live PID reported about 885 MB resident in
+Malloc Small (about 366 MB dirty), 246 MB resident mapped files, and 527 MB
+physical footprint. RSS therefore includes substantial reclaimable or shared
+memory; the 927 MB ceiling gap must not be described as 927 MB of private
+memory pressure. This snapshot does not identify the owner of the retained
+native allocations. TRA-2061 owns the memory attribution and fix.
