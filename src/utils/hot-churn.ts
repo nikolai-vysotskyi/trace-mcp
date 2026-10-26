@@ -110,28 +110,6 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
 /** Source directory segments that protect enclosed files from being treated as runtime churn. */
 const SOURCE_DIR_SEGMENTS = new Set(['src', 'lib', 'packages', 'internal', 'app']);
 
-/** Source file extensions that distinguish user code from engine execution scratch files. */
-const SOURCE_CODE_EXTS = new Set([
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
-  '.py',
-  '.go',
-  '.rs',
-  '.java',
-  '.c',
-  '.cpp',
-  '.cs',
-  '.rb',
-  '.swift',
-  '.kt',
-  '.scala',
-  '.php',
-]);
-
 const NON_PHP_SOURCE_EXTS = new Set([
   '.ts',
   '.tsx',
@@ -297,10 +275,6 @@ export function isHotChurnPath(p: string): boolean {
       if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
         break;
       }
-      const ext = base.includes('.') ? base.slice(base.lastIndexOf('.')).toLowerCase() : '';
-      if (SOURCE_CODE_EXTS.has(ext)) {
-        break;
-      }
       return true;
     }
   }
@@ -310,10 +284,6 @@ export function isHotChurnPath(p: string): boolean {
     if (segments[i].toLowerCase() === 'tmp' && segments[i + 1].toLowerCase().startsWith('arg0-')) {
       const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
       if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
-        break;
-      }
-      const ext = base.includes('.') ? base.slice(base.lastIndexOf('.')).toLowerCase() : '';
-      if (SOURCE_CODE_EXTS.has(ext)) {
         break;
       }
       return true;

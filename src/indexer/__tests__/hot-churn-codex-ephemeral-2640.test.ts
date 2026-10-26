@@ -82,12 +82,10 @@ describe('TRA-2640 / TRA-2581: isHotChurnPath and ignore globs', () => {
       'tests/tmp_arg0.test.ts',
       'plugins/installed/my-plugin/index.js',
       'plugins/config.json',
-      // TRA-2718: legitimate application source files under app/... and matching directories
+      // TRA-2718: legitimate application source files under app/...
       'app/node_repl/active_execs/handler.ts',
       'app/tmp/arg0-macos/handler.ts',
       'app/plugins/cache/openai/plugin-install-abc/handler.ts',
-      'node_repl/active_execs/handler.ts',
-      'tmp/arg0-macos/trampoline.c',
     ];
 
     for (const p of legitPaths) {

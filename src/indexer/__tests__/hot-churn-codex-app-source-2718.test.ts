@@ -47,11 +47,10 @@ describe('TRA-2718: Codex ephemeral churn vs app/... source files', () => {
         'app/tmp/arg0-linux/worker.py',
         'app/plugins/cache/openai/plugin-install-abc/handler.ts',
         'app/plugins/cache/openai/plugin-install-abc/index.ts',
-        'node_repl/active_execs/handler.ts',
-        'node_repl/active_execs/session.py',
-        'node_repl/active_execs/worker.go',
-        'tmp/arg0-macos/trampoline.c',
-        'tmp/arg0-macos/handler.ts',
+        'src/node_repl/active_execs/handler.ts',
+        'src/tmp/arg0-macos/trampoline.c',
+        'lib/node_repl/active_execs/parser.js',
+        'packages/repl/node_repl/active_execs/types.d.ts',
       ];
 
       for (const p of appSources) {
@@ -73,6 +72,12 @@ describe('TRA-2718: Codex ephemeral churn vs app/... source files', () => {
         'plugins/cache/openai-curated-remote/plugin-install-abc123/lib/index.js',
         '.codex/plugins/cache/openai-curated-remote/plugin-install-abc123/lib/index.js',
         '/Users/test/.codex/plugins/cache/custom-remote/plugin-install-999/manifest.json',
+        // TRA-2718 regression: files in root/codex directories without SOURCE_DIR_SEGMENTS prefix
+        // are identified as Codex churn in lockstep with native watcher globs
+        'node_repl/active_execs/handler.ts',
+        'tmp/arg0-macos/trampoline.c',
+        '.codex/node_repl/active_execs/handler.ts',
+        '.codex/tmp/arg0-macos/trampoline.c',
       ];
 
       for (const p of codexChurn) {
@@ -96,6 +101,34 @@ describe('TRA-2718: Codex ephemeral churn vs app/... source files', () => {
       expect(isIgnored('.codex/node_repl/active_execs/1.json')).toBe(true);
       expect(isIgnored('.codex/tmp/arg0-macos/tramp1')).toBe(true);
       expect(isIgnored('.codex/plugins/cache/openai/plugin-install-123/file.js')).toBe(true);
+    });
+
+    it('maintains strict consistency between isHotChurnPath and native watcher globs for all paths', () => {
+      const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
+      const testCases = [
+        // App / source prefix paths: neither is hot churn nor natively ignored
+        { path: 'app/node_repl/active_execs/handler.ts', expected: false },
+        { path: 'app/tmp/arg0-macos/handler.ts', expected: false },
+        { path: 'app/plugins/cache/openai/plugin-install-abc/handler.ts', expected: false },
+        { path: 'src/node_repl/active_execs/manager.ts', expected: false },
+        { path: 'src/tmp/arg0-macos/trampoline.c', expected: false },
+        // Root and .codex paths: both isHotChurnPath and native globs agree (true)
+        { path: 'node_repl/active_execs/1.json', expected: true },
+        { path: 'node_repl/active_execs/handler.ts', expected: true },
+        { path: 'tmp/arg0-macos/exec-trampoline', expected: true },
+        { path: 'tmp/arg0-macos/trampoline.c', expected: true },
+        { path: '.codex/node_repl/active_execs/1.json', expected: true },
+        { path: '.codex/node_repl/active_execs/handler.ts', expected: true },
+        { path: '.codex/tmp/arg0-macos/exec-trampoline', expected: true },
+        { path: '.codex/tmp/arg0-macos/trampoline.c', expected: true },
+        { path: 'plugins/cache/openai/plugin-install-123/file.js', expected: true },
+        { path: '.codex/plugins/cache/openai/plugin-install-123/file.js', expected: true },
+      ];
+
+      for (const { path: p, expected } of testCases) {
+        expect(isHotChurnPath(p), `isHotChurnPath("${p}")`).toBe(expected);
+        expect(isIgnored(p), `nativeGlob("${p}")`).toBe(expected);
+      }
     });
   });
 
