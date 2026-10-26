@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.41.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.40.0...v3.41.0) (2026-10-26)
+
+
+### Features
+
+* **plugin:** pymongo collection read/write edges (TRA-2706) ([#1754](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1754)) ([c27f99e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c27f99ee23533f4a67d7ba73d18900e13eb800bd))
+* **plugins:** add Polars plugin for DataFrame, column, join and UDF edges (TRA-2704) ([#1753](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1753)) ([7ab1861](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7ab1861e572eb3b45194583396de7e5992c74677))
+* **plugins:** direct AWS service and resource edges for boto3 (GH [#1471](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1471)/[#1473](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1473)) ([#1752](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1752)) ([416cdab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/416cdaba8d684abfbf91675eb7078d1298020588))
+
+
+### Bug Fixes
+
+* **app:** align MCP client status with disconnect action ([#1750](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1750)) ([fcf37bb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fcf37bbea144b5cbb48a351ac6f19d8c97aa0e14))
+* **daemon,launcher:** make package updates atomic and prevent rollback to app bundle (TRA-2687) ([#1738](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1738)) ([03437b4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03437b4f3d72f97d7938d0526ee911d45ba08701))
+* **daemon:** GC relief before restart threshold and storage churn exclusion (TRA-2682) ([#1734](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1734)) ([77481e3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/77481e30ea78e8a620569f6772533049bb0532f1))
+* **deps:** patch security alerts and add bb Dependabot coverage (TRA-2689) ([#1739](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1739)) ([e794cea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e794ceacf0e420f0c002029d7ae3f31924eee93c))
+
+
+### Documentation
+
+* **ops:** pass 2026-10-26 18:00, mention sweep clean, manzzaano/leo-code triage, codegraph symbol boundaries ([#2914](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2914)), graphify native OpenCode ([#4776](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4776)), GitNexus logger sink ([#3729](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3729)), serena pickle cache ([#2215](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2215)) (TRA-2708) ([#1755](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1755)) ([1c6deb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c6deb21caec9d5234494ddf64f3fd1aa4deebeb))
+* **ops:** pass 2026-10-26 22:00, mention sweep clean, blastcode & documentum triage, codegraph read-only status ([#2916](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2916)), graphify tagged templates ([#4794](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4794)), GitNexus AdonisJS taint ([#3727](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3727)), codebase-memory ZCode ([#2808](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2808)) (TRA-2710) ([#1756](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1756)) ([2a01377](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a01377f0ada2dfe34f97ed1f8f0734706ab649d))
+* **ops:** pass 2026-10-26 late, mention sweep clean, iamsaquib8/tessera triage, codegraph DB ([#2916](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2916)) & globals ([#2915](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2915)), serena ([#2214](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2214)) (TRA-2701) ([#1749](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1749)) ([26a1000](https://github.com/nikolai-vysotskyi/trace-mcp/commit/26a100048023a5dcbb55edabf20c328216e0c804))
+* **ops:** pass 2026-10-26 midday, mention sweep clean, nrupala/codetopo triage, codegraph projects ([#2912](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2912)), graphify dispatch tables ([#4773](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4773)) (TRA-2698) ([#1748](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1748)) ([60c6b32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60c6b3224b45d378783322a17c4063001cc6ab9e))
+* **ops:** pass 2026-10-26 morning, mention sweep clean, haplollc/Vesalius triage, codegraph unstaged deletes ([#2910](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2910)), graphify warm-tree ([#4769](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4769)) (TRA-2685) ([#1736](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1736)) ([588f8e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/588f8e7389efc2eb95ed7ff7c51c90baa06790e2))
+* record dropped FSEvents recovery during workspace checkouts ([#1735](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1735)) ([9fcf80f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9fcf80fd3a4ac75b81bfff35a3fce73f9eec30e6))
+
 ## [3.40.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.39.0...v3.40.0) (2026-10-25)
 
 
