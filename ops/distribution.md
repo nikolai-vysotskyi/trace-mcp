@@ -7438,3 +7438,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+
+### Outreach pass, 2026-10-26 midday (TRA-2698): mention sweep (clean), nrupala/codetopo & threadnote/threadnote ecosystem triage, codegraph projects MCP tool (#2912) & symbol boundary fix (#2914), graphify Python dispatch tables (#4773) & subagent token accounting (#4772), codebase-memory-mcp daemon reconnect retry (#2803)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend on 2026-09-26 / 2026-10-09, dedicated technical lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; final bot reminder step=4 posted 2026-10-25 00:36 UTC ("This is the last follow-up we'll send about this claim"); claim declined and stays declined, no reply owed.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Confirmed 100% clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **nrupala/codetopo** (1★, AGPL-3.0, Rust, updated 2026-10-26): "See your codebase the way an agent sees it. Rust code-graph engine: index any repo, query descendants, blast radius, paths. CLI, HTTP API, and MCP server." Ships four binary packages (`codetopo-cli`, `codetopo-server`, `codetopo-mcp`, `codetopo-acp`). Parses Rust and TS/JS via tree-sitter into an embedded SQLite database (`graph.db`). Deliberately domain-blind reporting structural counts and paths. Contrast: parses only 2 languages vs trace-mcp's 81 languages and 88 frameworks, lacks npm/npx distribution (source cargo build required), licensed under AGPL-3.0, and lacks framework AST intelligence, git diff blast-radius on staged/unstaged changes, and security taint scanners.
+- **threadnote/threadnote** (26★, 3 forks, AGPL-3.0, Bun/Effect TypeScript, pushed 2026-10-26): Local-first engineering memory and polyglot graph search for Codex, Claude, Cursor, Copilot. Focuses on capturing architectural decisions and cross-session handoffs, materializing Git proposals while keeping personal work local.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Project discovery MCP tool & CLI (PR #2912, open)*: Adds `codegraph_projects` MCP tool and `codegraph projects` CLI discovering all registered projects from global registry `~/.codegraph/projects.json`. Solves agent navigation when starting from outside a project root or in monorepos (parallels trace-mcp's project registry and `trace list`).
+  - *Qualified symbol boundary matching (PR #2914, open)*: Fixes `codegraph callers Format.Price` erroneously matching `LegacyFormat::Price` due to unanchored substring matching. Enforces matching at start of qualified name or after `::` / `.`.
+- **Graphify-Labs/graphify**:
+  - *Python dispatch table resolution (PR #4773, open)*: Resolves `module.func` entries in dictionary/list dispatch tables to INFERRED `indirect_call` edges through imported module analysis, enabling call-graph tracing for plugin-style registries without confusing shadowing locals or unimported modules.
+  - *Tri-state token accounting for subagents (PR #4772, open)*: Fixes Codex subagent runs where unreported tokens were logged as 0 in `GRAPH_REPORT.md` and `cost.json`. Distinguishes measured (int), unknown (null), and zero (actual 0 work).
+  - *Global plugin paths (PR #4771 & #4770, open)*: Standardizes global OpenCode plugin path to `~/.config/opencode` and Gemini skill directory on Windows.
+- **DeusData/codebase-memory-mcp**:
+  - *Daemon reconnect & request retry (PR #2803, open)*: Fixes fatal `_Exit(EXIT_FAILURE)` when shared daemon dies under an active MCP frontend (e.g. Windows process tree cleanup killing shared daemon). Introduces worker-level reconnect hook re-issuing interrupted requests to a re-spawned daemon up to 3 times with fresh tokens.
+
+**Competitor pulse (as of 2026-10-26 04:00 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (+1), 24 forks (=)
+- yamadashy/repomix: 29,025★ (+3), 1,599 forks (+1)
+- oraios/serena: 30,718★ (+9), 2,089 forks (+1)
+- DeusData/codebase-memory-mcp: 47,485★ (+15), 3,905 forks (+1)
+- tirth8205/code-review-graph: 32,384★ (+2), 2,957 forks (=)
+- colbymchenry/codegraph: 75,341★ (+38), 4,937 forks (+3)
+- abhigyanpatwari/GitNexus: 48,038★ (+3), 5,203 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,808★ (+3), 373 forks (=)
+- continuedev/continue: 36,324★ (+1), 5,522 forks (+2)
+- Aider-AI/aider: 49,754★ (+4), 5,108 forks (+1)
+- Graphify-Labs/graphify: 135,395★ (+246), 12,919 forks (+20)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
