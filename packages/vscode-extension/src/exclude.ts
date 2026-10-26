@@ -4,7 +4,6 @@
  * (already in the workspace via fast-glob) — no new runtime dep.
  */
 
-// @ts-expect-error — picomatch ships no bundled types
 import picomatch from 'picomatch';
 
 export function shouldExclude(relativePath: string, globs: readonly string[]): boolean {
