@@ -2796,7 +2796,27 @@ export class IndexingPipeline {
       // TRA-2433: stamp the check timestamp so consecutive watcher events
       // don't repeat the expensive collectFiles() disk walk every minute.
       this._lastCoverageReconcileMs = Date.now();
-      const onDisk = (await this.collectFiles()).files.length;
+
+      // TRA-2639: When the index was already marked truncated and is already saturated
+      // at or above maxFiles, candidate file count on disk will always be >= maxFiles and
+      // capped at maxFiles. Avoid redundant 20k+ file disk walks on routine watcher churn.
+      const isAlreadyTruncated = readIndexTruncation(this.store) !== null;
+      if (isAlreadyTruncated) {
+        if (this._disposed || !this.store.db.open) return;
+        const row = this.store.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM files WHERE path NOT GLOB '__external__/*' AND path != '__external__'",
+          )
+          .get() as { c: number } | undefined;
+        const currentCount = row?.c ?? 0;
+        const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
+        if (currentCount >= maxFiles) {
+          return;
+        }
+      }
+
+      const collected = await this.collectFiles({ warnOnTruncate: false });
+      const onDisk = collected.files.length;
       if (this._disposed || !this.store.db.open) return;
       const row = this.store.db
         .prepare(
@@ -2805,6 +2825,13 @@ export class IndexingPipeline {
         .get() as { c: number } | undefined;
       const indexed = row?.c ?? 0;
       const gap = onDisk - indexed;
+
+      // TRA-2639: When collected.truncated is true, onDisk is artificially capped at
+      // maxFiles. A negative gap (onDisk <= indexed) is an artifact of the cap and does NOT
+      // indicate deletion drift. Only positive drift (indexed < onDisk <= maxFiles) indicates
+      // unfilled headroom under the cap that can be indexed.
+      if (collected.truncated && gap <= 0) return;
+
       if (Math.abs(gap) < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
       logger.info(
         { root: this.rootPath, onDisk, indexed, gap },
@@ -3356,7 +3383,7 @@ export class IndexingPipeline {
     return this._gitignore;
   }
 
-  private async collectFiles(): Promise<CollectFilesResult> {
+  private async collectFiles(options?: { warnOnTruncate?: boolean }): Promise<CollectFilesResult> {
     // Built here rather than read from the field: on a first index
     // `runPipeline` has not run yet, so `_traceignore` was undefined and the
     // opening walk silently ignored .traceignore entirely.
@@ -3371,6 +3398,7 @@ export class IndexingPipeline {
       traceignore: this._traceignore,
       gitignore: this.gitignoreMatcher(),
       maxFiles: this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES,
+      warnOnTruncate: options?.warnOnTruncate,
     });
   }
 }

@@ -27,6 +27,12 @@ export interface FileCollectorParams {
   gitignore?: GitignoreMatcher | undefined;
   /** Overridable for tests; defaults to 10_000 (IndexingPipeline.DEFAULT_MAX_FILES). */
   maxFiles: number;
+  /**
+   * Whether to log a warning when `maxFiles` is exceeded.
+   * Defaults to true. Background coverage reconcile probes set this to false
+   * to avoid log spam during routine drift checks (TRA-2639).
+   */
+  warnOnTruncate?: boolean;
 }
 
 /**
@@ -83,6 +89,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
 
   const rootedPatterns = config.include.filter((p) => !p.startsWith('**/'));
 
+  let wsMatched = false;
   // Monorepo / folder-of-projects: the directory-rooted include globs
   // (src/**, app/**, routes/**, ...) only match at the container root, so
   // nested subprojects are missed (e.g. `the/15carats/15carats-laravel/routes`).
@@ -110,6 +117,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
       wsEntries.push(...batch);
     }
     if (wsEntries.length > 0) {
+      wsMatched = true;
       const merged = new Set(entries);
       for (const e of wsEntries) merged.add(e);
       entries = [...merged];
@@ -130,7 +138,8 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
 
   if (rootedPatterns.length > 0) {
     const isRootedMatch = picomatch(rootedPatterns, { dot: true });
-    const rootedMatched = entries.some((e) => isRootedMatch(e));
+    // TRA-2639: wsEntries already matched rooted patterns inside detected workspaces.
+    const rootedMatched = wsMatched || entries.some((e) => isRootedMatch(e));
     if (!rootedMatched) {
       const deepPatterns = rootedPatterns.map((p) => `**/${p}`);
       // TRA-2380: Bounded traversal for deep monorepo / subproject fallback.
@@ -198,11 +207,23 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   // pointlessly refreshes on every tick.
   entries = entries.filter((e) => !isHotChurnPath(e));
 
+  // TRA-2639: Sort entries deterministically before truncating to maxFiles.
+  // Without sorting, filesystem traversal yields files in arbitrary order, causing
+  // different slices to be chosen across runs, ballooning the index and triggering
+  // coverage reconcile drift loops.
+  entries.sort((a, b) => a.localeCompare(b));
+
   if (entries.length > maxFiles || deepTruncated) {
-    logger.warn(
-      { projectRoot: rootPath, found: deepTruncated ? deepFound : entries.length, limit: maxFiles },
-      'File count exceeds limit — truncating. Increase security.max_files to index more.',
-    );
+    if (params.warnOnTruncate !== false) {
+      logger.warn(
+        {
+          projectRoot: rootPath,
+          found: deepTruncated ? deepFound : entries.length,
+          limit: maxFiles,
+        },
+        'File count exceeds limit — truncating. Increase security.max_files to index more.',
+      );
+    }
     return {
       files: entries.slice(0, maxFiles),
       truncated: true,
