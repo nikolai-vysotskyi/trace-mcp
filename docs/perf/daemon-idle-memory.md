@@ -560,3 +560,27 @@ physical footprint. RSS therefore includes substantial reclaimable or shared
 memory; the 927 MB ceiling gap must not be described as 927 MB of private
 memory pressure. This snapshot does not identify the owner of the retained
 native allocations. TRA-2061 owns the memory attribution and fix.
+
+---
+
+## 2026-10-28 — sleep gaps separated from post-wake event-loop stalls
+
+Read-only field correlation on the installed v3.41.0 daemon (PID 9078).
+`pmset -g log` records Clamshell Sleep at 23:39:53 +0400 on October 27,
+several DarkWake/maintenance-sleep cycles, and a final user Wake at 00:05:22
++0400 on October 28. During the sleep cycles, `daemon.log` reported event-loop
+lags of 122,209, 457,761, 600,368, and 291,129 ms; the matching watchdog
+alerts were `stalled`/`recovered` pairs, with no `fatal`. These are wall-clock
+gaps during confirmed system sleep, not evidence of equally long CPU stalls.
+TRA-2583 and TRA-2622 already own the two sleep-aware monitor fixes.
+
+The post-wake window 00:05:23–02:02:00 +0400 had no further Sleep/DarkWake
+transition in `pmset`. In the same PID's JSON log, 39 event-loop warnings
+remained, with a maximum lag of 10,145 ms. At warning time,
+`reindexInFlight` was zero for 35 and positive for four. The 116 one-minute
+vitals in that window showed RSS between 2,734 and 5,110 MB and at most two
+projects indexing. The same PID later answered `/health` with `status: ok`.
+This is evidence of shorter, real service delays after wake, but the log does
+not identify their blocking operation or prove that memory growth caused them.
+TRA-2603 owns attribution of no-sleep stalls; keep these 39 warnings separate
+from the sleep-contaminated maximum when assessing that work.
