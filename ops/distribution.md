@@ -7819,3 +7819,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+### Outreach pass, 2026-10-27 18:00 pass (TRA-2731): mention sweep clean, Graphify CLI positional help flag (#4830), codegraph synthesis interval bound (#2922) & lazy MCP export (#2920), serena statement-spanning symbol bodies (#2227), GitNexus unexported type impact isolation (#3740) & stdio parent exit (#3737)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on #90 between contributor and maintainer; standing no-ping rule holds).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *CLI positional free-text help flag collision (PR #4830, open)*: Closes #4829. Invoking `graphify query --help` triggered a literal BFS search across the graph with `--help` as the query string, because help flag interceptors were disabled on free-text commands to prevent shadowing queries containing `-h` or `--help`. PR restricts the help interceptor to exact standalone `--help`/`-h` flags. Contrast: trace-mcp uses structured JSON-RPC schemas (`{ "query": "..." }`) over the MCP protocol rather than raw positional argv parsing, preventing query string collisions with CLI flags by construction.
+- **colbymchenry/codegraph**:
+  - *Rate-bound live sync edge synthesis with `CODEGRAPH_SYNTH_MIN_INTERVAL_MS` (PR #2922, open)*: Closes #2911. Incremental live syncs triggered full-graph edge synthesis scans whenever an edited file matched common language patterns (`class`, `interface`, `.vue`), causing 30+ second sync latency and heavy disk thrashing on large monorepos. PR introduces configurable minimum synthesis intervals and deferred timer-driven execution. Contrast: trace-mcp performs atomic, fine-grained AST hashing with per-symbol dependency invalidation in SQLite WAL, eliminating full-graph re-synthesis passes on localized file edits.
+  - *Lazy-load MCPServer package re-export (PR #2920, open)*: Static re-export of `MCPServer` in `src/index.ts` forced the `codegraph query` CLI command to eagerly import the entire 8.3k-line MCP server subsystem, daemon, proxy, and engine, adding 14% startup overhead. Fixed with CommonJS getter laziness. Contrast: trace-mcp maintains lean, modular entry points and dynamic tool registration, avoiding startup cascades for isolated command invocations.
+  - *Read-only database connections for status checks (PR #2921, open)*: Fixes #2913. `codegraph status` now opens indexes with explicit read-only handles to prevent writer lock collisions (`SQLITE_BUSY_SNAPSHOT`) and reports when background rebuilds are in flight.
+- **oraios/serena**:
+  - *Extend Python symbol bodies to full statements (PR #2227, open)*: Fixes #2226. In Pyright/BasedPyright backends, variable/field symbol ranges covered only the identifier name, causing `replace_symbol_body` to corrupt code into chained assignments (`x = <new> = <old>`). Introduces `PythonLanguageServerBase` backed by Python's `ast` parser to map assignments to statement boundaries. Contrast: trace-mcp relies on Tree-sitter AST nodes with precise syntactic expression and statement boundaries across all supported languages, preventing truncated symbol ranges.
+- **abhigyanpatwari/GitNexus**:
+  - *Isolate impact analysis from unexported types (PR #3740, open)*: Fixes #3602. Impact BFS analysis on a Class or Interface seeded the traversal with the defining file; for unexported/private types, this caused all external importers of the file to be misclassified as direct dependents, artificially inflating impact risk to HIGH. PR skips file seeding when `isExported = false`. Contrast: trace-mcp models explicit symbol-level call and reference graphs (`get_symbol_callers`, `get_symbol_impact`), strictly isolating file-level import fan-out from private, unexported symbols.
+  - *Clean shutdown on stdio parent process exit (PR #3737, merged)*: Stdio MCP servers hung indefinitely when parent processes died if stdin remained open by a child/sibling. Added parent process monitoring. Contrast: trace-mcp stdio transport manages process lifecycle and handles parent termination cleanly.
+
+**Competitor pulse (as of 2026-10-27 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,040★ (=), 1,600 forks (=)
+- oraios/serena: 30,758★ (+8), 2,097 forks (+2)
+- DeusData/codebase-memory-mcp: 47,614★ (+12), 3,911 forks (=)
+- tirth8205/code-review-graph: 32,426★ (+5), 2,956 forks (=)
+- colbymchenry/codegraph: 75,576★ (+26), 4,965 forks (+5)
+- abhigyanpatwari/GitNexus: 48,066★ (+5), 5,208 forks (=)
+- jgravelle/jcodemunch-mcp: 2,809★ (=), 373 forks (=)
+- continuedev/continue: 36,345★ (=), 5,528 forks (+1)
+- Aider-AI/aider: 49,770★ (=), 5,107 forks (=)
+- Graphify-Labs/graphify: 136,653★ (+152), 13,044 forks (+21)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
