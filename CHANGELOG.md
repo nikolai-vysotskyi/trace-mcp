@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.41.0...v3.42.0) (2026-10-27)
+
+
+### Features
+
+* **cli:** add CLI/daemon version drift diagnostics and document entrypoints (TRA-2721) ([#1765](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1765)) ([2be5f0d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2be5f0d77db1b21701b98d3c4368099f77d7e651))
+
+
+### Bug Fixes
+
+* **indexer:** deterministic truncation, loop prevention and partial index signals (TRA-2639) ([#1760](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1760)) ([58c9360](https://github.com/nikolai-vysotskyi/trace-mcp/commit/58c9360727e3a2e5d4b7f68416766d8a2c938d82))
+* **indexer:** drop codex ephemeral churn and handle post-discovery enoent races (TRA-2640) ([#1763](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1763)) ([55e3f7b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/55e3f7b5647c96a1f19b5fcd20f242ecc7262f17))
+* **indexer:** preserve legitimate sources under app/ and matching codex churn dirs (TRA-2718) ([#1764](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1764)) ([74e5400](https://github.com/nikolai-vysotskyi/trace-mcp/commit/74e5400379553f4d6f9c4a4014783b128685b901))
+* **plugin:** make boto3 AWS calls navigable (TRA-2715) ([#1759](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1759)) ([0299192](https://github.com/nikolai-vysotskyi/trace-mcp/commit/02991928899f0ae0d73ec1646e557549a38021e2))
+* **topology:** report missing service index databases ([#1757](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1757)) ([3d7c1a0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3d7c1a0454b58e0a1532408695e32b60d94c2770))
+
+
+### Documentation
+
+* **ops:** pass 2026-10-27 02:00, mention sweep (14 classified), alperhankendi/Ctxo triage, graphify per-file update ([#4801](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4801)), serena SSE shutdown ([#2221](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2221)) (TRA-2716) ([#1762](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1762)) ([dabe590](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dabe590e4329cfb5617eba6a68391d8f0e09fd60))
+* **ops:** pass 2026-10-27 08:00, mention sweep clean, graphify edge validation ([#4810](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4810)), codegraph reads/writes ([#2919](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2919)), serena planning mode ([#2214](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2214)) (TRA-2726) ([#1766](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1766)) ([4a45ba6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4a45ba685e8a210b8dd7eb1e2ea67dacf13e5a13))
+* **ops:** pass 2026-10-27 14:00, mention sweep clean, Graphify resolver degradation ([#4827](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4827)), codegraph status lock ([#2916](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2916)), serena cache flush ([#2221](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2221)) (TRA-2729) ([#1767](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1767)) ([b919ea8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b919ea83a2c5c767f48e2fac8721bb4f7c6c2015))
+* **ops:** pass 2026-10-27 18:00, mention sweep clean, Graphify CLI positional help ([#4830](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4830)), codegraph synthesis interval ([#2922](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2922)), serena symbol bodies ([#2227](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2227)), GitNexus impact isolation ([#3740](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3740)) (TRA-2731) ([#1768](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1768)) ([c91f86a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c91f86adc3b308f325ee9705dfb61ba0ced8bc0b))
+* **ops:** pass 2026-10-27 22:00, mention sweep clean, Graphify worktree duplicate pruning ([#4833](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4833)) & partial cache poisoning ([#4832](https://github.com/nikolai-vysotskyi/trace-mcp/issues/4832)), codegraph Windows drive roots ([#2931](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2931)) & path traversal guard bypasses ([#2929](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2929)), serena marker-based API exclusion ([#2228](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2228)), GitNexus scope-finalization memory ([#3741](https://github.com/nikolai-vysotskyi/trace-mcp/issues/3741)) (TRA-2733) ([#1769](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1769)) ([5088bf0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5088bf02dec309fea2873b1d515fc10f2b7d164d))
+* record v3.41.0 daemon RSS field sample ([#1761](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1761)) ([e0b70eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e0b70eb70df5a6b76622b284d338a8436b7ed73a))
+
 ## [3.41.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.40.0...v3.41.0) (2026-10-26)
 
 
