@@ -38,6 +38,8 @@ import {
   renderSessionFallbacks,
 } from './daemon-stats.js';
 import { findProcessDaemonLog } from './daemon-log-path.js';
+import { checkCliDaemonVersionDrift, CURRENT_CLI_VERSION } from '../daemon/version-drift.js';
+import { readLauncherConfig } from '../init/launcher.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 
@@ -252,7 +254,27 @@ daemonCommand
     // TRA-2056, TRA-2443: same for a V8 heap OOM — recent reports only.
     for (const line of formatOomCrashes(readRecentOomCrashes({ maxAgeMs: 24 * 60 * 60 * 1000 })))
       console.log(line);
-    if (health.version) console.log(`  Version: ${health.version}`);
+    if (health.version) {
+      console.log(`  Version: ${health.version}`);
+      if (CURRENT_CLI_VERSION !== '0.0.0-dev' && health.version !== CURRENT_CLI_VERSION) {
+        let launcherVersion: string | null = null;
+        try {
+          launcherVersion = readLauncherConfig().version ?? null;
+        } catch {}
+        const drift = checkCliDaemonVersionDrift({
+          cliVersion: CURRENT_CLI_VERSION,
+          daemonVersion: health.version,
+          launcherVersion,
+          daemonRunning: true,
+        });
+        if (drift.drift && drift.warning) {
+          console.log(`  WARNING: ${drift.warning}`);
+          if (drift.remedy) {
+            console.log(`  Remedy: ${drift.remedy}`);
+          }
+        }
+      }
+    }
     if (health.pid != null) console.log(`  PID: ${health.pid}`);
     if (health.uptime != null) {
       const h = Math.floor(health.uptime / 3600);
