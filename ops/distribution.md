@@ -7870,3 +7870,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+
+
+
+### Outreach pass, 2026-10-27 22:00 pass (TRA-2733): mention sweep clean, Graphify worktree duplicate pruning (#4833) & partial cache poisoning (#4832), codegraph Windows drive roots (#2931) & path traversal guard bypasses (#2929), serena marker-based API exclusion (#2228), GitNexus scope-finalization memory (#3741)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on #90 between contributor and maintainer; standing no-ping rule holds).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Prune linked git worktrees when main checkout is in scan root (PR #4833, open)*: Closes #4683. When a workspace folder holds a repository and its linked worktree side-by-side (e.g. `ws/app` and `ws/app-feature`), both directories were scanned, creating duplicate file and symbol nodes (~13.8k duplicates on a ~78k-node graph) and surfacing duplicate paths in `GRAPH_REPORT.md` community hubs. Neither existing path guard handled this layout. Contrast: trace-mcp detects repository and linked worktree boundaries (`.git` file indirection) and resolves real paths and inodes to prevent multi-worktree index duplication.
+  - *Prevent stale `.graphify_partial.txt` from poisoning builds (PR #4832, open)*: Fixes #4814. An incremental `--update` run terminates before step 9 deletes `graphify-out/.graphify_partial.txt`. A subsequent full build using the semantic cache skips step B3.5, leaving the stale file unmanaged so step 9 leaves files unstamped and triggers redundant extraction cycles. Contrast: trace-mcp maintains all indexing and extraction transaction state directly in SQLite WAL tables keyed by content hash and mtime, avoiding fragile, out-of-band ephemeral text markers on disk.
+- **colbymchenry/codegraph**:
+  - *Windows drive root indexing and traversal check failure (PR #2931, merged)*: Fixes #2926. Projects located at Windows drive roots (`Z:\`, `subst`, or root UNC shares) failed initialization with `Path traversal blocked in batch reader`, resulting in 100% indexing failure because `isWithinDir` made invalid assumptions about drive root path strings. Contrast: trace-mcp normalizes root paths cross-platform and validates directory confinement against canonical workspace roots without failing on drive root boundaries.
+  - *Harden sensitive-folder guard against links, case variants, and `\\?\` paths (PR #2929, merged)*: Fixes #2923. Sensitive folder restrictions (`~/.ssh`, `~/.aws`, system directories) checked input paths as-typed, enabling bypasses via symlinks, junction points, Windows/macOS case variations (`~/.SSH`), or `\\?\` extended-length prefixes. Fixed by resolving symlinks and normalising case. Contrast: trace-mcp canonicalizes paths through realpath resolution before security boundary checks and rejects symlink traversal escapes (`SECURITY_VIOLATION`), verified in cross-platform test suites.
+  - *Gracefully skip deleted files still tracked by Git (PR #2928, open)*: Closes #2925. Files deleted from working tree before being staged in git caused `codegraph init` and `codegraph index` to report unreadable file errors (`ENOENT`). PR skips them identically to broken symlinks. Contrast: trace-mcp checks working tree existence prior to dispatching parse tasks, gracefully handling unstaged removals without logging false-positive engine errors.
+- **oraios/serena**:
+  - *Tool and API exclusion by marker names (PR #2228, merged)*: Closes #2210. Adds declarative tool and API inclusions/exclusions using marker names (e.g. `ToolMarkerCanEdit`, `marker:editing`), ensuring `planning` mode reliably strips all mutating tools and editing capabilities. Contrast: trace-mcp utilizes explicit preset boundaries (`default` vs `dev` via `load_tools`), declarative mutating annotations (`mutating: true`), and read-only default postures, preventing unintended mutation without requiring custom runtime marker exclusion syntax.
+- **abhigyanpatwari/GitNexus**:
+  - *Eliminate memory overhead on terminal import misses (PR #3741, merged)*: Closes #3736. Resolving an un-exported named import previously triggered transitive export table synthesis across unrelated modules during scope finalization, causing large heap spikes on import misses. Fixed by early termination. Contrast: trace-mcp maintains indexed symbol tables in SQLite where missing exported identifiers resolve as instant negative lookups without allocating transient heap structures.
+- **DeusData/codebase-memory-mcp**:
+  - *Isolate test harness environment state (PR #2809, open)*: Fixes #2814. Custom `HOME` redirection failed to isolate the native runner when `XDG_CONFIG_HOME` and `XDG_DATA_HOME` remained pointed at host locations. Contrast: trace-mcp isolates all runtime configuration, database stores, and socket paths under dedicated per-instance directories during testing and runtime execution.
+
+**Competitor pulse (as of 2026-10-27 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,041★ (+1), 1,602 forks (+2)
+- oraios/serena: 30,765★ (+7), 2,097 forks (=)
+- DeusData/codebase-memory-mcp: 47,637★ (+23), 3,914 forks (+3)
+- tirth8205/code-review-graph: 32,431★ (+5), 2,956 forks (=)
+- colbymchenry/codegraph: 75,593★ (+17), 4,971 forks (+6)
+- abhigyanpatwari/GitNexus: 48,072★ (+6), 5,209 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,810★ (+1), 373 forks (=)
+- continuedev/continue: 36,347★ (+2), 5,529 forks (+1)
+- Aider-AI/aider: 49,774★ (+4), 5,108 forks (+1)
+- Graphify-Labs/graphify: 136,805★ (+152), 13,059 forks (+15)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
