@@ -7769,3 +7769,53 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+### Outreach pass, 2026-10-27 14:00 midday pass (TRA-2729): mention sweep clean, Graphify resolver degradation status (#4827) & build schema enforcement (#4826), colbymchenry/codegraph read-only status lock fix (#2916) & browser globals call resolution (#2915), codebase-memory-mcp test isolation and git prefix fix (#2809), oraios/serena SSE shutdown cache flush (#2221)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (standing no-ping rule holds).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Persist resolver degradation status (PR #4827, open)*: Fixes #3667. Cross-file resolver failures previously existed only as transient log warnings, allowing degraded graphs missing entire relationship layers to look healthy. Persists sanitized failure records as `degraded_passes` in `graph.json` and surfaces under Graph Health in diagnostics. Contrast: in trace-mcp, indexing health, file error states, and degraded resolution are first-class columns and records in SQLite (`index_state`) and surfaced directly via `get_index_status` / `trace_diagnose`, preventing silent partial index health.
+  - *Fail-closed on schema-invalid edges after alias folding (PR #4826, open)*: `build_from_json()` previously warned on missing required fields (like `relation`) but persisted the malformed edge to `graph.json` anyway, violating its own edge schema. PR drops uncanonicalized/invalid edges explicitly. Contrast: trace-mcp relies on relational schema constraints (NOT NULL, foreign keys) in SQLite WAL, making untyped or orphaned edge creation structurally impossible.
+- **colbymchenry/codegraph**:
+  - *Open database in read-only mode for status command (PR #2916, open)*: Fixes #2913. Running `codegraph status` during an active indexer run triggered SQLite crash-recovery auto-healing of secondary indexes in read-write mode, causing writer transactions to fail with `SQLITE_BUSY_SNAPSHOT (517)`. Fix passes `{ readOnly: true }` to avoid schema modifications. Contrast: trace-mcp opens status and diagnostic readers in explicit SQLite read-only mode with WAL, preventing reader-writer lock contention or concurrent schema mutations.
+  - *Do not link browser global calls to project methods (PR #2915, open)*: Fixes #2907. Unqualified method calls on browser globals (`window.open`, `localStorage.getItem`, `location.reload`) previously resolved to project class methods (`WindowService.open`, `StorageService.getItem`) due to heuristic fallback. Contrast: trace-mcp employs lexical scope, import resolution, and receiver AST analysis rather than bare name-similarity heuristics across arbitrary symbols.
+- **DeusData/codebase-memory-mcp**:
+  - *Isolate runner environment and diff parsing (PR #2809, open)*: The runner inherited host XDG directories and Git `diff.mnemonicPrefix` configurations, breaking hunk parsing (`+++ b/` vs `+++ w/`) and falling back to coarse file seeds, while dispatching Python probes via Bash could trigger desktop GUI tools (`import`). Contrast: trace-mcp isolates its environment pathing (`~/.trace-mcp/`), normalizes Git diff parsing independently of user gitconfig options, and avoids invoking shell utilities for runtime capability checks.
+- **oraios/serena**:
+  - *Save symbol caches on SIGTERM/SIGINT during SSE shutdown (PR #2221, open)*: Under SSE/streamable-HTTP transports, SIGTERM/SIGINT teardown by uvicorn bypassed Serena's shutdown hook, losing all in-memory symbol caches accumulated during long-running sessions. Contrast: trace-mcp uses persistent SQLite WAL with per-batch transactional commits during indexing; symbols and relations are durable immediately upon processing, eliminating data loss on daemon or server process termination.
+
+**Competitor pulse (as of 2026-10-27 14:00 midday pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,040★ (+3), 1,600 forks (+1)
+- oraios/serena: 30,750★ (+9), 2,095 forks (+1)
+- DeusData/codebase-memory-mcp: 47,602★ (+19), 3,911 forks (+1)
+- tirth8205/code-review-graph: 32,421★ (+8), 2,956 forks (-2)
+- colbymchenry/codegraph: 75,550★ (+61), 4,960 forks (+7)
+- abhigyanpatwari/GitNexus: 48,061★ (+5), 5,208 forks (=)
+- jgravelle/jcodemunch-mcp: 2,809★ (=), 373 forks (=)
+- continuedev/continue: 36,345★ (+5), 5,527 forks (+2)
+- Aider-AI/aider: 49,770★ (+1), 5,107 forks (=)
+- Graphify-Labs/graphify: 136,501★ (+223), 13,023 forks (+17)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
