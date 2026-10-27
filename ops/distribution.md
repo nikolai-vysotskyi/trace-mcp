@@ -7723,3 +7723,49 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+### Outreach pass, 2026-10-27 08:00 pass (TRA-2726): mention sweep clean, Graphify edge validation (#4810) & partial-read runbook (#4808) & markdown function scoping (#4806), colbymchenry/codegraph reads/writes split (#2919), oraios/serena planning mode rename_symbol gate (#2214)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (standing no-ping rule holds).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Fail-closed on edges missing relation (PR #4810, open)*: Closes #4809. `build_from_json()` previously warned when an edge was missing `relation` after legacy alias folding, but still persisted untyped edges into NetworkX and `graph.json`. PR drops untyped edges and emits summary warning count. Contrast: trace-mcp uses relational SQLite schema with strict foreign keys and non-null relation types, preventing corrupted or untyped graph topologies by construction.
+  - *Pass partial source files in update runbook (PR #4808, open)*: Fixes #4807 where partial/truncated reads during subagent `/graphify --update` stamped incomplete files as completed in `manifest.json`, poisoning the incremental cache. Contrast: trace-mcp executes atomic transactional indexing with per-file AST hashing; files are never marked indexed unless fully parsed and committed to SQLite WAL.
+  - *Require file qualification for bare function names in markdown (PR #4806, open)*: Fixes #4804 where bare single-token code spans in markdown (`token`, `raw`, `fail`) were erroneously linked across directories at 0.95 confidence. Contrast: trace-mcp uses lexical scope resolution, framework semantics, and language-aware AST node resolution rather than ambiguous global string heuristics.
+- **colbymchenry/codegraph**:
+  - *Split same-file value references into reads and writes (PR #2919, open)*: Closes #996. File-scope variable references previously emitted identical generic `references` edges for both mutations and reads, preventing caller impact queries from distinguishing reads from writes. Contrast: trace-mcp models read, write, call, and mutation edges explicitly in AST dataflow and symbol reference graphs.
+- **oraios/serena**:
+  - *Exclude `rename_symbol` from planning mode (PR #2214, open)*: Fixes #2210 where "read-only" planning mode omitted `rename_symbol` from its exclusion list, allowing agents to execute symbolic code renames during planning. Contrast: trace-mcp defines declarative `annotations: { readonly: true }` metadata on MCP tools and separates read/analysis tools from explicit mutation operations.
+
+**Competitor pulse (as of 2026-10-27 08:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,037★ (+1), 1,599 forks (=)
+- oraios/serena: 30,741★ (+5), 2,094 forks (+2)
+- DeusData/codebase-memory-mcp: 47,583★ (+22), 3,910 forks (-1)
+- tirth8205/code-review-graph: 32,413★ (+3), 2,958 forks (=)
+- colbymchenry/codegraph: 75,489★ (+51), 4,953 forks (+7)
+- abhigyanpatwari/GitNexus: 48,056★ (+3), 5,208 forks (+4)
+- jgravelle/jcodemunch-mcp: 2,809★ (=), 373 forks (=)
+- continuedev/continue: 36,340★ (+6), 5,525 forks (+1)
+- Aider-AI/aider: 49,769★ (=), 5,107 forks (=)
+- Graphify-Labs/graphify: 136,278★ (+205), 13,006 forks (+17)
+- alperhankendi/Ctxo: 74★ (+1), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
