@@ -256,22 +256,20 @@ daemonCommand
       console.log(line);
     if (health.version) {
       console.log(`  Version: ${health.version}`);
-      if (CURRENT_CLI_VERSION !== '0.0.0-dev' && health.version !== CURRENT_CLI_VERSION) {
-        let launcherVersion: string | null = null;
-        try {
-          launcherVersion = readLauncherConfig().version ?? null;
-        } catch {}
-        const drift = checkCliDaemonVersionDrift({
-          cliVersion: CURRENT_CLI_VERSION,
-          daemonVersion: health.version,
-          launcherVersion,
-          daemonRunning: true,
-        });
-        if (drift.drift && drift.warning) {
-          console.log(`  WARNING: ${drift.warning}`);
-          if (drift.remedy) {
-            console.log(`  Remedy: ${drift.remedy}`);
-          }
+      let launcherVersion: string | null = null;
+      try {
+        launcherVersion = readLauncherConfig().version ?? null;
+      } catch {}
+      const drift = checkCliDaemonVersionDrift({
+        cliVersion: CURRENT_CLI_VERSION,
+        daemonVersion: health.version,
+        launcherVersion,
+        daemonRunning: true,
+      });
+      if (drift.drift && drift.warning) {
+        console.log(`  WARNING: ${drift.warning}`);
+        if (drift.remedy) {
+          console.log(`  Remedy: ${drift.remedy}`);
         }
       }
     }

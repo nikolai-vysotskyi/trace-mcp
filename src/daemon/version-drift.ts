@@ -188,14 +188,3 @@ export async function diagnoseVersionDrift(opts?: {
     daemonRunning,
   });
 }
-
-/**
- * Human-readable warning lines for terminal reports (doctor, daemon status).
- */
-export function formatVersionDriftReport(report: CliDaemonVersionDriftReport): string[] {
-  if (!report.drift) return [];
-  const lines: string[] = ['Version drift detected:'];
-  if (report.warning) lines.push(`  ${report.warning}`);
-  if (report.remedy) lines.push(`  Remedy: ${report.remedy}`);
-  return lines;
-}

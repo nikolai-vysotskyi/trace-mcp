@@ -15,7 +15,6 @@ import {
   checkCliDaemonVersionDrift,
   compareVersions,
   diagnoseVersionDrift,
-  formatVersionDriftReport,
 } from '../version-drift.js';
 
 describe('compareVersions', () => {
@@ -114,37 +113,6 @@ describe('checkCliDaemonVersionDrift', () => {
     expect(report.drift).toBe(true);
     expect(report.status).toBe('cli_older');
     expect(report.warning).toContain('older than the control plane launcher');
-  });
-});
-
-describe('formatVersionDriftReport', () => {
-  it('returns empty array when there is no drift', () => {
-    const lines = formatVersionDriftReport({
-      drift: false,
-      cliVersion: '3.41.0',
-      daemonVersion: '3.41.0',
-      launcherVersion: '3.41.0',
-      daemonRunning: true,
-      status: 'in_sync',
-    });
-    expect(lines).toEqual([]);
-  });
-
-  it('formats warning and remedy lines when drift is present', () => {
-    const lines = formatVersionDriftReport({
-      drift: true,
-      cliVersion: '3.38.0',
-      daemonVersion: '3.41.0',
-      launcherVersion: '3.41.0',
-      daemonRunning: true,
-      status: 'cli_older',
-      warning: 'CLI is older than daemon',
-      remedy: 'Run npm i -g trace-mcp@latest',
-    });
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toContain('Version drift detected:');
-    expect(lines[1]).toContain('CLI is older than daemon');
-    expect(lines[2]).toContain('Remedy: Run npm i -g trace-mcp@latest');
   });
 });
 
