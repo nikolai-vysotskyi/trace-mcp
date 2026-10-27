@@ -102,7 +102,7 @@
     "provenance": true
   },
   "dependencies": {
-    "@ast-grep/napi": "^0.50.0",
+    "@ast-grep/napi": "^0.51.0",
     "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@parcel/watcher": "^2.5.6",
