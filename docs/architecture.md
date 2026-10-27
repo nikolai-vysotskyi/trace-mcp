@@ -2,7 +2,7 @@
 title: "Architecture — indexing pipeline, storage, and MCP server internals"
 description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server on top."
 category: concepts
-updated: 2026-10-19
+updated: 2026-10-27
 ---
 
 # Architecture
@@ -103,10 +103,29 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
   analytics.db              # session analytics (cross-project)
   activity.db               # tool-call history behind the Activity tab (7-day retention)
   savings.json              # cumulative token savings tracker
+  launcher.env              # control plane pointers (Node runtime + cli.js path)
+  bin/
+    trace                   # stable launcher shim invoked by MCP clients
+    trace-mcp -> trace      # legacy compatibility symlink
   index/
     my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
     api-server-b2c3d4e5.db
 ```
+
+### Control plane and entrypoint architecture
+
+trace-mcp maintains a deliberate separation between the client control plane and interactive shell execution:
+
+1. **Control plane launcher shim (`~/.trace/bin/trace`)**:
+   MCP clients (Claude Desktop, Cursor, Claude Code) and the desktop application configure their MCP connection to target `~/.trace/bin/trace serve`. This stable shim resolves the active Node interpreter and `dist/cli.js` entrypoint through `~/.trace/launcher.env`. When a global update lands (via `npm install -g`, `pnpm dlx`, or desktop app release), `scripts/postinstall-control-plane.mjs` updates `launcher.env` so that all connected MCP clients immediately run the updated release without modifying individual client configuration files.
+
+2. **Shell `$PATH` CLI (`trace` / `trace-mcp`)**:
+   Developers in interactive shells invoke `trace-mcp` (or `trace`) resolved via `$PATH`. In multi-runtime environments (such as Laravel Herd, nvm, fnm, or Homebrew), global npm binaries reside in specific version prefixes (e.g. `.../Herd/config/nvm/versions/node/v22.22.2/bin/trace-mcp`). If `~/.trace/bin` is not placed early in `$PATH`, shell commands can run an older CLI binary even while the background daemon and MCP clients run a newer release.
+
+3. **Version drift detection**:
+   `trace-mcp doctor` and `trace-mcp daemon status` compare the running CLI's version against the live daemon (`GET /health`) and `launcher.env`. If a version mismatch is detected, they report actionable remedies:
+   - When the CLI is older than the daemon: updating the global npm package (`npm i -g trace-mcp@latest`) or invoking via `~/.trace/bin/trace`.
+   - When the CLI is newer than the daemon: restarting the daemon (`trace-mcp daemon restart`).
 
 Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md). All databases stay local to your machine; for storage boundaries and telemetry policies, see [privacy](privacy.md).
 

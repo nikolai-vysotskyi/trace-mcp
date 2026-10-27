@@ -49,6 +49,7 @@ import {
 } from '../registry.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { diagnoseVersionDrift, type CliDaemonVersionDriftReport } from '../daemon/version-drift.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -167,6 +168,9 @@ export const doctorCommand = new Command('doctor')
       // launching us through an MCP client with no cwd needs answered.
       const serveRoot = diagnoseServeRoot();
 
+      // Version drift check between executing CLI and live daemon / launcher (TRA-2721)
+      const versionDrift = await diagnoseVersionDrift();
+
       // Single-daemon inventory (TRA-1607): every trace-mcp PID with role +
       // RSS + age, flagging duplicate daemons and orphaned sessions.
       const daemonProcesses = diagnoseDaemonProcesses();
@@ -236,6 +240,7 @@ export const doctorCommand = new Command('doctor')
             JSON.stringify(
               {
                 serveRoot,
+                versionDrift,
                 daemonProcesses,
                 registry,
                 registryFix,
@@ -258,6 +263,7 @@ export const doctorCommand = new Command('doctor')
             JSON.stringify(
               {
                 serveRoot,
+                versionDrift,
                 daemonProcesses,
                 registry,
                 topology,
@@ -276,6 +282,7 @@ export const doctorCommand = new Command('doctor')
 
       printServeRootReport(serveRoot);
       printProcessReport(daemonProcesses);
+      printVersionDriftReport(versionDrift);
       printRegistryReport(registry);
       printTopologyReport(topology);
       printDecisionsReport(decisions);
@@ -788,6 +795,7 @@ export function fixStateHygiene(
 // ---------------------------------------------------------------------------
 
 export type { DaemonProcessReport };
+export { diagnoseVersionDrift, type CliDaemonVersionDriftReport };
 
 /**
  * Inventory every trace-mcp process on this machine and flag single-daemon
@@ -817,6 +825,21 @@ export function diagnoseDaemonProcesses(): DaemonProcessReport {
 function printProcessReport(r: DaemonProcessReport): void {
   for (const line of formatProcessReport(r)) console.log(line);
   console.log('');
+}
+
+export function printVersionDriftReport(report: CliDaemonVersionDriftReport): void {
+  if (!report.drift) return;
+  const lines: string[] = [
+    `CLI version:       ${report.cliVersion}`,
+    `Daemon version:    ${report.daemonVersion ?? '(offline)'}`,
+  ];
+  if (report.launcherVersion) {
+    lines.push(`Launcher version:  ${report.launcherVersion}`);
+  }
+  lines.push('');
+  if (report.warning) lines.push(report.warning);
+  if (report.remedy) lines.push(`Remedy: ${report.remedy}`);
+  p.note(lines.join('\n'), 'Version drift detected');
 }
 
 export interface BlockedOverlapContainer {
