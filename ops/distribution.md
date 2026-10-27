@@ -7922,3 +7922,56 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+
+
+### Outreach pass, 2026-10-28 02:00 pass (TRA-2736): mention sweep clean, Graphify partial backup retry (#4834) & MATLAB AST extraction (#4836), codegraph worktree Windows spelling (#2937), deleted link watcher CPU spin (#2938), read-only index CLI (#2936) & JS/TS call binding perf (#2934), codebase-memory drift counter (#2817), GitNexus duplicate test inventory (#3743)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on PR #90 between contributor and maintainer; no action needed from us).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Report partial backups as failed and retry (PR #4834, open)*: Fixes #3769. `backup_if_protected` swallowed per-artifact `shutil.copy2` copy errors, reporting a partial backup as successful and leaving incomplete snapshot states on disk that survived subsequent rebuilds. PR flags any failed component as backup failure and forces a retry. Contrast: trace-mcp uses atomic SQLite transactions and WAL checkpoint backups, ensuring backup snapshots either succeed completely or roll back without leaving partial disk artifacts.
+  - *MATLAB AST extraction and source inheritance (PR #4836, open)*: Adds MATLAB AST extractor for `.m` files with located definitions and same-file lexical calls, separating MATLAB parsing from Objective-C heuristics. Contrast: trace-mcp relies on explicit Tree-sitter grammars and query extractors across 81 languages, avoiding runtime file-extension ambiguity.
+- **colbymchenry/codegraph**:
+  - *Recognize linked worktrees across Windows path spellings (PR #2937, open)*: On Windows, git worktrees inside checkouts (e.g. `.claude/worktrees/<name>`) failed recognition when paths used lowercase drive letters (passed by VS Code/Cursor), alternate casing, `subst` drives, or 8.3 short names. Contrast: trace-mcp canonicalizes paths through realpath and normalizes Windows drive letters across all index lookups and status reporting.
+  - *Avoid CPU spinloop on deleted link targets in Windows watcher (PR #2938, open)*: Deleting the target directory of a symlink/junction inside an indexed repository caused the watcher on Windows to pin a CPU core in a tight retry loop and drop subsequent file change events. Contrast: trace-mcp's file watcher catches `ENOENT` on link resolution, unregisters invalid targets cleanly, and preserves main watcher throughput.
+  - *Open index read-only for queries and prompt hooks (PR #2936, open)*: Concurrent executions of `codegraph query`, `files`, or the automated `prompt-hook` during `codegraph index` rebuilds threw `SQLITE_BUSY` ("database is locked"). PR forces query commands and prompt hooks to connect read-only. Contrast: trace-mcp runs SQLite in WAL mode with separate reader pools and busy handlers, supporting concurrent agent queries during background indexing passes.
+  - *Cache local bindings for bare JS/TS call resolution (PR #2934, merged)*: Resolving bare JS/TS calls previously re-checked whether the caller's own file bound the name locally for every candidate match. PR caches the local binding check lazily per match. Contrast: trace-mcp indexes file-local scope and symbol bindings directly in relational tables, resolving local references in a single indexed query.
+- **DeusData/codebase-memory-mcp**:
+  - *Agent search drift notification (PR #2817, open)*: Claude Code sessions often default to repetitive text-based Grep/Glob searches instead of using graph MCP tools; PR adds an internal drift counter and alert after repeated search tool usage. Contrast: trace-mcp ships compact prompt context, high-signal MCP schemas, and curated instruction profiles (`CLAUDE.md`, `AGENTS.md`) designed so agent models prioritize structured navigation by default.
+- **abhigyanpatwari/GitNexus**:
+  - *Test inventory completeness check (PR #3743, open)*: Duplicate test detection previously masked valid tests due to disparate setup contexts; PR exposes full test inventory and runtime case counts. Contrast: trace-mcp enforces strict harness isolation and quiet test verification (`test-quiet.mjs`) ensuring 100% deterministic test execution.
+
+**Competitor pulse (as of 2026-10-28 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,046★ (+5), 1,603 forks (+1)
+- oraios/serena: 30,771★ (+6), 2,097 forks (=)
+- DeusData/codebase-memory-mcp: 47,653★ (+16), 3,914 forks (=)
+- tirth8205/code-review-graph: 32,434★ (+3), 2,957 forks (+1)
+- colbymchenry/codegraph: 75,605★ (+12), 4,972 forks (+1)
+- abhigyanpatwari/GitNexus: 48,077★ (+5), 5,210 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,811★ (+1), 372 forks (-1)
+- continuedev/continue: 36,350★ (+3), 5,529 forks (=)
+- Aider-AI/aider: 49,780★ (+6), 5,108 forks (=)
+- Graphify-Labs/graphify: 136,920★ (+115), 13,069 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
