@@ -8,6 +8,7 @@
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
 import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from './server/bounded-shutdown.js';
+import { trackHttpConnections } from './server/http-connection-tracker.js';
 import {
   clearOwnDaemonPidFile,
   checkDaemonRuntimeIntact,
@@ -52,7 +53,6 @@ const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
 import http from 'node:http';
-import type { Socket } from 'node:net';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { stripRedundantSchemaKeyword } from './server/schema-shim.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -895,14 +895,6 @@ program
         };
 
     const sseConnections = new Set<http.ServerResponse>();
-    /**
-     * Live TCP sockets under httpServer (TRA-1017, cause B). `httpServer.close(cb)`
-     * fires its callback only after the last connection ends, so a socket the
-     * shutdown did not end wedges the whole graceful path past the deadline.
-     * The count is logged at 'Projects stopped' and in the deadline handler —
-     * the next field log names the holder instead of us guessing.
-     */
-    const openSockets = new Set<Socket>();
 
     // Per-(project, pipeline) timestamps for the 200 ms progress throttle.
     // Terminal events (reindex_completed, reindex_errored, embed_completed,
@@ -3787,6 +3779,7 @@ program
     // TRA-2056: heap-pressure guard timer — stopped here so shutdown never
     // re-triggers a restart mid-drain.
     let stopHeapGuard: (() => void) | null = null;
+    const httpConnections = trackHttpConnections(httpServer);
     let memoryScheduler: MemoryScheduler | null = null;
     let memorySchedulerInitPromise: Promise<void> | null = null;
     let activityPoker: NodeJS.Timeout | undefined;
@@ -3842,11 +3835,8 @@ program
               reason: reason ?? 'unknown',
               deadlineMs: DAEMON_SHUTDOWN_DEADLINE_MS,
               elapsedMs: Date.now() - shutdownStartedAt,
-              // TRA-1017, cause B: which sockets held httpServer.close() open.
-              // `openSockets` is tracked via the 'connection' listener below;
-              // nonzero here after SSE + transports were ended means an idle
-              // keep-alive (or another stream) the shutdown never closed.
-              openSockets: openSockets.size,
+              openSockets: httpConnections.size,
+              connectionTypes: httpConnections.snapshot(),
             },
             'Graceful shutdown exceeded its deadline — forcing exit',
           );
@@ -3959,7 +3949,11 @@ program
       // cause B (sockets slow) in the next field log — when the deadline
       // fires after this line, the holder is below, not above.
       logger.info(
-        { elapsedMs: Date.now() - projectsStopStartedAt, openSockets: openSockets.size },
+        {
+          elapsedMs: Date.now() - projectsStopStartedAt,
+          openSockets: httpConnections.size,
+          connectionTypes: httpConnections.snapshot(),
+        },
         'Projects stopped',
       );
       // TRA-1752: these close SQLite handles, so they run only after the
@@ -3978,25 +3972,31 @@ program
       clearOwnDaemonPidFile();
       // Reaching here at all is what makes this stop "clean" (TRA-671).
       recordDaemonCleanStop();
-      // TRA-1017, cause B: `httpServer.close(cb)` waits for EVERY live socket,
-      // including idle keep-alive connections no request is using — a client
-      // holding one open (desktop app, MCP client with a pooled agent) wedged
-      // the graceful path after 'Projects stopped' in 11 of 36 field overruns.
-      // SSE streams were ended and session transports closed above, so what
-      // remains should be idle: close those without touching in-flight
-      // requests (this is deliberately NOT closeAllConnections(), which would
-      // destroy requests still being served).
-      try {
-        if (typeof httpServer.closeIdleConnections === 'function') {
-          httpServer.closeIdleConnections();
-        }
-      } catch {
-        /* best-effort — close() below still runs */
-      }
+      // Stop accepting connections first, then close idle keep-alive sockets.
+      // A peer that has not finished sending headers is classified as active by
+      // Node but has no application request to drain. Abort it immediately.
       httpServer.close(() => {
         logger.info({ elapsedMs: Date.now() - shutdownStartedAt }, 'Daemon shutdown complete');
         process.exit(0);
       });
+      httpServer.closeIdleConnections();
+      const incomplete = httpConnections.snapshot()['headers:unknown'] ?? 0;
+      if (incomplete) {
+        logger.warn({ connections: incomplete }, 'Aborting incomplete HTTP headers on shutdown');
+        httpConnections.abortIncompleteHeaders();
+      }
+      // Active requests get a short chance to finish after the project drain.
+      // Anything still open is explicitly aborted before the 20-second process
+      // deadline; this also covers long-lived streams not in the SSE registry.
+      const abortTimer = setTimeout(() => {
+        if (httpConnections.size === 0) return;
+        logger.warn(
+          { connectionTypes: httpConnections.snapshot() },
+          'Aborting HTTP connections after shutdown grace period',
+        );
+        httpConnections.abortRemaining();
+      }, 2_000);
+      abortTimer.unref();
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
@@ -4060,15 +4060,6 @@ program
       typeof globalRaw.daemon_eager_load_projects === 'number'
         ? globalRaw.daemon_eager_load_projects
         : 8;
-
-    // TRA-1017, cause B: track live sockets for the shutdown instrumentation
-    // above. Attached before listen(), so no connection can arrive untracked.
-    httpServer.on('connection', (socket: Socket) => {
-      openSockets.add(socket);
-      socket.on('close', () => {
-        openSockets.delete(socket);
-      });
-    });
 
     httpServer.listen(port, host, () => {
       // Guard against shutdown race: if shutdown began before listen callback fired,
