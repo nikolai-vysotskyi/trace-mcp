@@ -8165,3 +8165,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-29 02:00 pass (TRA-2758): mention sweep clean, GitNexus MCP catalog cost eval arm (#3762) & devcontainer Trixie runtime (#3763), Graphify C# extension-method call resolution (#4849), codegraph idle stdio backend suspension (#2993) & Astro script parser (#2989), ecosystem triage ontograph/ontoindex & diffbot/mcp-code-graph
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet, no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream commit moved main; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **abhigyanpatwari/GitNexus**:
+  - *Opt-in baseline_cli arm to measure MCP catalog token cost (PR #3762, open)*: Adds a `baseline_cli` evaluation arm running a Python CLI shim instead of MCP to quantify how much of the MCP arm's cost premium (+22% to +43%, primarily ~35% extra cache-read input tokens across ~70 turns) comes from context re-transmission of the 70–84 KB MCP tool catalog. Contrast: trace-mcp provides compact, token-conscious tool definitions and compact code maps designed to stay small in agent context prompts, preventing the tool catalog itself from driving token consumption.
+  - *Packaged native runtime in devcontainer (PR #3763, open)*: Migrates devcontainers from Debian Bookworm to Debian 13 (Trixie) to supply `GLIBCXX_3.4.31` needed by packaged tree-sitter binaries. Contrast: trace-mcp distributes native binaries built for broad glibc compatibility alongside automated platform fallbacks across operating systems.
+- **Graphify-Labs/graphify**:
+  - *Extension-method call resolution in C# (PR #4849, open)*: Fixes #4828. Classic `this`-parameter extension methods (`value.Mask()`) failed to resolve callers because nominal member dispatch only searched the receiver's inheritance chain, and lowercase primitive types (`string`, `int`) were previously rejected by receiver typing. PR introduces a secondary extension dispatch arm with visibility, arity, and BCL deny-list checks. Contrast: trace-mcp represents member calls and receiver namespaces directly through Tree-sitter query rules and indexed SQLite symbol tables across 81 languages without maintaining hardcoded BCL deny-lists.
+- **colbymchenry/codegraph**:
+  - *Idle stdio backend suspension (Issue #2993, open)*: Proposes an opt-in bridge to retire idle Node engine backends after 15 minutes of inactivity while preserving client stdio pipes for Codex Desktop, dropping active process memory from ~125 MiB to ~24 MiB without triggering client-side `Transport closed` errors. Contrast: trace-mcp utilizes an efficient, lightweight daemon model with minimal idle resident memory and zero-cost connection maintenance.
+  - *Astro self-closing script parse failure (Issue #2989, open)*: Self-closing `<script is:inline set:html={...} />` tags caused regex-based block extractors to capture into subsequent `<script>` blocks, dropping symbols. Contrast: trace-mcp relies on robust Tree-sitter grammar parsers rather than regular expressions for multi-language embedded block boundaries.
+- **DeusData/codebase-memory-mcp**:
+  - *Managed binary path for agent configs (PR #2822, open)*: Fixes #2722 by honoring externally managed binary paths when generating agent configurations.
+  - *BM25 candidate ranking under post-window filters (PR #2819, open)*: Retains ranking across candidates when subsequent window filters prune items.
+- **Ecosystem & New Competitor Discovery**:
+  - *ontograph/ontoindex* (46★, release v2.2.1): Successor to deprecated `er77/code-graph-rag-mcp`. Local code graph and MCP server written in Node.js with native parsers, generating structural relationships (`CALLS`, `IMPORTS`, `EXTENDS`, `HANDLES_ROUTE`), BM25 + zvec vector search, generated agent skills, and a web UI under AGPL-3.0.
+  - *diffbot/mcp-code-graph* (402★, formerly JudiniLabs/mcp-code-graph): Deep Graph MCP server by CodeGPT; requires indexing repositories through external hosted service deepgraph.co.
+
+**Competitor pulse (as of 2026-10-29 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,062★ (+2), 1,605 forks (=)
+- oraios/serena: 30,815★ (+5), 2,101 forks (=)
+- DeusData/codebase-memory-mcp: 47,731★ (+13), 3,929 forks (+2)
+- tirth8205/code-review-graph: 32,457★ (+2), 2,958 forks (=)
+- colbymchenry/codegraph: 75,756★ (+10), 4,997 forks (+2)
+- abhigyanpatwari/GitNexus: 48,096★ (+3), 5,213 forks (=)
+- jgravelle/jcodemunch-mcp: 2,815★ (=), 372 forks (=)
+- continuedev/continue: 36,359★ (=), 5,527 forks (-1)
+- Aider-AI/aider: 49,795★ (+2), 5,110 forks (=)
+- Graphify-Labs/graphify: 137,759★ (+143), 13,133 forks (+12)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
