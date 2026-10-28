@@ -8118,3 +8118,50 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-28 22:00 pass (TRA-2753): mention sweep clean, codegraph graceful stdio shutdown (#2992) & object method namesake ranking (#2990), codebase-memory Claude search drift reminder (#2817), Serena symbol cache write throttling (#2231) & unreadable cache backup (#2230), Graphify SystemVerilog constructor node (#4848)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet, no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream commit moved main; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (2026-08-31; automated verification bot reminders completed on 2026-10-25; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Graceful stdio session shutdown on stdout failure (PR #2992, open)*: Fixes #2991. When the host process keeps stdin open but disconnects or loses the stdout response pipe, subsequent responses raised an asynchronous unhandled stdout error, crashing direct mode and proxy without running normal shutdown cleanup. PR routes stdout `error`/`close` events through existing one-shot teardown paths (direct invokes close callback, local-handshake proxy drains owned engines, legacy proxy detaches socket) and preserves error listeners during shutdown to prevent unhandled rejection escapes. Contrast: trace-mcp's MCP stdio transport attaches comprehensive stream error/close listeners and drains daemon connections gracefully upon pipe disconnection, preventing runaway orphaned daemon processes.
+  - *JS/TS object method namesake resolution ranking (PR #2990, open)*: Fixes #2945. Exported object literals (`export const d = { f() {} }`) indexed `f` alongside module exports (`export function f()`), causing `import { f }` to link to `d.f` based purely on declaration order. PR ranks member nodes behind actual module bindings, export clauses, and re-exports. Contrast: trace-mcp explicitly distinguishes member symbols from top-level module exports in its relational SQLite symbol table and hierarchical namespace indexing, ensuring module-level imports only match exported module identifiers rather than nested object properties.
+- **DeusData/codebase-memory-mcp**:
+  - *Claude Code search drift reminder hook (PR #2817, merged)*: Mitigates #509. When an agent runs Grep/Glob/Bash searches repeatedly without consulting the graph, a Claude Code `PostToolUse` hook injects an augmentation note at the 3rd, 6th, and 12th non-graph search (`[codebase-memory] This session has run N searches since its last codebase-memory-mcp tool call. Questions about callers, callees, call paths and definitions are one graph call each.`), reset upon any graph tool call (`mcp__.*codebase-memory-mcp__.*`). Contrast: trace-mcp reduces token overhead by advertising concise tool schemas and compact code maps up front, fitting directly into agent context prompts rather than intercepting external shell commands with synthetic nag messages.
+- **oraios/serena**:
+  - *Symbol cache write throttling (PR #2231, open)*: Fixes #2189. Throttles symbol cache saves during tool calls to at most once every 30 seconds (`save_all_caches_if_due`) to eliminate disk I/O thrashing during interactive tool executions, while saving unwritten caches prior to language server restarts. Contrast: trace-mcp maintains all symbol graph state inside an ACID SQLite database with WAL mode and memory-mapped reads, eliminating the need to serialize full-cache JSON/pickle blobs to disk after each tool invocation.
+  - *Preserve unreadable symbol cache files as backups (PR #2230, open)*: Fixes #2223. When a corrupted or unreadable cache file fails to load, Serena previously wiped and overwrote it with a near-empty in-memory cache upon the next tool call. PR moves unreadable files to `<name>.bak` before continuing. Contrast: trace-mcp stores index state in SQLite with page checksums, atomic transactions, and backup verification, preventing silent cache truncation.
+- **Graphify-Labs/graphify**:
+  - *SystemVerilog constructor dedicated node generation (PR #4848, open)*: Gives `new` constructors distinct AST nodes in SystemVerilog class scopes. Contrast: trace-mcp's Tree-sitter AST queries represent constructor and initializer scopes uniformly across 81 supported languages.
+
+**Competitor pulse (as of 2026-10-28 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,060★ (+5), 1,605 forks (+2)
+- oraios/serena: 30,810★ (+8), 2,101 forks (+1)
+- DeusData/codebase-memory-mcp: 47,718★ (+15), 3,927 forks (+3)
+- tirth8205/code-review-graph: 32,455★ (+5), 2,958 forks (+1)
+- colbymchenry/codegraph: 75,746★ (+23), 4,995 forks (+6)
+- abhigyanpatwari/GitNexus: 48,093★ (+4), 5,213 forks (=)
+- jgravelle/jcodemunch-mcp: 2,815★ (+1), 372 forks (=)
+- continuedev/continue: 36,359★ (+3), 5,528 forks (=)
+- Aider-AI/aider: 49,793★ (+2), 5,110 forks (+2)
+- Graphify-Labs/graphify: 137,616★ (+184), 13,121 forks (+16)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
