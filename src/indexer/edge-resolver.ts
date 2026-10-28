@@ -261,8 +261,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2c: TypeScript extends/implements edges. */
-  resolveTypeScriptHeritageEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('ts-heritage', () => _resolveHeritage(this.state, scope));
+  resolveTypeScriptHeritageEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('ts-heritage', () => _resolveHeritage(this.state, scope, signal));
   }
 
   /** Pass 2d: ES module import edges. */
