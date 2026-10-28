@@ -7975,3 +7975,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+
+
+
+### Outreach pass, 2026-10-28 08:00 pass (TRA-2746): mention sweep clean, Graphify failed doc stamp in update (#4838), codegraph video TS skipped accounting (#2943) & path alias wildcard overlap (#2969) & Kotlin receiver chain (#2972), Serena negative line index rejection (#2213) & Elixir Windows detection (#2229), GitNexus dot-directory opt-in (#3745), codebase-memory BM25 post-window filters (#2819) & ZCode client (#2808)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on PR #90 between contributor and maintainer; no action needed from us).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Failed doc stamped complete on `--update` rerun (PR #4838, open)*: Fixes #4811. During an `--update`, the merge block read extraction output from `.graphify_extract.json` and immediately overwrote that same file with the merged graph. Any subsequent rerun or Step 9 re-reading the file saw the whole graph and stamped docs whose chunks failed as completed, preventing requeueing. PR introduces an immutable run extraction snapshot before the merge. Contrast: trace-mcp updates file index status transactionally in SQLite, rolling back extraction failures and keeping dirty/unindexed status in `file_states` so failed extractions are never stamped complete.
+  - *MATLAB AST extraction (PR #4836, open)*: Adds AST extractor for `.m` files with definition/call links. Contrast: trace-mcp parses 81 languages via native Tree-sitter grammars without runtime extension ambiguity.
+- **colbymchenry/codegraph**:
+  - *MPEG-TS video skipped tally accounting (PR #2943, merged)*: Video clips with `.ts` extension were detected and skipped by transport stream header bytes, but tallied only as `processed` rather than `filesSkipped`. This caused `filesIndexed + filesSkipped + filesErrored` to fall short of `filesDiscovered`, erroneously setting `index_state = partial` and preventing recording `indexed_at_commit`. Contrast: trace-mcp detects binary content via `isBinaryFile` null-byte checks, explicitly recording skipped files with reasons so index accounting reconciles cleanly.
+  - *Path alias wildcard overlap check (PR #2969, merged)*: TS/JS `paths` alias like `"@x/*/index": ["widgets/*/index"]` matched imports like `@x/index` because prefix and suffix checks were evaluated independently without verifying `specifier.length >= prefix.length + suffix.length`. Contrast: trace-mcp adheres to standard TypeScript compiler path-mapping semantics with strict boundary matching.
+  - *Kotlin receiver chain resolution (PR #2972, merged)*: Resolves calls through properties or receiver chains on their declared types rather than falling back to guessing. Contrast: trace-mcp resolves typed symbol hierarchies and chained member expressions via indexed relational symbol graphs.
+- **oraios/serena**:
+  - *Negative line index rejection in CodeEditor (PR #2213, open)*: Line edit tools accepted negative line numbers and silently resolved them to line 0, prepending text to the start of the file rather than failing or indexing from EOF. PR rejects negative line numbers at the editor boundary. Contrast: trace-mcp validates tool inputs against JSON Schemas with strict non-negative integer bounds and enforces explicit line range validation on all edit operations.
+  - *Elixir runtime detection on Windows (PR #2229, open)*: Runs Elixir version detection via `cmd.exe` on Windows so Python can invoke `elixir.bat`. Contrast: trace-mcp bundles precompiled Tree-sitter parsers natively in Node.js, requiring zero external platform runtimes.
+- **abhigyanpatwari/GitNexus**:
+  - *Opt-in indexing of named dot directories (PR #3745, open)*: Adds `GITNEXUS_INCLUDE_DOT_DIRS` to allow selectively indexing specific dot directories (e.g. `.github`) without ingesting sensitive files in `.env*` or editor caches. Contrast: trace-mcp indexes `.github/workflows` by default for workflow intelligence while respecting `.gitignore` and excluding secret files.
+- **DeusData/codebase-memory-mcp**:
+  - *BM25 candidate ranking with post-window filters (PR #2819, open)*: Top 2000 FTS5 candidates saturated with unmatching items caused post-window filters (`file_pattern`, `kind`, `namespace`) to return 0 rows or truncated totals. PR forces full ranking over all candidates when post-window filters hide matches. Contrast: trace-mcp integrates path, symbol kind, and namespace filters directly into relational SQLite queries and CTE indexes, avoiding candidate window saturation.
+  - *ZCode client surface integration (PR #2808, open)*: Registers ZCode as 46th detected client surface (`~/.zcode/cli/config.json`). Contrast: trace-mcp auto-detects client configs across Claude Code, Cursor, Windsurf, OpenHands, and standard MCP client paths.
+
+**Competitor pulse (as of 2026-10-28 08:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,050★ (+4), 1,603 forks (=)
+- oraios/serena: 30,788★ (+17), 2,099 forks (+2)
+- DeusData/codebase-memory-mcp: 47,674★ (+21), 3,920 forks (+6)
+- tirth8205/code-review-graph: 32,440★ (+6), 2,958 forks (+1)
+- colbymchenry/codegraph: 75,654★ (+49), 4,978 forks (+6)
+- abhigyanpatwari/GitNexus: 48,082★ (+5), 5,211 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,813★ (+2), 372 forks (=)
+- continuedev/continue: 36,350★ (=), 5,528 forks (-1)
+- Aider-AI/aider: 49,786★ (+6), 5,109 forks (+1)
+- Graphify-Labs/graphify: 137,097★ (+177), 13,081 forks (+12)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
