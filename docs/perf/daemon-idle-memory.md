@@ -584,3 +584,26 @@ This is evidence of shorter, real service delays after wake, but the log does
 not identify their blocking operation or prove that memory growth caused them.
 TRA-2603 owns attribution of no-sleep stalls; keep these 39 warnings separate
 from the sleep-contaminated maximum when assessing that work.
+
+---
+
+## 2026-10-29 — SIGTERM waited on one HTTP socket after project drain
+
+Read-only field observation of installed v3.42.0 in `~/.trace/daemon.log`.
+PID 84617 received SIGTERM at 2026-10-28 18:06:22 UTC with seven loaded
+projects and no reindex in flight. `Projects stopped` followed in 78 ms,
+with seven HTTP sockets still open. At 18:06:42 UTC the 20-second shutdown
+deadline forced exit; one socket was still open. This is a confirmed slow
+shutdown after the project drain, not evidence that indexing held the stop.
+
+The daemon calls `closeIdleConnections()` before `httpServer.close()`, so the
+remaining socket was not removed by that call. The log does not identify its
+client, request, or whether it was active. TRA-2760 tracks request-level
+attribution, an isolated reproduction, and a bounded close that preserves the
+daemon's in-flight request contract. Do not infer an idle keep-alive leak from
+the socket count alone.
+
+The same read-only check found the current PID 59435 answering `/health`
+with `status: ok`. The last release workflow on 2026-10-28 had successful
+`build-app-mac` and `build-app-win` jobs. These checks do not establish
+sleep/wake recovery or a runtime reconnect under injected failure.
