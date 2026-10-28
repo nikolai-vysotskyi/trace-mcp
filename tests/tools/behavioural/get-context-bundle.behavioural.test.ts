@@ -187,6 +187,46 @@ describe('getContextBundle() — behavioural contract', () => {
     expect(content).toContain('return shared();');
   });
 
+  it.each(['é à ê', 'Привет', '漢字かな', '😀🚀'])(
+    'preserves source after %s in a bundle',
+    (prefix) => {
+      const body = 'function café() { return "exact"; }';
+      const content = `// ${prefix}\n${body}\n`;
+      const rootPath = createTmpFixture({ 'src/unicode.ts': content });
+      const store = createTestStore();
+      try {
+        const fileId = store.insertFile(
+          'src/unicode.ts',
+          'typescript',
+          'h-unicode',
+          Buffer.byteLength(content),
+        );
+        const start = content.indexOf(body);
+        const symbolId = 'src/unicode.ts::café#function';
+        store.insertSymbol(fileId, {
+          symbolId,
+          name: 'café',
+          kind: 'function',
+          fqn: 'café',
+          byteStart: start,
+          byteEnd: start + body.length,
+          lineStart: 2,
+          lineEnd: 2,
+          signature: 'function café()',
+        });
+        const result = getContextBundle(store, rootPath, {
+          symbolIds: [symbolId],
+          outputFormat: 'markdown',
+          tokenBudget: 8000,
+        });
+        expect(result.isOk()).toBe(true);
+        expect(result._unsafeUnwrap().content).toContain(body);
+      } finally {
+        removeTmpDir(rootPath);
+      }
+    },
+  );
+
   it('unknown symbol_id returns err with NOT_FOUND', () => {
     const result = getContextBundle(ctx.store, ctx.rootPath, {
       symbolIds: ['src/does-not-exist.ts::nope#function'],

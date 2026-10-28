@@ -11,6 +11,9 @@
  * This keeps the tests hermetic: no disk, no git, no external processes.
  */
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../../db/store.js';
 import { getSymbol } from '../navigation.js';
@@ -30,15 +33,15 @@ const mockedExecFileSync = vi.mocked(execFileSync);
 /** The signature text is what getSymbol falls back to when readSymbolSource fails. */
 const SIGNATURE = 'function foo(): void';
 
-function makeSymbol() {
+function makeSymbol(prefix = '') {
   return {
     symbol_id: 'src/a.ts::foo#function',
     name: 'foo',
     kind: 'function',
     fqn: 'foo',
     file_id: 1,
-    byte_start: 0,
-    byte_end: SIGNATURE.length,
+    byte_start: prefix.length,
+    byte_end: prefix.length + SIGNATURE.length,
     line_start: 1,
     line_end: 3,
     signature: SIGNATURE,
@@ -58,8 +61,8 @@ function makeFile() {
   };
 }
 
-function makeStore(): Store {
-  const sym = makeSymbol();
+function makeStore(prefix = ''): Store {
+  const sym = makeSymbol(prefix);
   const file = makeFile();
   return {
     getSymbolBySymbolId: () => sym,
@@ -145,6 +148,37 @@ describe('getSymbol — verify_against_git', () => {
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().git_mismatch).toBeUndefined();
+  });
+
+  it('compares a UTF-16 range after a non-ASCII prefix in HEAD', () => {
+    const prefix = '// 😀 漢字 é\n';
+    mockedExecFileSync.mockReturnValueOnce(gitBuf(prefix + SIGNATURE));
+    const result = getSymbol(makeStore(prefix), PROJECT_ROOT, {
+      symbolId: 'src/a.ts::foo#function',
+      verifyAgainstGit: true,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().git_mismatch).toBeUndefined();
+  });
+
+  it('does not flag identical exported source after a Unicode prefix', () => {
+    const root = mkdtempSync(join(tmpdir(), 'trace-git-unicode-'));
+    const prefix = '// 😀 漢字 é\nexport ';
+    const content = `${prefix}${SIGNATURE}`;
+    mkdirSync(join(root, 'src'));
+    writeFileSync(join(root, 'src/a.ts'), content);
+    mockedExecFileSync.mockReturnValueOnce(Buffer.from(content) as unknown as string);
+    try {
+      const result = getSymbol(makeStore(prefix), root, {
+        symbolId: 'src/a.ts::foo#function',
+        verifyAgainstGit: true,
+      });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().source).toBe(`export ${SIGNATURE}`);
+      expect(result._unsafeUnwrap().git_mismatch).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('silently skips the check when git show throws (git unavailable)', () => {

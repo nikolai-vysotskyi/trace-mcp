@@ -4,7 +4,7 @@ import path from 'node:path';
 const GITIGNORED_NOTICE = '[content hidden — file is gitignored]';
 
 /**
- * Read source code from a file using byte offsets. O(1) retrieval.
+ * Read source code using the UTF-16 offsets stored by the indexer.
  * When `gitignored` is true, returns a redaction notice instead of source.
  * .env files are exempt — their redacted content is always safe to serve.
  */
@@ -16,15 +16,7 @@ export function readByteRange(
 ): string {
   if (gitignored && !isEnvFile(filePath)) return GITIGNORED_NOTICE;
   if (byteEnd <= byteStart || byteStart < 0) return '';
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    const length = byteEnd - byteStart;
-    const buffer = Buffer.alloc(length);
-    const bytesRead = fs.readSync(fd, buffer, 0, length, byteStart);
-    return buffer.subarray(0, bytesRead).toString('utf8');
-  } finally {
-    fs.closeSync(fd);
-  }
+  return fs.readFileSync(filePath, 'utf8').slice(byteStart, byteEnd);
 }
 
 // Modifiers that may sit on the same line BEFORE a declaration's recorded
@@ -43,7 +35,7 @@ const MODIFIER_WORD =
 const LEADING_MODIFIER_RE = new RegExp(`^(?:${MODIFIER_WORD})(?:\\s+(?:${MODIFIER_WORD}))*\\s+$`);
 
 /**
- * Read source for a symbol, extending the byte range backward on the same line
+ * Read source for a symbol, extending the UTF-16 range backward on the same line
  * to include leading modifiers (export / export default / async / public / …)
  * that tree-sitter excludes from the symbol's own range.
  *
@@ -59,39 +51,35 @@ export function readSymbolSource(
   if (gitignored && !isEnvFile(filePath)) return GITIGNORED_NOTICE;
   if (byteEnd <= byteStart || byteStart < 0) return '';
 
-  // Read up to 64 bytes of context preceding the symbol, then scan back to
+  return sliceSymbolSource(fs.readFileSync(filePath, 'utf8'), byteStart, byteEnd);
+}
+
+/** Apply the same modifier extension to disk and Git HEAD source. */
+export function sliceSymbolSource(content: string, byteStart: number, byteEnd: number): string {
+  if (byteEnd <= byteStart || byteStart < 0) return '';
+
+  // Read up to 64 UTF-16 code units preceding the symbol, then scan back to
   // the start of the line and see whether it's whitespace + recognised
   // modifiers only. If so, extend the slice to include them.
   const PREFIX_PEEK = 64;
   const peekStart = Math.max(0, byteStart - PREFIX_PEEK);
   const peekLen = byteStart - peekStart;
 
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    let extendedStart = byteStart;
-    if (peekLen > 0) {
-      const peekBuf = Buffer.alloc(peekLen);
-      fs.readSync(fd, peekBuf, 0, peekLen, peekStart);
-      const peekStr = peekBuf.toString('utf8');
-      // Find last newline → start of the current line within the peek window.
-      const lastNl = peekStr.lastIndexOf('\n');
-      const lineHeadInPeek = lastNl >= 0 ? lastNl + 1 : 0;
-      const lineHead = peekStr.slice(lineHeadInPeek);
-      const stripped = lineHead.replace(/^[ \t]+/, '');
-      if (stripped.length > 0 && LEADING_MODIFIER_RE.test(stripped)) {
-        // Extend start back to the beginning of the leading whitespace so the
-        // returned source is line-aligned and includes the export prefix.
-        extendedStart = peekStart + lineHeadInPeek;
-      }
+  let extendedStart = byteStart;
+  if (peekLen > 0) {
+    const peekStr = content.slice(peekStart, byteStart);
+    // Find last newline → start of the current line within the peek window.
+    const lastNl = peekStr.lastIndexOf('\n');
+    const lineHeadInPeek = lastNl >= 0 ? lastNl + 1 : 0;
+    const lineHead = peekStr.slice(lineHeadInPeek);
+    const stripped = lineHead.replace(/^[ \t]+/, '');
+    if (stripped.length > 0 && LEADING_MODIFIER_RE.test(stripped)) {
+      // Extend start back to the beginning of the leading whitespace so the
+      // returned source is line-aligned and includes the export prefix.
+      extendedStart = peekStart + lineHeadInPeek;
     }
-
-    const length = byteEnd - extendedStart;
-    const buffer = Buffer.alloc(length);
-    const bytesRead = fs.readSync(fd, buffer, 0, length, extendedStart);
-    return buffer.subarray(0, bytesRead).toString('utf8');
-  } finally {
-    fs.closeSync(fd);
   }
+  return content.slice(extendedStart, byteEnd);
 }
 
 const ENV_BASENAME_RE = /^\.env(\..+)?$/;
