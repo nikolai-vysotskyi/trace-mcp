@@ -8030,3 +8030,47 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-10-28 14:00 pass (TRA-2749): mention sweep clean, codegraph barrel re-export retargeting (#2985) & config file invalidation (#2984) & filelock TOCTOU coordination (#2983), GitNexus CI test shard balancing (#3748), Serena Python assignment symbol range coverage (#2227)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream commit moved main; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on PR #90 between contributor and maintainer; no action needed from us).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Barrel re-export retargeting sweep (PR #2985, open)*: Fixes #2978. When `c.ts` imported `foo` through `index.ts` re-exporting from `a.ts`, changing the barrel to `b.ts` failed to rebind callers on incremental sync because the barrel declared no definition delta and the existing binding had not failed. PR inspects changed `file\0module` import pairs, returns `reExportsChangedFilePaths`, and runs `reopenReferencesThroughRetargetedModules` to sweep and rebind importer edges. Contrast: trace-mcp represents exports and re-exports explicitly as relational symbol references in SQLite (`symbols` and `symbol_references`); retargeting an export updates symbol edges and resolves callers via relational joins directly without ad-hoc multi-pass importer sweep routines.
+  - *Config file change import invalidation (PR #2984, open)*: Fixes #2977. `ReferenceResolver` cached `tsconfig.json`/`jsconfig.json` path mappings and `go.mod` module paths indefinitely because the watcher only tracked source files, causing long-running servers and syncs to preserve stale alias bindings when `@lib/*` moved. PR records a `module_config_snapshot` hash in project metadata, diffs it on every sync, drops resolver alias memos via `resetModuleConfig`, and re-opens affected module imports. Contrast: trace-mcp uses `oxc-resolver` with path alias and framework config caches keyed to file modification timestamps, automatically invalidating stale path resolutions whenever project manifests change.
+  - *Coordinated stale-lock takeover to prevent TOCTOU writer races (PR #2983, open)*: Fixes #2979. In `FileLock.acquire()`, stale lock recovery blindly unlinked the lock file upon finding a dead PID, creating a TOCTOU race window where concurrent contenders unlinked freshly created locks and operated as concurrent writers. PR implements an atomic directory claim protocol (`<lockPath>.takeover.d` with PID files, atomic directory rename semantics across POSIX/Windows). Contrast: trace-mcp uses SQLite's native WAL mode (`PRAGMA journal_mode = WAL;`) and busy handlers for all persistent state, relying on battle-tested OS-level database locking and eliminating custom application-level file locking race conditions entirely.
+- **abhigyanpatwari/GitNexus**:
+  - *Dynamic CI shard rebalancing from recorded timings (PR #3748, open)*: Balances cross-platform Vitest test shards using `vitest-shard-balancer` and GitHub Actions artifact timing snapshots, replacing static weight tables with learned profiles across Windows, macOS, and coverage suites. Contrast: trace-mcp maintains lean, targeted Vitest suites with granular path filters and fast in-memory SQLite fixtures, keeping full CI runs deterministic and rapid without complex dynamic shard balancing infrastructure.
+- **oraios/serena**:
+  - *Full statement range coverage for Python assignment symbols (PR #2227, open)*: Fixes #2226. Pyright/BasedPyright LSP reported only the identifier token as the body of variable/field symbols, causing `replace_symbol_body` to corrupt code (`x = <new> = <old>`) and `insert_after_symbol` to fail. PR introduces `PythonLanguageServerBase` and parses the file with Python's built-in `ast` parser to post-process symbol bodies into full statement ranges. Contrast: trace-mcp parses Python AST natively using Tree-sitter grammars (`python.ts`), extracting complete assignment statement ranges and symbol spans directly at index time without depending on external LSP idiosyncrasies or runtime interpreter versions.
+
+**Competitor pulse (as of 2026-10-28 14:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,052★ (+2), 1,603 forks (=)
+- oraios/serena: 30,796★ (+8), 2,099 forks (=)
+- DeusData/codebase-memory-mcp: 47,693★ (+19), 3,922 forks (+2)
+- tirth8205/code-review-graph: 32,448★ (+8), 2,959 forks (+1)
+- colbymchenry/codegraph: 75,702★ (+48), 4,985 forks (+7)
+- abhigyanpatwari/GitNexus: 48,090★ (+8), 5,212 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,814★ (+1), 372 forks (=)
+- continuedev/continue: 36,353★ (+3), 5,528 forks (=)
+- Aider-AI/aider: 49,789★ (+3), 5,108 forks (-1)
+- Graphify-Labs/graphify: 137,287★ (+190), 13,101 forks (+20)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
