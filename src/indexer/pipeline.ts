@@ -2487,7 +2487,7 @@ export class IndexingPipeline {
       // domain resolvers + file projection below.
       () => edgeResolver.resolveElectronRemovalEdges(scope),
       () => edgeResolver.resolveOrmAssociationEdges(scope),
-      () => edgeResolver.resolveTypeScriptHeritageEdges(scope),
+      () => edgeResolver.resolveTypeScriptHeritageEdges(scope, activeSignal),
       () => edgeResolver.resolveEsmImportEdges(scope, activeSignal),
       () => edgeResolver.resolvePythonImportEdges(scope),
       () => edgeResolver.resolvePhpImportEdges(scope, activeSignal),

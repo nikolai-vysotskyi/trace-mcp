@@ -4,10 +4,12 @@ import type { PipelineState } from '../pipeline-state.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
+import { isForeignKeyViolation } from '../../db/repair.js';
 
 export async function resolveTypeScriptHeritageEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store } = state;
   const changedFileIds = scope
@@ -114,10 +116,23 @@ export async function resolveTypeScriptHeritageEdges(
   if (!tsExtendsType || !tsImplementsType) return;
 
   let created = 0;
+  let skippedStale = 0;
   const insertStmt = store.db.prepare(
     `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
      VALUES (?, ?, ?, 1, NULL, 0)`,
   );
+
+  const insertEdge = (src: number, tgt: number, typeId: number): void => {
+    try {
+      insertStmt.run(src, tgt, typeId);
+      created++;
+    } catch (e) {
+      // TRA-2756 / TRA-2649 / TRA-1902: endpoint node deleted after snapshot —
+      // the edge is stale, not the pass. Anything else is a real bug: rethrow.
+      if (!isForeignKeyViolation(e)) throw e;
+      skippedStale++;
+    }
+  };
 
   await commitInChunks(
     store.db,
@@ -144,8 +159,7 @@ export async function resolveTypeScriptHeritageEdges(
           const phantom = phantoms.ensure(targetName, sourceWs, phantomKind);
           if (!before) phantomNodesCreated++;
           if (phantom.node_id === sourceNodeId) return;
-          insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId);
-          created++;
+          insertEdge(sourceNodeId, phantom.node_id, edgeTypeId);
         };
 
         // Strict workspace isolation: a candidate only matches if it shares
@@ -170,8 +184,7 @@ export async function resolveTypeScriptHeritageEdges(
           if (sameWsTargets && sameWsTargets.length > 0) {
             const targetNodeId = symbolNodeMap.get(sameWsTargets[0].id);
             if (targetNodeId == null) continue;
-            insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
-            created++;
+            insertEdge(sourceNodeId, targetNodeId, tsExtendsType.id);
             continue;
           }
           // Phantom fallback — external class (React.Component, Error, EventEmitter, etc.)
@@ -187,8 +200,7 @@ export async function resolveTypeScriptHeritageEdges(
               const target = sameWsTargets.find((t) => t.kind === 'interface') ?? sameWsTargets[0];
               const targetNodeId = symbolNodeMap.get(target.id);
               if (targetNodeId == null) continue;
-              insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
-              created++;
+              insertEdge(sourceNodeId, targetNodeId, tsImplementsType.id);
               continue;
             }
             emitPhantomEdge(targetName, tsImplementsType.id, 'interface');
@@ -197,9 +209,16 @@ export async function resolveTypeScriptHeritageEdges(
       }
     },
     RESOLVER_WRITE_CHUNK,
+    signal,
   );
 
   if (created > 0) {
     logger.info({ edges: created, phantomNodesCreated }, 'TypeScript heritage edges resolved');
+  }
+  if (skippedStale > 0) {
+    logger.warn(
+      { skipped: skippedStale },
+      'TypeScript heritage edges skipped stale node references deleted mid-pass (TRA-2756)',
+    );
   }
 }
