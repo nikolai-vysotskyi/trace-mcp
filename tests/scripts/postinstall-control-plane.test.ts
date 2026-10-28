@@ -420,17 +420,34 @@ describe('postinstall-control-plane', () => {
     }
   });
 
-  // TRA-1963: a stale cached extract (npx `~/.npm/_npx/<hash>/...`) must not
+  // TRA-1963/2743: stale npx and pnpm dlx extracts must not
   // adopt the live daemon even when it is not under a tmp root — the tree
   // can vanish with the next cache prune, and in the incident it carried an
   // older version that downgraded :3741.
-  it('refuses to adopt the live daemon from a transient npx cache', () => {
+  it.each([
+    ['npx', path.join('_npx', '6f1433a36d5760a4', 'node_modules', 'trace-mcp')],
+    [
+      'pnpm dlx',
+      path.join(
+        'Library',
+        'Caches',
+        'pnpm',
+        'dlx',
+        'abc123',
+        'node_modules',
+        '.pnpm',
+        'trace-mcp@3.41.0',
+        'node_modules',
+        'trace-mcp',
+      ),
+    ],
+  ])('refuses to adopt the live daemon from a transient %s cache', (_manager, relativePath) => {
     // Must live outside /tmp: the shared-tmp rule would refuse it for the
     // wrong reason. Staged under the real home instead (cleaned up below).
-    const base = fs.mkdtempSync(path.join(os.homedir(), 'trace-mcp-npxtest-'));
-    const fakePkg = path.join(base, '_npx', '6f1433a36d5760a4', 'node_modules', 'trace-mcp');
+    const base = fs.mkdtempSync(path.join(os.homedir(), 'trace-mcp-cachetest-'));
+    const fakePkg = path.join(base, relativePath);
     try {
-      // Sanity: this path is refused for the npx reason, not the tmp reason.
+      // Sanity: this path is refused for its cache shape, not the tmp rule.
       expect(isEphemeralInstallPath(fakePkg)).toBe(true);
       expect(path.resolve(fakePkg).startsWith(`${path.resolve('/tmp')}/`)).toBe(false);
       expect(path.resolve(fakePkg).startsWith(`${path.resolve('/private/tmp')}/`)).toBe(false);
