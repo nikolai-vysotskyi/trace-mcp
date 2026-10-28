@@ -8074,3 +8074,47 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Outreach pass, 2026-10-28 18:00 pass (TRA-2751): mention sweep clean, codegraph BEGIN IMMEDIATE migrations (#2988) & FTS special char separation (#2987) & MCP non-object args (#2986), GitNexus query native memory guard (#3749) & Go router wrapper aliases (#3750), codebase-memory managed binary path (#2822)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream commit moved main; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion on PR #90 between contributor and maintainer; no action needed from us).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Run migrations under `BEGIN IMMEDIATE` to prevent `SQLITE_BUSY` contention (PR #2988, open)*: Fixes #2980. Concurrent processes opening an index with pending migrations failed with `SQLITE_BUSY` despite a 5-second `busy_timeout`. Root cause was deferred transactions (`BEGIN`): multiple openers read the old schema version, started deferred transactions, and when the loser attempted to upgrade from read to write, SQLite returned `SQLITE_BUSY` immediately without invoking the busy handler. PR runs migration version checks and applies under `BEGIN IMMEDIATE` to take the write lock up front so racers wait on `busy_timeout`, re-reading version inside the transaction. Contrast: trace-mcp separates write ownership through its persistent background daemon and enforces explicit `PRAGMA busy_timeout = 10000` with atomic migrations at startup, ensuring CLI and MCP readers never encounter deferred lock-upgrade deadlocks.
+  - *FTS special characters separator handling (PR #2987, open)*: Fixes #2971. `QueryBuilder.searchNodesFTS` stripped FTS5 special characters with `.replace(/['"*():^]/g, '')`, inadvertently merging adjacent terms (e.g. `leaf(entry)` -> `"leafentry"*`) and producing zero search results. PR replaces stripped special characters with whitespace so each side forms an independent quoted prefix term. Contrast: trace-mcp tokenizes symbol search queries through structured word boundary and identifier camelCase/snake_case segmenters with full-text SQLite FTS5 trigram/match expressions, preventing adjacent identifier concatenation.
+  - *Strict object validation for `tools/call` arguments (PR #2986, open)*: Fixes #2981. Primitive or array `arguments` in MCP `tools/call` caused an uncaught TypeError in the server when checking properties with `in` (`Cannot use 'in' operator to search for '_cgExploreSession' in alpha`), returning an unhandled internal error. PR validates that `arguments` is an object, returning standard JSON-RPC `-32602` ("Tool arguments must be an object"). Contrast: trace-mcp schemas are strictly validated at the MCP protocol boundary via Zod schemas, returning structured protocol error responses before handlers execute.
+- **abhigyanpatwari/GitNexus**:
+  - *Mitigation and RSS bounding for runaway native memory in impact reads (PR #3749, open)*: Mitigates #3696 where upstream impact graph queries consumed up to 184 GB in native pooled graph reads. PR introduces process RSS monitoring every 200 ms during queries, exits with code 70 when exceeding 25%–75% RAM budget, caps impact BFS frontiers at 100,000 relationship rows, and enforces timeouts across pooled native connections. Contrast: trace-mcp executes relational SQLite queries with streaming iterators and bounded recursive depth for reference/call hierarchies, maintaining a predictable ~50MB memory footprint without native memory explosion or custom process killer watchdogs.
+  - *Framework router alias indexing for Go services (PR #3750, open)*: Go services registering routes on wrapper package engine aliases (e.g. `InitRoute(s *core.Engine)` where `Engine = gin.Engine`) failed to produce `Route` nodes or `HANDLES_ROUTE` edges. PR introduces `.gitnexusrc` configuration keys (`goRouterAliases`, `goHandlerWrappers`) and decoupled worker candidate extraction. Contrast: trace-mcp parses Go ASTs natively with Tree-sitter, extracting route declarations and HTTP handler associations directly from function signatures and receiver method calls.
+- **DeusData/codebase-memory-mcp**:
+  - *Externally managed binary path detection for agent configs (PR #2822, open)*: Fixes #2722. When installed via external managers (mise, Homebrew, nix, asdf), `codebase-memory-mcp install` avoided copying to `~/.local/bin` but still hardcoded that path into agent configs (Claude Code, VS Code, Zed), leaving clients pointing to missing binaries. PR detects `self_path` and writes the real managed binary path. Contrast: trace-mcp configures client surfaces with `npx -y trace-mcp` or dynamically resolved executable paths, avoiding hardcoded path assumptions across diverse package manager environments.
+
+**Competitor pulse (as of 2026-10-28 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,055★ (+3), 1,603 forks (=)
+- oraios/serena: 30,802★ (+6), 2,100 forks (+1)
+- DeusData/codebase-memory-mcp: 47,703★ (+10), 3,924 forks (+2)
+- tirth8205/code-review-graph: 32,450★ (+2), 2,957 forks (-2)
+- colbymchenry/codegraph: 75,723★ (+21), 4,989 forks (+4)
+- abhigyanpatwari/GitNexus: 48,089★ (-1), 5,213 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,814★ (=), 372 forks (=)
+- continuedev/continue: 36,356★ (+3), 5,528 forks (=)
+- Aider-AI/aider: 49,791★ (+2), 5,108 forks (=)
+- Graphify-Labs/graphify: 137,432★ (+145), 13,105 forks (+4)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
