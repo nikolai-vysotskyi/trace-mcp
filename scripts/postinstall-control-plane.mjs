@@ -108,11 +108,13 @@ function migrateLegacyHomeDir(target, legacy) {
 // as plain regexes because postinstall runs unbundled with no access to src/.
 // TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`): a stale
 // cached extract downgraded the live daemon 3.33.0 → 3.31.5.
+// TRA-2743 adds pnpm dlx: its disposable cache was observed in launcher.env.
 const EPHEMERAL_INSTALL_PATTERNS = [
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i,
   /[/\\]multica-task-\d+[/\\]/i,
   /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i,
   /[/\\]_npx[/\\]/i,
+  /[/\\]pnpm[/\\]dlx[/\\]/i,
 ];
 
 /**

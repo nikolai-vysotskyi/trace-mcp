@@ -505,6 +505,9 @@ function autoRegisterPatternMatches(absRoot: string, rawPattern: string): boolea
  * those letters (`my_npx`, `_npx-backup`) does not match.
  */
 const EPHEMERAL_NPX_CACHE_PATTERN = /[/\\]_npx[/\\]/i;
+// pnpm dlx extracts into a disposable cache under .../pnpm/dlx/<hash>/.
+// TRA-2743: postinstall once pinned launcher.env to one of these trees.
+const EPHEMERAL_PNPM_DLX_CACHE_PATTERN = /[/\\]pnpm[/\\]dlx[/\\]/i;
 
 /**
  * True when `installPath` is an install location that must never back the
@@ -539,7 +542,8 @@ export function isEphemeralInstallPath(installPath: string): boolean {
     EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
     EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
     EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs) ||
-    EPHEMERAL_NPX_CACHE_PATTERN.test(abs)
+    EPHEMERAL_NPX_CACHE_PATTERN.test(abs) ||
+    EPHEMERAL_PNPM_DLX_CACHE_PATTERN.test(abs)
   ) {
     return true;
   }
