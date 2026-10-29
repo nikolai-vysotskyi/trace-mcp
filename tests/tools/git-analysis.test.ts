@@ -1,7 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git/git-analysis.js';
+import {
+  getChurnRate,
+  getHotspots,
+  isGitRepo,
+  mapRepoPathToCwd,
+  resolveGitRoots,
+} from '../../src/tools/git/git-analysis.js';
 import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
@@ -130,7 +136,7 @@ describe('getHotspots', () => {
     expect(result.length).toBe(1);
     expect(result[0].file).toBe('src/complex.ts');
     expect(result[0].max_cyclomatic).toBe(15);
-    expect(result[0].commits).toBe(0);
+    expect(result[0].commits).toBeNull();
     expect(result[0].score).toBe(15); // complexity-only fallback
   });
 
@@ -186,5 +192,111 @@ describe('getHotspots', () => {
 
     const result = getHotspots(store, '/project', { minCyclomatic: 5 });
     expect(result).toEqual([]);
+  });
+
+  it('aggregates commits across nested child repositories in umbrella project (TRA-1690)', () => {
+    // In an umbrella repo, cwd itself is not a git repo, but has child repos sub-a and sub-b
+    mockExecFileSync.mockImplementation(
+      (cmd: string, args: readonly string[] | undefined, opts: unknown) => {
+        const argList = args as string[];
+        const options = opts as { cwd?: string };
+        if (argList[0] === 'rev-parse') {
+          if (options?.cwd === '/umbrella') {
+            throw new Error('fatal: not a git repository');
+          }
+          if (options?.cwd === '/umbrella/sub-a') return Buffer.from('/umbrella/sub-a');
+          if (options?.cwd === '/umbrella/sub-b') return Buffer.from('/umbrella/sub-b');
+          return Buffer.from(options?.cwd ?? '');
+        }
+        if (argList[0] === 'log') {
+          if (options?.cwd === '/umbrella/sub-a') {
+            return Buffer.from(
+              [
+                '__COMMIT__c1|2026-03-01T10:00:00Z|Alice',
+                'Controller.ts',
+                '__COMMIT__c2|2026-03-02T10:00:00Z|Alice',
+                'Controller.ts',
+              ].join('\n'),
+            );
+          }
+          if (options?.cwd === '/umbrella/sub-b') {
+            return Buffer.from(['__COMMIT__c3|2026-03-03T10:00:00Z|Bob', 'Service.ts'].join('\n'));
+          }
+        }
+        return Buffer.from('');
+      },
+    );
+
+    // Mock resolveGitRoots behavior through the roots
+    const roots = [
+      { dir: '/umbrella/sub-a', relToCwd: 'sub-a', isAncestor: false },
+      { dir: '/umbrella/sub-b', relToCwd: 'sub-b', isAncestor: false },
+    ];
+
+    const mappedA = mapRepoPathToCwd(roots[0], 'Controller.ts', '/umbrella');
+    const mappedB = mapRepoPathToCwd(roots[1], 'Service.ts', '/umbrella');
+    expect(mappedA).toBe('sub-a/Controller.ts');
+    expect(mappedB).toBe('sub-b/Service.ts');
+  });
+
+  it('returns commits: null for files uncovered by any nested repository in umbrella (TRA-1690)', () => {
+    mockExecFileSync.mockImplementation(
+      (cmd: string, args: readonly string[] | undefined, opts: unknown) => {
+        const argList = args as string[];
+        const options = opts as { cwd?: string };
+        if (argList[0] === 'rev-parse') {
+          // cwd itself is inside sub-a
+          return Buffer.from('/umbrella/sub-a');
+        }
+        if (argList[0] === 'log') {
+          return Buffer.from(['__COMMIT__c1|2026-03-01T10:00:00Z|Alice', 'src/sub.ts'].join('\n'));
+        }
+        return Buffer.from('');
+      },
+    );
+
+    const store = createTestStore();
+    // Sub-repo file with complexity
+    insertFileWithComplexity(store, 'src/sub.ts', 10);
+
+    const result = getHotspots(store, '/umbrella/sub-a');
+    expect(result.length).toBe(1);
+    expect(result[0].file).toBe('src/sub.ts');
+    expect(result[0].commits).toBe(1);
+  });
+
+  it('mapRepoPathToCwd strips prefix when git root is an ancestor (TRA-1690)', () => {
+    const ancestorRoot = {
+      dir: '/repo',
+      relToCwd: '..',
+      isAncestor: true,
+    };
+    // Inside cwd /repo/packages/core, git log outputs paths relative to repo root
+    expect(
+      mapRepoPathToCwd(ancestorRoot, 'packages/core/src/index.ts', '/repo/packages/core'),
+    ).toBe('src/index.ts');
+    // Path outside cwd subtree returns null
+    expect(
+      mapRepoPathToCwd(ancestorRoot, 'packages/other/src/index.ts', '/repo/packages/core'),
+    ).toBeNull();
+  });
+
+  it('mapRepoPathToCwd prefixes path when git root is a child repo (TRA-1690)', () => {
+    const childRoot = {
+      dir: '/umbrella/packages/sub',
+      relToCwd: 'packages/sub',
+      isAncestor: false,
+    };
+    expect(mapRepoPathToCwd(childRoot, 'src/index.ts', '/umbrella')).toBe(
+      'packages/sub/src/index.ts',
+    );
+  });
+
+  it('resolveGitRoots returns empty array when git fails and no nested repos exist', () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error('fatal: not a git repository');
+    });
+    expect(resolveGitRoots('/non-existent-dir-for-test')).toEqual([]);
+    expect(isGitRepo('/non-existent-dir-for-test')).toBe(false);
   });
 });
