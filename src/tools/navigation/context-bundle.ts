@@ -61,7 +61,7 @@ interface ContextBundleResult {
 
 /** Cache for batched file reads — avoids re-opening the same file for each symbol */
 class FileReadCache {
-  private cache = new Map<number, Buffer | null>();
+  private cache = new Map<number, string | null>();
 
   constructor(private rootPath: string) {}
 
@@ -75,7 +75,7 @@ class FileReadCache {
         // the benchmarks under tsx, `pnpm serve` — threw ReferenceError into
         // the catch below and got a bundle with no source at all, silently.
         const absPath = path.resolve(this.rootPath, file.path);
-        buf = fs.readFileSync(absPath);
+        buf = fs.readFileSync(absPath, 'utf8');
       } catch {
         buf = null;
       }
@@ -83,7 +83,7 @@ class FileReadCache {
     }
     if (!buf || sym.byte_start == null || sym.byte_end == null) return undefined;
     if (file.gitignored) return '[gitignored]';
-    return buf.subarray(sym.byte_start, sym.byte_end).toString('utf-8');
+    return buf.slice(sym.byte_start, sym.byte_end);
   }
 }
 
@@ -202,9 +202,8 @@ function containsAny(sym: SymbolRow, others: Array<{ sym: SymbolRow }>): boolean
  * Suggested in review, replacing a match on those symbols' names: the flag is
  * already in the row, and no real symbol can collide with it.
  */
-function isWholeFileContainer(sym: SymbolRow, file: FileRow): boolean {
-  if (sym.byte_start == null || sym.byte_end == null || file.byte_length == null) return false;
-  if (sym.byte_start !== 0 || sym.byte_end < file.byte_length) return false;
+function isWholeFileContainer(sym: SymbolRow): boolean {
+  if (sym.byte_start !== 0) return false;
   try {
     return (JSON.parse(sym.metadata ?? '{}') as { synthetic?: boolean }).synthetic === true;
   } catch {
@@ -404,7 +403,7 @@ export function getContextBundle(
   ): boolean =>
     i >= MAX_FULL_SOURCE_DEPS ||
     e.file.language === 'markdown' ||
-    isWholeFileContainer(e.sym, e.file) ||
+    isWholeFileContainer(e.sym) ||
     isContainedInAnother(emitted, unionOffset + i) ||
     containsAny(e.sym, primarySymbols);
   const depSignatureOnly = depSymbols.map((d, i) => signatureOnly(d, i, primarySymbols.length));

@@ -157,6 +157,34 @@ describe('normalizeToProjectRelative', () => {
 // ─── getSymbol ──────────────────────────────────────────────────────────────
 
 describe('getSymbol — natural inputs (TRA-1660)', () => {
+  it.each(['é à ê', 'Привет', '漢字かな', '😀🚀'])('returns exact source after %s', (prefix) => {
+    const body = 'export function café() { return "exact"; }';
+    const content = `// ${prefix}\n${body}\n`;
+    const root = makeProject({ 'src/unicode.ts': content });
+    const store = createTestStore();
+    const fileId = store.insertFile(
+      'src/unicode.ts',
+      'typescript',
+      null,
+      Buffer.byteLength(content),
+    );
+    const start = content.indexOf('function');
+    const symbolId = 'src/unicode.ts::café#function';
+    store.insertSymbol(fileId, {
+      symbolId,
+      name: 'café',
+      kind: 'function',
+      fqn: 'café',
+      signature: 'function café()',
+      byteStart: start,
+      byteEnd: content.indexOf('\n', start),
+      lineStart: 2,
+      lineEnd: 2,
+    });
+    const result = getSymbol(store, root, { symbolId });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().source).toBe(body);
+  });
   it('still resolves the exact symbol_id', () => {
     const { store, root } = setup();
     const r = getSymbol(store, root, { symbolId: 'src/auth.ts::AuthService#class' });
