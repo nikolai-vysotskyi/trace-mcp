@@ -24,7 +24,6 @@ const BARE_REQUIRE = /(?:^|[^.\w])require\s*\(/;
 const ALLOWED: Record<string, string> = {
   'src/ai/vec-extension.ts': 'sqlite-vec is optional; a static import breaks builds without it',
   'src/session/providers/sqlite-source.ts': 'better-sqlite3 native binding, loaded lazily',
-  'src/daemon/project-artifacts.ts': 'topology-db is loaded lazily to keep daemon startup cheap',
   'src/cli/install-app.ts': 'reads package.json version at runtime, not a module import',
   'src/utils/stall-watchdog.ts':
     'require() calls live inside the eval() worker source string (TRA-1957): ' +

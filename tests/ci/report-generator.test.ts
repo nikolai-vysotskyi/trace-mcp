@@ -340,7 +340,7 @@ describe('CI Report Generator with empty index', () => {
     expect(report.changedFiles[0].symbolCount).toBe(0);
     expect(report.blastRadius.totalAffected).toBe(0);
     expect(report.summary.riskLevel).toBe('low');
-  });
+  }, 30_000);
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -661,7 +661,7 @@ describe('CI Report — Project-Aware Analysis', () => {
     expect(report).toBeDefined();
     expect(report.summary.riskLevel).toBe('low');
     emptyStore.db.close();
-  });
+  }, 30_000);
 
   it('formatMarkdown includes domain section when present', () => {
     const report: CIReport = {

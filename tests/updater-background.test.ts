@@ -116,6 +116,8 @@ describe('scheduleBackgroundUpdate (TRA-703)', () => {
     expect(vi.mocked(execFile)).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(60_000);
+    // Allow the background async IIFE promises to resolve
+    await Promise.resolve();
     const installCalls = vi
       .mocked(execFile)
       .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
