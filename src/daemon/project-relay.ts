@@ -40,6 +40,15 @@ function resolveRegisteredRoot(targetRoot: string): { root: string; dbPath: stri
   return entry ? { root: entry.root, dbPath: entry.dbPath } : null;
 }
 
+export const DEFAULT_MAX_RELAY_TARGETS = 64;
+
+interface DaemonRelayEntry {
+  handle: ServerHandle;
+  managed: ManagedProject;
+  root: string;
+  lastAccessedAt: number;
+}
+
 /**
  * Daemon/HTTP relay. `projectManager`/`resourcePool` are the same instances
  * cli.ts's `serve-http` command already constructs and uses for every
@@ -50,6 +59,7 @@ function resolveRegisteredRoot(targetRoot: string): { root: string; dbPath: stri
 export function createDaemonProjectRelay(
   projectManager: ProjectManager,
   resourcePool: ProjectResourcePool,
+  maxTargets = DEFAULT_MAX_RELAY_TARGETS,
 ): ProjectRelay {
   /**
    * Cached handles paired with the exact ManagedProject instance they were
@@ -60,7 +70,7 @@ export function createDaemonProjectRelay(
    * cache entry whose instance is no longer managed is stale and must be
    * dropped + reopened, never served (TRA-1738).
    */
-  const cache = new Map<string, { handle: ServerHandle; managed: ManagedProject; root: string }>();
+  const cache = new Map<string, DaemonRelayEntry>();
 
   const dropEntry = (handle: ServerHandle): void => {
     for (const [key, entry] of cache) {
@@ -70,6 +80,35 @@ export function createDaemonProjectRelay(
       handle.dispose();
     } catch {
       /* best-effort */
+    }
+  };
+
+  const ensureCapacity = (): void => {
+    const entriesByHandle = new Map<ServerHandle, DaemonRelayEntry>();
+    for (const entry of cache.values()) {
+      entriesByHandle.set(entry.handle, entry);
+    }
+    if (entriesByHandle.size < maxTargets) return;
+
+    // 1. Stale-first: drop entries whose ManagedProject is no longer active in ProjectManager
+    for (const [handle, entry] of entriesByHandle) {
+      const live = projectManager.getProject(entry.root);
+      if (!live || live !== entry.managed) {
+        dropEntry(handle);
+        entriesByHandle.delete(handle);
+        if (entriesByHandle.size < maxTargets) return;
+      }
+    }
+
+    // 2. If still at capacity, evict the least recently accessed handle (LRU)
+    let oldest: { handle: ServerHandle; lastAccessedAt: number } | null = null;
+    for (const [handle, entry] of entriesByHandle) {
+      if (!oldest || entry.lastAccessedAt < oldest.lastAccessedAt) {
+        oldest = { handle, lastAccessedAt: entry.lastAccessedAt };
+      }
+    }
+    if (oldest) {
+      dropEntry(oldest.handle);
     }
   };
 
@@ -83,6 +122,7 @@ export function createDaemonProjectRelay(
       if (direct) {
         const live = projectManager.getProject(direct.root);
         if (live && live === direct.managed) {
+          direct.lastAccessedAt = Date.now();
           projectManager.touchActivity(direct.root);
           return direct.handle;
         }
@@ -113,12 +153,15 @@ export function createDaemonProjectRelay(
       const byRoot = cache.get(resolved.root);
       if (byRoot) {
         if (byRoot.managed === managed) {
+          byRoot.lastAccessedAt = Date.now();
           if (abs !== resolved.root) cache.set(abs, byRoot);
           projectManager.touchActivity(resolved.root);
           return byRoot.handle;
         }
         dropEntry(byRoot.handle);
       }
+
+      ensureCapacity();
 
       // TRA-1738: deliberately getSharedDeps(), NOT acquire(). The relay's
       // cached handle is not a client session, but acquire() bumps the
@@ -145,12 +188,31 @@ export function createDaemonProjectRelay(
       // lastAccessedAt froze at load time) and churn through
       // unload → full lazy reload on every TTL window (TRA-1738 review).
       projectManager.touchActivity(resolved.root);
-      const entry = { handle, managed, root: resolved.root };
+      const entry: DaemonRelayEntry = {
+        handle,
+        managed,
+        root: resolved.root,
+        lastAccessedAt: Date.now(),
+      };
       cache.set(resolved.root, entry);
       if (abs !== resolved.root) {
         cache.set(abs, entry);
       }
       return handle;
+    },
+    invalidateProject(targetRoot: string): void {
+      const abs = path.resolve(targetRoot);
+      const resolved = resolveRegisteredRoot(abs);
+      const canonical = resolved?.root ?? abs;
+      const toDrop = new Set<ServerHandle>();
+      for (const [key, entry] of cache.entries()) {
+        if (entry.root === canonical || entry.root === abs || key === canonical || key === abs) {
+          toDrop.add(entry.handle);
+        }
+      }
+      for (const handle of toDrop) {
+        dropEntry(handle);
+      }
     },
     dispose() {
       const seen = new Set<ServerHandle>();
@@ -168,14 +230,73 @@ export function createDaemonProjectRelay(
   };
 }
 
+interface LightweightRelayEntry {
+  handle: ServerHandle;
+  db: Database.Database;
+  root: string;
+  lastAccessedAt: number;
+}
+
 /**
  * Stdio/no-daemon relay. Opens each target project's already-indexed database
  * read-only-in-spirit (no indexAll(), no FileWatcher) and caches the result
  * for the caller's lifetime. Used by LocalBackend, which owns exactly one
  * project and has no ProjectManager/ResourcePool to reuse.
  */
-export function createLightweightProjectRelay(): ProjectRelay {
-  const cache = new Map<string, { handle: ServerHandle; db: Database.Database }>();
+export function createLightweightProjectRelay(
+  maxTargets = DEFAULT_MAX_RELAY_TARGETS,
+): ProjectRelay {
+  const cache = new Map<string, LightweightRelayEntry>();
+
+  const dropEntry = (handle: ServerHandle): void => {
+    let dbToClose: Database.Database | null = null;
+    for (const [key, entry] of cache) {
+      if (entry.handle === handle) {
+        dbToClose = entry.db;
+        cache.delete(key);
+      }
+    }
+    try {
+      handle.dispose();
+    } catch {
+      /* best-effort */
+    }
+    if (dbToClose) {
+      try {
+        dbToClose.close();
+      } catch {
+        /* best-effort */
+      }
+    }
+  };
+
+  const ensureCapacity = (): void => {
+    const entriesByHandle = new Map<ServerHandle, LightweightRelayEntry>();
+    for (const entry of cache.values()) {
+      entriesByHandle.set(entry.handle, entry);
+    }
+    if (entriesByHandle.size < maxTargets) return;
+
+    // 1. Stale-first: drop entries whose target directory or DB no longer exists on disk
+    for (const [handle, entry] of entriesByHandle) {
+      if (!fs.existsSync(entry.root)) {
+        dropEntry(handle);
+        entriesByHandle.delete(handle);
+        if (entriesByHandle.size < maxTargets) return;
+      }
+    }
+
+    // 2. If still at capacity, evict least recently accessed handle (LRU)
+    let oldest: { handle: ServerHandle; lastAccessedAt: number } | null = null;
+    for (const [handle, entry] of entriesByHandle) {
+      if (!oldest || entry.lastAccessedAt < oldest.lastAccessedAt) {
+        oldest = { handle, lastAccessedAt: entry.lastAccessedAt };
+      }
+    }
+    if (oldest) {
+      dropEntry(oldest.handle);
+    }
+  };
 
   return {
     listRelayTargets() {
@@ -184,7 +305,10 @@ export function createLightweightProjectRelay(): ProjectRelay {
     async openProject(targetRoot) {
       const abs = path.resolve(targetRoot);
       const cached = cache.get(abs);
-      if (cached) return cached.handle;
+      if (cached) {
+        cached.lastAccessedAt = Date.now();
+        return cached.handle;
+      }
 
       const resolved = resolveRegisteredRoot(abs);
       if (!resolved) return null;
@@ -192,8 +316,17 @@ export function createLightweightProjectRelay(): ProjectRelay {
       // index build here; this path is read-only access to an existing index.
       if (!fs.existsSync(resolved.dbPath)) return null;
 
+      const byRoot = cache.get(resolved.root);
+      if (byRoot) {
+        byRoot.lastAccessedAt = Date.now();
+        if (abs !== resolved.root) cache.set(abs, byRoot);
+        return byRoot.handle;
+      }
+
       const configResult = await loadConfig(resolved.root);
       if (configResult.isErr()) return null;
+
+      ensureCapacity();
 
       const db = initializeDatabase(resolved.dbPath);
       const store = new Store(db);
@@ -205,18 +338,44 @@ export function createLightweightProjectRelay(): ProjectRelay {
         serveFullSurface: true,
         skipUsagePing: true,
       });
-      cache.set(abs, { handle, db });
+      const entry: LightweightRelayEntry = {
+        handle,
+        db,
+        root: resolved.root,
+        lastAccessedAt: Date.now(),
+      };
+      cache.set(resolved.root, entry);
+      if (abs !== resolved.root) {
+        cache.set(abs, entry);
+      }
       return handle;
     },
+    invalidateProject(targetRoot: string): void {
+      const abs = path.resolve(targetRoot);
+      const resolved = resolveRegisteredRoot(abs);
+      const canonical = resolved?.root ?? abs;
+      const toDrop = new Set<ServerHandle>();
+      for (const [key, entry] of cache.entries()) {
+        if (entry.root === canonical || entry.root === abs || key === canonical || key === abs) {
+          toDrop.add(entry.handle);
+        }
+      }
+      for (const handle of toDrop) {
+        dropEntry(handle);
+      }
+    },
     dispose() {
-      for (const { handle, db } of cache.values()) {
+      const seen = new Set<ServerHandle>();
+      for (const entry of cache.values()) {
+        if (seen.has(entry.handle)) continue;
+        seen.add(entry.handle);
         try {
-          handle.dispose();
+          entry.handle.dispose();
         } catch {
           /* best-effort */
         }
         try {
-          db.close();
+          entry.db.close();
         } catch {
           /* best-effort */
         }

@@ -30,7 +30,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   collectIdleSessions,
   dropSessionBookkeeping,
+  resolveSessionIdleMs,
   teardownProjectBookkeeping,
+  DEFAULT_SESSION_IDLE_MS,
+  SESSION_IDLE_MIN_MS,
+  SESSION_IDLE_MAX_MS,
   type ClosableTransport,
   type DisposableHandle,
   type SessionBookkeepingDeps,
@@ -208,5 +212,46 @@ describe('dead-client session pins the pool until the sweep closes it (TRA-1627)
     await transport.close();
     expect(pool.get(ROOT_A)).toBe(0);
     expect(released).toEqual([ROOT_A]);
+  });
+});
+
+describe('resolveSessionIdleMs (TRA-1719)', () => {
+  it('defaults to 15 minutes (half of default 30 min project idle unload)', () => {
+    expect(resolveSessionIdleMs()).toBe(15 * 60 * 1000);
+    expect(resolveSessionIdleMs(undefined)).toBe(DEFAULT_SESSION_IDLE_MS);
+    expect(resolveSessionIdleMs(30)).toBe(15 * 60 * 1000);
+  });
+
+  it('computes half the project unload TTL when within bounds', () => {
+    expect(resolveSessionIdleMs(40)).toBe(20 * 60 * 1000);
+    expect(resolveSessionIdleMs(60)).toBe(30 * 60 * 1000);
+    expect(resolveSessionIdleMs(90)).toBe(45 * 60 * 1000);
+  });
+
+  it('clamps to lower bound of 5 minutes', () => {
+    expect(resolveSessionIdleMs(8)).toBe(SESSION_IDLE_MIN_MS);
+    expect(resolveSessionIdleMs(4)).toBe(5 * 60 * 1000);
+    expect(resolveSessionIdleMs(1)).toBe(5 * 60 * 1000);
+  });
+
+  it('clamps to upper bound of 1 hour', () => {
+    expect(resolveSessionIdleMs(140)).toBe(SESSION_IDLE_MAX_MS);
+    expect(resolveSessionIdleMs(200)).toBe(60 * 60 * 1000);
+  });
+
+  it('reads project_idle_unload_minutes from config objects', () => {
+    expect(resolveSessionIdleMs({ project_idle_unload_minutes: 50 })).toBe(25 * 60 * 1000);
+    expect(resolveSessionIdleMs({ project_idle_unload_minutes: 6 })).toBe(SESSION_IDLE_MIN_MS);
+  });
+
+  it('handles invalid or non-positive values with default', () => {
+    expect(resolveSessionIdleMs(0)).toBe(DEFAULT_SESSION_IDLE_MS);
+    expect(resolveSessionIdleMs(-10)).toBe(DEFAULT_SESSION_IDLE_MS);
+    expect(resolveSessionIdleMs(Number.NaN)).toBe(DEFAULT_SESSION_IDLE_MS);
+  });
+
+  it('accepts milliseconds if value > 10_000', () => {
+    expect(resolveSessionIdleMs(30 * 60 * 1000)).toBe(15 * 60 * 1000);
+    expect(resolveSessionIdleMs(60 * 60 * 1000)).toBe(30 * 60 * 1000);
   });
 });

@@ -52,6 +52,8 @@ export interface ProjectRelay {
    *  Returns null when `targetRoot` isn't a registered project, or is
    *  registered but has never been indexed. */
   openProject(targetRoot: string): Promise<{ toolHandlers: ToolHandlerMap } | null>;
+  /** Invalidate and dispose any cached handles/resources for target project root. Idempotent. */
+  invalidateProject(root: string): void;
   /** Release everything this relay opened. Idempotent. */
   dispose(): void;
 }

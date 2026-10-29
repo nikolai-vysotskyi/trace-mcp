@@ -116,6 +116,33 @@ export function teardownProjectBookkeeping(root: string, deps: TeardownDeps): vo
   }
 }
 
+export const SESSION_IDLE_MIN_MS = 5 * 60 * 1000;
+export const SESSION_IDLE_MAX_MS = 60 * 60 * 1000;
+export const DEFAULT_SESSION_IDLE_MS = 15 * 60 * 1000;
+
+/**
+ * Resolve session idle reap threshold (TRA-1719).
+ * Set to half the project idle unload TTL, clamped to [5 min, 1 h].
+ * Default (with 30 min project unload TTL): 15 min.
+ */
+export function resolveSessionIdleMs(projectIdleUnload?: unknown): number {
+  let minutes: number | undefined;
+  if (typeof projectIdleUnload === 'object' && projectIdleUnload !== null) {
+    const obj = projectIdleUnload as Record<string, unknown>;
+    if (typeof obj.project_idle_unload_minutes === 'number') {
+      minutes = obj.project_idle_unload_minutes;
+    }
+  } else if (typeof projectIdleUnload === 'number') {
+    // Milliseconds (e.g. > 10_000) converted to minutes; otherwise treat as minutes
+    minutes = projectIdleUnload > 10_000 ? projectIdleUnload / 60_000 : projectIdleUnload;
+  }
+  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) {
+    minutes = 30;
+  }
+  const halfTtlMs = Math.round((minutes * 60 * 1000) / 2);
+  return Math.min(SESSION_IDLE_MAX_MS, Math.max(SESSION_IDLE_MIN_MS, halfTtlMs));
+}
+
 /**
  * Select sessions idle longer than `idleMs` — the reap list for the
  * daemon's stale-session sweep (TRA-1627).
