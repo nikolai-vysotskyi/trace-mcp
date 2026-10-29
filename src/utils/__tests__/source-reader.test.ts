@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSymbolSource } from '../source-reader.js';
+import { readByteRange, readSymbolSource } from '../source-reader.js';
 
 function writeTempFile(content: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'source-reader-test-'));
@@ -36,6 +36,17 @@ describe('readSymbolSource', () => {
     expect(readSymbolSource(file, byteStart, content.length - 1, false)).toBe(
       'export function foo() {}',
     );
+  });
+
+  it.each(['é à ê', 'Привет', '漢字かな', '😀🚀'])('uses UTF-16 offsets after %s', (prefix) => {
+    const source = 'export function café() { return "ok"; }';
+    const content = `// ${prefix}\n${source}\n`;
+    const file = writeTempFile(content);
+    cleanup.push(file);
+    const start = content.indexOf('function');
+    const end = content.indexOf('\n', start);
+    expect(readSymbolSource(file, start, end)).toBe(source);
+    expect(readByteRange(file, start, end)).toBe(source.slice('export '.length));
   });
 
   it('does not extend past unrelated preceding text', () => {

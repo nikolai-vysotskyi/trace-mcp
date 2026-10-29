@@ -34,7 +34,7 @@ import {
   type FusionWeights,
   signalFusion,
 } from '../../scoring/signal-fusion.js';
-import { readSymbolSource } from '../../utils/source-reader.js';
+import { readSymbolSource, sliceSymbolSource } from '../../utils/source-reader.js';
 import { normalizeToProjectRelative } from '../../utils/security.js';
 import { resolveSymbolFlexible } from '../shared/resolve.js';
 import { minMax } from '../../util/minmax.js';
@@ -51,7 +51,7 @@ interface GetSymbolResult {
 }
 
 /**
- * Read the byte range [byteStart, byteEnd) from HEAD:<relPath> via `git show`.
+ * Read the indexed UTF-16 range [byteStart, byteEnd) from HEAD:<relPath> via `git show`.
  * Returns null when git is unavailable, the file is not tracked, or any other
  * error occurs — callers should treat null as "check skipped".
  *
@@ -71,11 +71,10 @@ function readGitHeadSlice(
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 3000,
       env: safeGitEnv(),
-      // Return a Buffer so we can safely slice bytes before decoding.
+      // Keep the raw output as a Buffer, then decode before applying UTF-16 offsets.
       encoding: 'buffer',
     });
-    const slice = raw.slice(byteStart, byteEnd);
-    return slice.toString('utf8');
+    return sliceSymbolSource(raw.toString('utf8'), byteStart, byteEnd);
   } catch {
     // git not available, file not tracked, detached HEAD with no commits, etc.
     return null;
