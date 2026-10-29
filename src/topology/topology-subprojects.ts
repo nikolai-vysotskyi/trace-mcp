@@ -299,13 +299,35 @@ export class SubprojectOperations {
 
   getSubproject(nameOrRoot: string, projectRoot?: string): SubprojectRow | undefined {
     if (projectRoot) {
-      return this.db
+      const direct = this.db
         .prepare('SELECT * FROM subprojects WHERE (name = ? OR repo_root = ?) AND project_root = ?')
         .get(nameOrRoot, nameOrRoot, projectRoot) as SubprojectRow | undefined;
+      if (direct) return direct;
+    } else {
+      const direct = this.db
+        .prepare('SELECT * FROM subprojects WHERE name = ? OR repo_root = ?')
+        .get(nameOrRoot, nameOrRoot) as SubprojectRow | undefined;
+      if (direct) return direct;
     }
-    return this.db
-      .prepare('SELECT * FROM subprojects WHERE name = ? OR repo_root = ?')
-      .get(nameOrRoot, nameOrRoot) as SubprojectRow | undefined;
+    // TRA-2032: Probe realpath on miss for symlink alias tolerance
+    try {
+      const real = fs.realpathSync(nameOrRoot);
+      if (real !== nameOrRoot) {
+        if (projectRoot) {
+          return this.db
+            .prepare(
+              'SELECT * FROM subprojects WHERE (name = ? OR repo_root = ?) AND project_root = ?',
+            )
+            .get(real, real, projectRoot) as SubprojectRow | undefined;
+        }
+        return this.db
+          .prepare('SELECT * FROM subprojects WHERE name = ? OR repo_root = ?')
+          .get(real, real) as SubprojectRow | undefined;
+      }
+    } catch {
+      // Ignore missing or inaccessible paths
+    }
+    return undefined;
   }
 
   getSubprojectsByProject(projectRoot: string): SubprojectRow[] {
@@ -325,15 +347,128 @@ export class SubprojectOperations {
   /**
    * Remove all topology data associated with a repo root:
    * subprojects (+ cascading client_calls), services (+ cascading contracts,
-   * endpoints, events, edges, snapshots).
+   * endpoints, events, edges, snapshots). Tolerates symlink aliases
+   * (e.g. `/tmp` vs `/private/tmp`, `/var` vs `/private/var` on macOS).
    * Returns counts of deleted rows for logging.
    */
-  removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
+  removeByRepoRoot(
+    repoRoot: string,
+    projectRoot?: string,
+  ): { subprojects: number; services: number } {
     const result = { subprojects: 0, services: 0 };
+    const absRoot = path.resolve(repoRoot);
+    const candidateRepoRoots = new Set<string>([repoRoot, absRoot]);
+    let realRepo: string | undefined;
+    try {
+      realRepo = fs.realpathSync(absRoot);
+      candidateRepoRoots.add(realRepo);
+    } catch {
+      // Path may no longer exist on disk
+    }
 
-    const services = this.db
-      .prepare('SELECT id FROM services WHERE repo_root = ?')
-      .all(repoRoot) as Array<{ id: number }>;
+    for (const r of Array.from(candidateRepoRoots)) {
+      if (r.startsWith('/private/')) {
+        candidateRepoRoots.add(r.slice('/private'.length));
+      } else if (r.startsWith('/tmp/') || r.startsWith('/var/')) {
+        candidateRepoRoots.add(`/private${r}`);
+      }
+    }
+
+    const effectiveProjectRoot = projectRoot ?? repoRoot;
+    const absProjRoot = path.resolve(effectiveProjectRoot);
+    const candidateProjectRoots = new Set<string>([effectiveProjectRoot, absProjRoot]);
+    let realProj: string | undefined;
+    try {
+      realProj = fs.realpathSync(absProjRoot);
+      candidateProjectRoots.add(realProj);
+    } catch {
+      // Path may no longer exist on disk
+    }
+
+    for (const r of Array.from(candidateProjectRoots)) {
+      if (r.startsWith('/private/')) {
+        candidateProjectRoots.add(r.slice('/private'.length));
+      } else if (r.startsWith('/tmp/') || r.startsWith('/var/')) {
+        candidateProjectRoots.add(`/private${r}`);
+      }
+    }
+
+    // TRA-2782: Discover project_root aliases by checking registered project roots
+    // against the canonical path of this project. Only project roots matching realProj
+    // are included — preserving other projects' cross-repo subproject links intact.
+    if (realProj) {
+      try {
+        const distinctProjRoots = this.db
+          .prepare('SELECT DISTINCT project_root FROM subprojects')
+          .all() as Array<{ project_root: string }>;
+        for (const row of distinctProjRoots) {
+          if (candidateProjectRoots.has(row.project_root)) continue;
+          try {
+            if (fs.realpathSync(row.project_root) === realProj) {
+              candidateProjectRoots.add(row.project_root);
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+
+    // Collect all subprojects scoped strictly to this project's candidate roots.
+    const selectScopedSub = this.db.prepare(
+      'SELECT id, repo_root, project_root FROM subprojects WHERE project_root = ?',
+    );
+    const subprojects: Array<{ id: number }> = [];
+    const seenSubIds = new Set<number>();
+
+    for (const projCandidate of Array.from(candidateProjectRoots)) {
+      const rows = selectScopedSub.all(projCandidate) as Array<{
+        id: number;
+        repo_root: string;
+        project_root: string;
+      }>;
+      for (const row of rows) {
+        if (!seenSubIds.has(row.id)) {
+          seenSubIds.add(row.id);
+          subprojects.push({ id: row.id });
+        }
+        candidateProjectRoots.add(row.project_root);
+        if (projectRoot === undefined || projectRoot === repoRoot) {
+          candidateRepoRoots.add(row.repo_root);
+        }
+      }
+    }
+
+    // If removing a standalone subproject (repoRoot != projectRoot), also delete that
+    // specific subproject row without wiping other subprojects in the project.
+    if (projectRoot !== undefined && projectRoot !== repoRoot) {
+      const selectSingleSub = this.db.prepare(
+        'SELECT id FROM subprojects WHERE repo_root = ? AND project_root = ?',
+      );
+      for (const repoCandidate of candidateRepoRoots) {
+        for (const projCandidate of candidateProjectRoots) {
+          const rows = selectSingleSub.all(repoCandidate, projCandidate) as Array<{
+            id: number;
+          }>;
+          for (const row of rows) {
+            if (!seenSubIds.has(row.id)) {
+              seenSubIds.add(row.id);
+              subprojects.push({ id: row.id });
+            }
+          }
+        }
+      }
+    }
+
+    const services: Array<{ id: number }> = [];
+    const selectSvc = this.db.prepare('SELECT id FROM services WHERE repo_root = ?');
+    const seenSvcIds = new Set<number>();
+    for (const root of candidateRepoRoots) {
+      for (const row of selectSvc.all(root) as Array<{ id: number }>) {
+        if (!seenSvcIds.has(row.id)) {
+          seenSvcIds.add(row.id);
+          services.push(row);
+        }
+      }
+    }
 
     // Whole removal runs in ONE transaction so a mid-way FK failure can't leave
     // a half-deleted repo behind.
@@ -344,13 +479,13 @@ export class SubprojectOperations {
         // api_endpoints) throws "FOREIGN KEY constraint failed" whenever ANOTHER
         // repo's client call matched one of those endpoints. Detach those
         // references first (the column is nullable), then the cascade is safe.
-        const placeholders = services.map(() => '?').join(',');
+        const svcPlaceholders = services.map(() => '?').join(',');
         const ids = services.map((s) => s.id);
         this.db
           .prepare(
             `UPDATE client_calls SET matched_endpoint_id = NULL
              WHERE matched_endpoint_id IN (
-               SELECT id FROM api_endpoints WHERE service_id IN (${placeholders})
+               SELECT id FROM api_endpoints WHERE service_id IN (${svcPlaceholders})
              )`,
           )
           .run(...ids);
@@ -363,16 +498,17 @@ export class SubprojectOperations {
         result.services = services.length;
       }
 
-      // Delete subproject entry last. source_repo_id cascades, but
+      // Delete subproject entries last. source_repo_id cascades, but
       // client_calls.target_repo_id REFERENCES subprojects(id) has NO `ON DELETE`
       // — other repos pointing AT this one would block the delete. Detach first.
-      const sub = this.getSubproject(repoRoot);
-      if (sub) {
-        this.db
-          .prepare('UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id = ?')
-          .run(sub.id);
-        this.deleteSubproject(sub.id);
-        result.subprojects = 1;
+      if (subprojects.length > 0) {
+        for (const sub of subprojects) {
+          this.db
+            .prepare('UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id = ?')
+            .run(sub.id);
+          this.deleteSubproject(sub.id);
+        }
+        result.subprojects = subprojects.length;
       }
     })();
 

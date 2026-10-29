@@ -219,10 +219,12 @@ describe('packaged daemon topology cleanup on project delete (TRA-2778)', () => 
       expect(subRoots).toContain(otherRoot);
       expect(subRoots).not.toContain(canonicalTestRoot);
       expect(subRoots).not.toContain(testRoot);
+      expect(subRoots).not.toContain(canonicalTestRoot);
 
       expect(svcRoots).toContain(otherRoot);
       expect(svcRoots).not.toContain(canonicalTestRoot);
       expect(svcRoots).not.toContain(testRoot);
+      expect(svcRoots).not.toContain(canonicalTestRoot);
     } finally {
       db.close();
     }
@@ -234,5 +236,94 @@ describe('packaged daemon topology cleanup on project delete (TRA-2778)', () => 
     const registeredRoots = Object.keys(registryContent.projects ?? {});
     expect(registeredRoots).not.toContain(canonicalTestRoot);
     expect(registeredRoots).not.toContain(testRoot);
+  });
+
+  it('deletes project in /tmp symlink alias cleanly removing topology and registry rows', async () => {
+    if (
+      process.platform !== 'darwin' ||
+      !fs.existsSync('/tmp') ||
+      fs.realpathSync('/tmp') === '/tmp'
+    ) {
+      return;
+    }
+    const tmpProj = fs.mkdtempSync('/tmp/trace-topo-test-');
+    const canonicalTmpProj = fs.realpathSync(tmpProj);
+
+    fs.mkdirSync(path.join(tmpProj, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(tmpProj, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    fs.writeFileSync(
+      path.join(tmpProj, 'package.json'),
+      '{"name":"fixture-tmp","version":"0.0.0"}\n',
+    );
+
+    const topoDbPath = path.join(tmpHome, 'topology.db');
+    const db = new Database(topoDbPath);
+    try {
+      db.prepare(`
+        INSERT INTO subprojects (name, repo_root, project_root) VALUES (?, ?, ?)
+      `).run('tmp-proj', tmpProj, tmpProj);
+      db.prepare(`
+        INSERT INTO services (name, repo_root, db_path, service_type) VALUES (?, ?, ?, ?)
+      `).run('tmp-svc', tmpProj, path.join(tmpHome, 'index', 'tmp.db'), 'backend');
+    } finally {
+      db.close();
+    }
+
+    // Register with canonicalTmpProj in registry.json
+    const regPath = path.join(tmpHome, 'registry.json');
+    const reg = JSON.parse(fs.readFileSync(regPath, 'utf-8'));
+    reg.projects[canonicalTmpProj] = {
+      name: 'tmp-project',
+      root: canonicalTmpProj,
+      dbPath: path.join(tmpHome, 'index', 'tmp.db'),
+      lastIndexed: new Date().toISOString(),
+      addedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(regPath, JSON.stringify(reg, null, 2));
+
+    try {
+      // DELETE via symlink spelling (/tmp/...)
+      const deleteUrl = `http://127.0.0.1:${port}/api/projects?project=${encodeURIComponent(tmpProj)}`;
+      const res = await fetch(deleteUrl, { method: 'DELETE' });
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as {
+        status: string;
+        project: string;
+        topology: { subprojects: number; services: number };
+        failures: Array<{ tier: string; error: string }>;
+      };
+
+      expect(body.status).toBe('removed');
+      expect(body.topology.subprojects).toBe(1);
+      expect(body.topology.services).toBe(1);
+
+      // Verify topology.db
+      const verifyDb = new Database(topoDbPath);
+      try {
+        const subRoots = (
+          verifyDb.prepare('SELECT repo_root FROM subprojects').all() as Array<{
+            repo_root: string;
+          }>
+        ).map((r) => r.repo_root);
+        const svcRoots = (
+          verifyDb.prepare('SELECT repo_root FROM services').all() as Array<{ repo_root: string }>
+        ).map((r) => r.repo_root);
+        expect(subRoots).not.toContain(tmpProj);
+        expect(subRoots).not.toContain(canonicalTmpProj);
+        expect(svcRoots).not.toContain(tmpProj);
+        expect(svcRoots).not.toContain(canonicalTmpProj);
+      } finally {
+        verifyDb.close();
+      }
+
+      // Verify registry.json
+      const verifyReg = JSON.parse(fs.readFileSync(regPath, 'utf-8'));
+      const registeredRoots = Object.keys(verifyReg.projects ?? {});
+      expect(registeredRoots).not.toContain(tmpProj);
+      expect(registeredRoots).not.toContain(canonicalTmpProj);
+    } finally {
+      fs.rmSync(tmpProj, { recursive: true, force: true });
+    }
   });
 });
