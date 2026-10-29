@@ -137,6 +137,7 @@ describe('call_project_tool', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A, REPO_B],
       openProject: vi.fn(async () => null),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const { server, captured } = makeCapturingServer();
@@ -160,6 +161,7 @@ describe('call_project_tool', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => null),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const { server, captured } = makeCapturingServer();
@@ -177,6 +179,7 @@ describe('call_project_tool', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map() })),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const { server, captured } = makeCapturingServer();
@@ -199,6 +202,7 @@ describe('call_project_tool', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map([['get_symbol', targetHandler]]) })),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const { server, captured } = makeCapturingServer();
@@ -227,6 +231,7 @@ describe('call_project_tool', () => {
       openProject: vi.fn(async () => ({
         toolHandlers: new Map([['get_project_map', mapHandler]]),
       })),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const { server, captured } = makeCapturingServer();
@@ -248,6 +253,7 @@ describe('call_project_tool journal broadcast (TRA-1868)', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map([['search', targetHandler]]) })),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const emitted: Array<Record<string, unknown>> = [];
@@ -279,6 +285,7 @@ describe('call_project_tool journal broadcast (TRA-1868)', () => {
     const relay: ProjectRelay = {
       listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map() })),
+      invalidateProject: () => undefined,
       dispose: () => undefined,
     };
     const emitted: unknown[] = [];

@@ -186,6 +186,7 @@ import { recordUnresolvableResolution } from './daemon/resolution-telemetry.js';
 import {
   collectIdleSessions,
   dropSessionBookkeeping,
+  resolveSessionIdleMs,
   teardownProjectBookkeeping as teardownProjectBookkeepingImpl,
 } from './daemon/project-bookkeeping.js';
 import {
@@ -1439,14 +1440,14 @@ program
     // PATCH /api/clients during MCP initialize; stdio clients update through
     // the same path. If lastSeen hasn't moved in an hour the proxy is gone.
     const CLIENT_STALE_MS = 60 * 60 * 1000;
-    const CLIENT_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
-    // MCP sessions go stale the same way, with worse consequences (TRA-1627):
+    const CLIENT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+    // MCP sessions go stale the same way, with worse consequences (TRA-1627, TRA-1719):
     // a dead session's resourcePool refcount pins its whole project resident,
-    // defeating the idle-unload sweep. Same 1h threshold — a live client with
-    // an hour of zero traffic re-initializes transparently (ProxyBackend
+    // defeating the idle-unload sweep. Half-TTL threshold (default 15m) — a live
+    // client with zero traffic re-initializes transparently (ProxyBackend
     // replays its cached initialize frame on 404; direct clients follow the
     // spec's reinitialize path our 404 names).
-    const SESSION_IDLE_MS = 60 * 60 * 1000;
+    const SESSION_IDLE_MS = resolveSessionIdleMs(globalRaw.project_idle_unload_minutes);
     const clientSweep = setInterval(() => {
       const now = Date.now();
       const cutoff = now - CLIENT_STALE_MS;
@@ -3241,6 +3242,7 @@ program
         // this root BEFORE we emit the status event so listeners on the
         // SSE bus see a clean state.
         teardownProjectBookkeeping(projectRoot);
+        projectRelay.invalidateProject(projectRoot);
         broadcastEvent({ type: 'project_status', project: projectRoot, status: 'removed' });
         // Clean up any remaining client entries for this project (transport
         // onclose handlers typically already removed these via the teardown
@@ -4224,6 +4226,7 @@ program
         onUnloaded: (roots) => {
           for (const root of roots) {
             teardownProjectBookkeeping(root);
+            projectRelay.invalidateProject(root);
             broadcastEvent({ type: 'project_status', project: root, status: 'unloaded' });
           }
         },
@@ -4478,6 +4481,10 @@ program
           try {
             const removed = await projectManager.sweepEphemeralProjects();
             if (removed.length > 0) {
+              for (const root of removed) {
+                teardownProjectBookkeeping(root);
+                projectRelay.invalidateProject(root);
+              }
               logger.info(
                 { removedRoots: removed },
                 `Deregistered ${removed.length} stale one-shot workdir project(s)`,
