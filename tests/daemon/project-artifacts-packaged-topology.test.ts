@@ -217,9 +217,11 @@ describe('packaged daemon topology cleanup on project delete (TRA-2778)', () => 
       const svcRoots = serviceRows.map((r) => r.repo_root);
 
       expect(subRoots).toContain(otherRoot);
+      expect(subRoots).not.toContain(canonicalTestRoot);
       expect(subRoots).not.toContain(testRoot);
 
       expect(svcRoots).toContain(otherRoot);
+      expect(svcRoots).not.toContain(canonicalTestRoot);
       expect(svcRoots).not.toContain(testRoot);
     } finally {
       db.close();
