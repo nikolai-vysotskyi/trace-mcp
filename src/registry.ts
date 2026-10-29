@@ -557,9 +557,39 @@ export function unregisterProject(root: string): void {
   const absRoot = path.resolve(root);
   _ephemeralEntries.delete(absRoot);
   const reg = loadRegistry();
-  if (!(absRoot in reg.projects)) return; // ephemeral, or already gone — nothing to rewrite
-  delete reg.projects[absRoot];
-  saveRegistry(reg);
+  if (absRoot in reg.projects) {
+    delete reg.projects[absRoot];
+    saveRegistry(reg);
+    return;
+  }
+  // TRA-2032: symlink aliases (`/tmp/x` vs `/private/tmp/x` on macOS) resolve
+  // to different `path.resolve` keys. Probe the realpath spelling on an exact miss.
+  let real: string;
+  try {
+    real = fs.realpathSync(absRoot);
+  } catch {
+    return;
+  }
+  if (real !== absRoot) {
+    _ephemeralEntries.delete(real);
+    if (real in reg.projects) {
+      delete reg.projects[real];
+      saveRegistry(reg);
+      return;
+    }
+  }
+  for (const key of Object.keys(reg.projects)) {
+    if (key === absRoot || key === real) continue;
+    try {
+      if (fs.realpathSync(key) === real) {
+        delete reg.projects[key];
+        saveRegistry(reg);
+        return;
+      }
+    } catch {
+      // ignore missing or inaccessible paths
+    }
+  }
 }
 
 export function getProject(root: string): RegistryEntry | null {

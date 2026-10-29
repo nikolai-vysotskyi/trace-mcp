@@ -15,6 +15,7 @@ import {
   registerProject,
   resolveRegisteredAncestor,
   sweepEphemeralDbs,
+  unregisterProject,
 } from '../src/registry.js';
 
 let savedRegistry: string | null = null;
@@ -574,6 +575,21 @@ describe('symlink-alias tolerant lookup', () => {
   it('still misses a truly unregistered root', () => {
     const repo = makeTmpRepo();
     expect(getProject(repo)).toBeNull();
+  });
+
+  it('unregisters a project when queried via canonical or symlink alias', () => {
+    const repo = makeTmpRepo();
+    const link = path.join(path.dirname(repo), 'repo-link-del');
+    fs.symlinkSync(repo, link, 'junction');
+    try {
+      registerProject(link);
+      const canonical = fs.realpathSync(repo);
+      unregisterProject(canonical);
+      expect(getProject(link)).toBeNull();
+      expect(getProject(canonical)).toBeNull();
+    } finally {
+      if (fs.existsSync(link)) fs.unlinkSync(link);
+    }
   });
 });
 
