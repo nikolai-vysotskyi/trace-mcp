@@ -5,6 +5,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
 import { safeGitEnv } from '../../utils/git-env.js';
@@ -29,13 +31,13 @@ interface ChurnEntry {
   assessment: 'stable' | 'active' | 'volatile';
 }
 
-interface HotspotEntry {
+export interface HotspotEntry {
   file: string;
   /** Max cyclomatic complexity among symbols in this file */
   max_cyclomatic: number;
-  /** Number of commits in the analysis window */
-  commits: number;
-  /** hotspot_score = max_cyclomatic × log(1 + commits) */
+  /** Number of commits in the analysis window (null when file is outside git history) */
+  commits: number | null;
+  /** hotspot_score = max_cyclomatic × log(1 + commits) (or max_cyclomatic when commits is null) */
   score: number;
   assessment: 'low' | 'medium' | 'high';
   /**
@@ -47,6 +49,27 @@ interface HotspotEntry {
   /** Number of independent signals that fired (0..2). */
   signals_fired: number;
 }
+
+export interface GitRoot {
+  /** Absolute path to the git working tree root */
+  dir: string;
+  /** Relative path from cwd to dir (empty string if dir === cwd, e.g. "subrepo" if child) */
+  relToCwd: string;
+  /** Whether dir is an ancestor of cwd (cwd is inside a subfolder of dir) */
+  isAncestor: boolean;
+}
+
+const IGNORED_GIT_SCAN_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.cache',
+  '.next',
+  '.turbo',
+  'vendor',
+  'target',
+]);
 
 /** A signal "fires" when its raw value crosses this threshold. */
 const HOTSPOT_COMPLEXITY_FIRE = 10; // matches the high-complexity boundary used by assessment
@@ -73,7 +96,7 @@ export const HOTSPOT_METHODOLOGY: Methodology = {
 // GIT HELPERS
 // ════════════════════════════════════════════════════════════════════════
 
-interface GitLogEntry {
+export interface GitLogEntry {
   file: string;
   commits: number;
   authors: Set<string>;
@@ -82,27 +105,183 @@ interface GitLogEntry {
 }
 
 /**
- * Check if the project root is inside a git repository.
+ * Resolve all relevant git roots for a given project directory:
+ * 1. Checks upwards via `git rev-parse --show-toplevel` (handles standard repos and subdirectories).
+ * 2. Scans nested directories up to depth 2 for `.git` (handles umbrella repos with nested projects/submodules).
  */
-export function isGitRepo(cwd: string): boolean {
+export function resolveGitRoots(cwd: string): GitRoot[] {
+  const roots: GitRoot[] = [];
+  const normalizedCwd = path.resolve(cwd);
+
+  // 1. Upwards check
   try {
-    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
-      cwd,
+    const rawTop = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: normalizedCwd,
       stdio: 'pipe',
       timeout: 5000,
       env: safeGitEnv(),
-    });
-    return true;
+    })
+      .toString('utf-8')
+      .trim();
+
+    if (rawTop) {
+      // In tests, mockExecFileSync may return 'true' or a relative path
+      const top = path.isAbsolute(rawTop) ? path.resolve(rawTop) : normalizedCwd;
+      const isAncestor = top !== normalizedCwd && normalizedCwd.startsWith(top + path.sep);
+      roots.push({
+        dir: top,
+        relToCwd: path.relative(normalizedCwd, top),
+        isAncestor,
+      });
+    }
   } catch {
-    return false;
+    // cwd is not inside a git repo from rev-parse upwards
   }
+
+  // 2. Downwards check for nested git repositories (depth 1 & 2)
+  function checkDirForGit(dirPath: string): string | null {
+    try {
+      const gitPath = path.join(dirPath, '.git');
+      const stat = fs.statSync(gitPath);
+      if (stat.isDirectory() || stat.isFile()) {
+        const raw = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+          cwd: dirPath,
+          stdio: 'pipe',
+          timeout: 5000,
+          env: safeGitEnv(),
+        })
+          .toString('utf-8')
+          .trim();
+        return raw && path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(dirPath);
+      }
+    } catch {
+      // Not a git repository
+    }
+    return null;
+  }
+
+  try {
+    const level1 = fs.readdirSync(normalizedCwd, { withFileTypes: true });
+    for (const entry1 of level1) {
+      if (
+        !entry1.isDirectory() ||
+        entry1.name.startsWith('.') ||
+        IGNORED_GIT_SCAN_DIRS.has(entry1.name)
+      ) {
+        continue;
+      }
+      const path1 = path.join(normalizedCwd, entry1.name);
+      const gitTop1 = checkDirForGit(path1);
+      if (gitTop1) {
+        if (!roots.some((r) => r.dir === gitTop1)) {
+          roots.push({
+            dir: gitTop1,
+            relToCwd: path.relative(normalizedCwd, gitTop1),
+            isAncestor: false,
+          });
+        }
+        // Do not recurse into an already discovered git root
+        continue;
+      }
+
+      // Check depth 2
+      try {
+        const level2 = fs.readdirSync(path1, { withFileTypes: true });
+        for (const entry2 of level2) {
+          if (
+            !entry2.isDirectory() ||
+            entry2.name.startsWith('.') ||
+            IGNORED_GIT_SCAN_DIRS.has(entry2.name)
+          ) {
+            continue;
+          }
+          const path2 = path.join(path1, entry2.name);
+          const gitTop2 = checkDirForGit(path2);
+          if (gitTop2) {
+            if (!roots.some((r) => r.dir === gitTop2)) {
+              roots.push({
+                dir: gitTop2,
+                relToCwd: path.relative(normalizedCwd, gitTop2),
+                isAncestor: false,
+              });
+            }
+          }
+        }
+      } catch {
+        // Ignore depth 2 read errors
+      }
+    }
+  } catch {
+    // Ignore cwd read errors
+  }
+
+  return roots;
 }
 
 /**
- * Get per-file git log data: commit count, authors, date range.
- * Uses a single `git log` call with --name-only for efficiency.
+ * Map a file path returned by git log in `root.dir` back to a relative path from `cwd`.
+ * Returns null if the file lies outside `cwd` (for example, in an ancestor repo outside the subtree).
  */
-function getGitFileStats(cwd: string, sinceDays?: number): Map<string, GitLogEntry> {
+export function mapRepoPathToCwd(root: GitRoot, repoRelPath: string, cwd: string): string | null {
+  const normalizedCwd = path.resolve(cwd);
+  const normalizedDir = path.resolve(root.dir);
+  const normalizedFile = repoRelPath.replace(/\\/g, '/');
+
+  if (normalizedDir === normalizedCwd) {
+    return normalizedFile;
+  }
+  if (root.isAncestor) {
+    let prefix = path.relative(normalizedDir, normalizedCwd).replace(/\\/g, '/');
+    if (!prefix.endsWith('/')) {
+      prefix += '/';
+    }
+    if (normalizedFile.startsWith(prefix)) {
+      return normalizedFile.slice(prefix.length);
+    }
+    return null;
+  }
+  // Child / nested repo: prefix with child folder path relative to cwd
+  const prefix = path.relative(normalizedCwd, normalizedDir).replace(/\\/g, '/');
+  return prefix ? `${prefix}/${normalizedFile}` : normalizedFile;
+}
+
+/**
+ * Check if a file is covered by any resolved git repository root.
+ */
+export function isFileCoveredByGit(file: string, roots: GitRoot[], cwd: string): boolean {
+  if (roots.length === 0) return false;
+  const normalizedCwd = path.resolve(cwd);
+  const normalizedFile = file.replace(/\\/g, '/');
+
+  for (const root of roots) {
+    const normalizedDir = path.resolve(root.dir);
+    if (normalizedDir === normalizedCwd || root.isAncestor) {
+      return true;
+    }
+    const prefix = path.relative(normalizedCwd, normalizedDir).replace(/\\/g, '/');
+    if (prefix && (normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if the project root is inside a git repository or contains nested git repositories.
+ */
+export function isGitRepo(cwd: string): boolean {
+  return resolveGitRoots(cwd).length > 0;
+}
+
+/**
+ * Collect per-file git log data across all resolved git roots.
+ */
+export function collectGitLogs(cwd: string, sinceDays?: number): Map<string, GitLogEntry> {
+  const roots = resolveGitRoots(cwd);
+  if (roots.length === 0) {
+    return new Map();
+  }
+
   const args = [
     'log',
     '--pretty=format:__COMMIT__%H|%aI|%aN',
@@ -114,54 +293,67 @@ function getGitFileStats(cwd: string, sinceDays?: number): Map<string, GitLogEnt
     args.push(`--since=${sinceDays} days ago`);
   }
 
-  let output: string;
-  try {
-    output = execFileSync('git', args, {
-      cwd,
-      stdio: 'pipe',
-      maxBuffer: 10 * 1024 * 1024, // 10 MB
-      timeout: 30_000,
-      env: safeGitEnv(),
-    }).toString('utf-8');
-  } catch (e) {
-    logger.warn({ error: e }, 'git log failed');
-    return new Map();
-  }
-
   const fileStats = new Map<string, GitLogEntry>();
-  let currentDate: Date | null = null;
-  let currentAuthor: string | null = null;
 
-  for (const line of output.split('\n')) {
-    if (line.startsWith('__COMMIT__')) {
-      const parts = line.slice('__COMMIT__'.length).split('|');
-      // parts: [hash, isoDate, authorName]
-      currentDate = new Date(parts[1]);
-      currentAuthor = parts[2];
+  for (const root of roots) {
+    let output: string;
+    try {
+      output = execFileSync('git', args, {
+        cwd: root.dir,
+        stdio: 'pipe',
+        maxBuffer: 10 * 1024 * 1024, // 10 MB
+        timeout: 30_000,
+        env: safeGitEnv(),
+      }).toString('utf-8');
+    } catch (e) {
+      logger.warn({ error: e, root: root.dir }, 'git log failed');
       continue;
     }
 
-    const trimmed = line.trim();
-    if (!trimmed || !currentDate || !currentAuthor) continue;
+    let currentDate: Date | null = null;
+    let currentAuthor: string | null = null;
 
-    const existing = fileStats.get(trimmed);
-    if (existing) {
-      existing.commits++;
-      existing.authors.add(currentAuthor);
-      if (currentDate < existing.firstDate) existing.firstDate = currentDate;
-      if (currentDate > existing.lastDate) existing.lastDate = currentDate;
-    } else {
-      fileStats.set(trimmed, {
-        file: trimmed,
-        commits: 1,
-        authors: new Set([currentAuthor]),
-        firstDate: currentDate,
-        lastDate: currentDate,
-      });
+    for (const line of output.split('\n')) {
+      if (line.startsWith('__COMMIT__')) {
+        const parts = line.slice('__COMMIT__'.length).split('|');
+        // parts: [hash, isoDate, authorName]
+        currentDate = new Date(parts[1]);
+        currentAuthor = parts[2];
+        continue;
+      }
+
+      const trimmed = line.trim();
+      if (!trimmed || !currentDate || !currentAuthor) continue;
+
+      const mapped = mapRepoPathToCwd(root, trimmed, cwd);
+      if (!mapped) continue;
+
+      const existing = fileStats.get(mapped);
+      if (existing) {
+        existing.commits++;
+        existing.authors.add(currentAuthor);
+        if (currentDate < existing.firstDate) existing.firstDate = currentDate;
+        if (currentDate > existing.lastDate) existing.lastDate = currentDate;
+      } else {
+        fileStats.set(mapped, {
+          file: mapped,
+          commits: 1,
+          authors: new Set([currentAuthor]),
+          firstDate: currentDate,
+          lastDate: currentDate,
+        });
+      }
     }
   }
 
   return fileStats;
+}
+
+/**
+ * Get per-file git log data: commit count, authors, date range.
+ */
+function getGitFileStats(cwd: string, sinceDays?: number): Map<string, GitLogEntry> {
+  return collectGitLogs(cwd, sinceDays);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -218,8 +410,9 @@ export function getHotspots(
   options: { sinceDays?: number; limit?: number; minCyclomatic?: number } = {},
 ): HotspotEntry[] {
   const { sinceDays = 90, limit = 20, minCyclomatic = 3 } = options;
+  const roots = resolveGitRoots(cwd);
 
-  if (!isGitRepo(cwd)) {
+  if (roots.length === 0) {
     // Fallback: complexity-only ranking when git unavailable
     return getComplexityOnlyHotspots(store, limit, minCyclomatic);
   }
@@ -234,19 +427,34 @@ export function getHotspots(
   for (const [file, maxCyclomatic] of fileComplexity) {
     if (maxCyclomatic < minCyclomatic) continue;
 
-    const git = gitStats.get(file);
-    const commits = git?.commits ?? 0;
-    const score = Math.round(maxCyclomatic * Math.log(1 + commits) * 100) / 100;
-
-    if (score <= 0) continue;
-
+    const covered = isFileCoveredByGit(file, roots, cwd);
+    let commits: number | null = null;
+    let score: number;
+    let signalsFired: number;
     let assessment: HotspotEntry['assessment'];
-    if (score <= 3) assessment = 'low';
-    else if (score <= 10) assessment = 'medium';
-    else assessment = 'high';
+    let confidenceLevel: ConfidenceLevel;
 
-    const signalsFired =
-      (maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0) + (commits > HOTSPOT_CHURN_FIRE ? 1 : 0);
+    if (!covered) {
+      // File is outside all git repositories
+      score = maxCyclomatic;
+      assessment = score <= 3 ? 'low' : score <= 10 ? 'medium' : 'high';
+      signalsFired = maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0;
+      confidenceLevel = 'low';
+    } else {
+      const git = gitStats.get(file);
+      commits = git?.commits ?? 0;
+      score = Math.round(maxCyclomatic * Math.log(1 + commits) * 100) / 100;
+
+      if (score <= 0) continue;
+
+      if (score <= 3) assessment = 'low';
+      else if (score <= 10) assessment = 'medium';
+      else assessment = 'high';
+
+      signalsFired =
+        (maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0) + (commits > HOTSPOT_CHURN_FIRE ? 1 : 0);
+      confidenceLevel = classifyConfidence(signalsFired, 2);
+    }
 
     entries.push({
       file,
@@ -254,7 +462,7 @@ export function getHotspots(
       commits,
       score,
       assessment,
-      confidence_level: classifyConfidence(signalsFired, 2),
+      confidence_level: confidenceLevel,
       signals_fired: signalsFired,
     });
   }
@@ -301,7 +509,7 @@ function getComplexityOnlyHotspots(
     entries.push({
       file,
       max_cyclomatic: maxCyclomatic,
-      commits: 0,
+      commits: null,
       score: maxCyclomatic, // score = complexity alone
       assessment: maxCyclomatic <= 3 ? 'low' : maxCyclomatic <= 10 ? 'medium' : 'high',
       confidence_level: 'low',

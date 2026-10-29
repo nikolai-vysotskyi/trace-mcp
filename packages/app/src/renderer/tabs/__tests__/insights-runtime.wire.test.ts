@@ -75,6 +75,25 @@ describe('flattenRiskHotspotRows — real get_risk_hotspots wire shape', () => {
     expect(flattenRiskHotspotRows(payload)).toEqual({ rows: [] });
   });
 
+  it('renders null commits as n/a instead of 0 commits (TRA-1690)', () => {
+    const payload = {
+      hotspots: [
+        {
+          file: 'general/thewed/MediaController.php',
+          max_cyclomatic: 80,
+          commits: null,
+          assessment: 'high',
+          score: 80,
+        },
+      ],
+    };
+    const { rows } = flattenRiskHotspotRows(payload);
+    expect(rows.length).toBe(1);
+    expect(rows[0].secondary).toContain('80');
+    expect(rows[0].secondary).toContain('n/a commits');
+    expect(rows[0].secondary).not.toContain('0 commits');
+  });
+
   it('throws instead of silently emptying on a shape it does not recognise', () => {
     expect(() => flattenRiskHotspotRows({ unexpected_field: 'x' })).toThrow();
   });

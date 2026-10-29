@@ -41,7 +41,7 @@ export interface InsightsReport {
     is_bridge: boolean;
     co_change_weight: number;
   }[];
-  hotspots: { file: string; score: number; max_cyclomatic: number; commits: number }[];
+  hotspots: { file: string; score: number; max_cyclomatic: number; commits: number | null }[];
   gaps: {
     dead_exports: number;
     untested_exports: number;
@@ -141,8 +141,9 @@ function renderMarkdown(report: Omit<InsightsReport, 'markdown'>): string {
     lines.push('- (no hotspots — git unavailable or no high-complexity files)');
   } else {
     for (const h of report.hotspots) {
+      const commitsStr = h.commits === null ? 'n/a' : `${h.commits}`;
       lines.push(
-        `- \`${h.file}\` — score ${h.score.toFixed(2)} (cyclomatic ${h.max_cyclomatic}, ${h.commits} commits)`,
+        `- \`${h.file}\` — score ${h.score.toFixed(2)} (cyclomatic ${h.max_cyclomatic}, ${commitsStr} commits)`,
       );
     }
   }

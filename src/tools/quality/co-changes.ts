@@ -10,6 +10,7 @@ import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { safeGitEnv } from '../../utils/git-env.js';
+import { mapRepoPathToCwd, resolveGitRoots } from '../git/git-analysis.js';
 
 interface CoChangeEntry {
   file: string;
@@ -49,44 +50,52 @@ export function collectCoChanges(
   rootPath: string,
   windowDays = 180,
 ): Map<string, Map<string, { count: number; lastDate: string }>> {
+  const roots = resolveGitRoots(rootPath);
+  if (roots.length === 0) return new Map();
+
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - windowDays);
   const since = sinceDate.toISOString().split('T')[0];
 
-  let gitOutput: string;
-  try {
-    gitOutput = execSync(
-      `git log --name-only --pretty=format:"COMMIT:%H:%aI" --since="${since}" --diff-filter=AMRD`,
-      {
-        cwd: rootPath,
-        maxBuffer: 50 * 1024 * 1024,
-        encoding: 'utf-8',
-        timeout: 30_000,
-        env: safeGitEnv(),
-      },
-    );
-  } catch (e) {
-    logger.warn({ error: e }, 'Failed to read git log for co-change analysis');
-    return new Map();
-  }
-
-  // Parse git output into commits → file sets
   const commits: Array<{ hash: string; date: string; files: string[] }> = [];
-  let current: { hash: string; date: string; files: string[] } | null = null;
 
-  for (const line of gitOutput.split('\n')) {
-    if (line.startsWith('COMMIT:')) {
-      if (current && current.files.length > 0) commits.push(current);
-      const parts = line.slice(7).split(':');
-      // Format: COMMIT:hash:date — date may contain colons (ISO format)
-      const hash = parts[0];
-      const date = parts.slice(1).join(':');
-      current = { hash, date, files: [] };
-    } else if (line.trim() && current) {
-      current.files.push(line.trim());
+  for (const root of roots) {
+    let gitOutput: string;
+    try {
+      gitOutput = execSync(
+        `git log --name-only --pretty=format:"COMMIT:%H:%aI" --since="${since}" --diff-filter=AMRD`,
+        {
+          cwd: root.dir,
+          maxBuffer: 50 * 1024 * 1024,
+          encoding: 'utf-8',
+          timeout: 30_000,
+          env: safeGitEnv(),
+        },
+      );
+    } catch (e) {
+      logger.warn({ error: e, root: root.dir }, 'Failed to read git log for co-change analysis');
+      continue;
     }
+
+    let current: { hash: string; date: string; files: string[] } | null = null;
+
+    for (const line of gitOutput.split('\n')) {
+      if (line.startsWith('COMMIT:')) {
+        if (current && current.files.length > 0) commits.push(current);
+        const parts = line.slice(7).split(':');
+        // Format: COMMIT:hash:date — date may contain colons (ISO format)
+        const hash = parts[0];
+        const date = parts.slice(1).join(':');
+        current = { hash, date, files: [] };
+      } else if (line.trim() && current) {
+        const mapped = mapRepoPathToCwd(root, line.trim(), rootPath);
+        if (mapped) {
+          current.files.push(mapped);
+        }
+      }
+    }
+    if (current && current.files.length > 0) commits.push(current);
   }
-  if (current && current.files.length > 0) commits.push(current);
 
   // Build co-change pairs: for each commit, pair all files together
   // Track per-file total change counts for confidence calculation

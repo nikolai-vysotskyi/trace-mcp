@@ -245,7 +245,7 @@ export function flattenRiskHotspotRows(payload: unknown): InsightRows {
       file?: string;
       score?: number;
       max_cyclomatic?: number;
-      commits?: number;
+      commits?: number | null;
       assessment?: string;
     }>;
     // get_risk_hotspots' own "nothing found" shape (src/tools/register/git.ts)
@@ -261,7 +261,7 @@ export function flattenRiskHotspotRows(payload: unknown): InsightRows {
     primary: shortFile(it.file ?? '?'),
     secondary: t(it.assessment ? 'insights:rowHotspotConfidence' : 'insights:rowHotspot', {
       complexity: it.max_cyclomatic ?? '?',
-      commits: it.commits ?? '?',
+      commits: it.commits === null ? 'n/a' : (it.commits ?? '?'),
       confidence: it.assessment,
     }),
     badge: typeof it.score === 'number' ? it.score.toFixed(1) : undefined,
