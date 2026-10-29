@@ -131,6 +131,8 @@ Rules for keeping it honest:
 | [alperhankendi/Ctxo](https://github.com/alperhankendi/Ctxo) | **Yes — third-party competitor architectural comparison, we did not submit it** (73★, 10 forks, active daily) | Direct competitor MCP server (`@ctxo/cli`). In `docs/archive/walkthroughs/walkthrough-v1.1.md`, cites `trace-mcp PR reports` alongside `ops-codegraph diff-impact` as established benchmark competitors solving multi-round-trip changed symbols and blast radius in one call | Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
 | [wbingli/ai-agent-research](https://github.com/wbingli/ai-agent-research) | **Yes — third-party research report, we did not submit it** (MIT, daily intelligence reports) | Daily AI Agent research evaluation `reports/daily/2026-04-15.md` analyzing `trace-mcp`: "The key innovation is framework semantics, not just static code parsing. It tries to answer 'what actually happens in this app?' across route, controller, ORM, UI, and past decisions... Repo structure is the next battleground. Supermodel and trace-mcp both try to compress architectural understanding into agent-readable form" | Independent research evaluation & external validation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
 | [artubss/SKILLS-CLAUDE-CODE](https://github.com/artubss/SKILLS-CLAUDE-CODE) | **Yes — third-party catalog mirror, we did not submit it** (11★, 3 forks) | Curated Claude Code skills and devtools collection mirroring `bonus/mcps/devtools/trace-mcp.json` with `npx -y trace-mcp@latest` and 81 languages / 60 framework integrations description | Curated community skills mirror. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
+| [ravisingh11/agentbay-ultimate-list](https://github.com/ravisingh11/agentbay-ultimate-list) | **Yes — third-party automated catalog dump, we did not submit it** (0★, 0 forks) | Auto-generated skills catalog file `skills/memory-and-context-0eed3a.md` curating `nikolai-vysotskyi/trace-mcp` under agent memory, context, and MCP tool integration | Automated dump. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
+| [dreygur/knot](https://github.com/dreygur/knot) | **Yes — third-party benchmark & evaluation harness, we did not submit it** (0★, 1 fork, MIT, archived Rust MCP experiment) | Benchmark harness and evaluation comparing code intelligence systems. Implements `eval/adapters/tracemcp.sh` and `eval/adapters/tracemcp.setup.sh` targeting `trace-mcp` v3.42.0 (`get_feature_context` FTS/PageRank) on retrieval questions across multi-language corpora alongside CodeGraph, GitNexus, Serena, and Knot | Independent benchmark evaluation and harness adapter. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
 
 
 
@@ -8311,6 +8313,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - continuedev/continue: 36,363★ (+4), 5,527 forks (+2)
 - Aider-AI/aider: 49,808★ (+8), 5,110 forks (+1)
 - Graphify-Labs/graphify: 138,183★ (+210), 13,174 forks (+22)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-10-29 18:00 pass (TRA-2773): new surface dreygur/knot benchmark adapter & evaluation, codegraph framework re-index status (#3005) & unlinked ambiguous calls (#3004) & deep symbol flow exploration (#3003), Graphify file vs declaration ID collision (#4857) & Scala extension method receiver scoping (#4856), GitNexus refresh_index MCP tool (#3769) & unmaterialized member edges (#3767), Serena UTF-8 BOM .gitignore bypass (#2233)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 1 new repo outside seen list: `dreygur/knot`.
+- Verified repository & files: `dreygur/knot` is an archived Rust MCP / code-graph experiment that implemented custom evaluation adapters for `trace-mcp` v3.42.0 (`eval/adapters/tracemcp.sh`, `eval/adapters/tracemcp.setup.sh`, `eval/adapters/lib/tracemcp_pointers.mjs`), benchmarking `get_feature_context` (FTS/PageRank) on multi-language retrieval questions alongside CodeGraph, GitNexus, Serena, and Knot. Also surfaces external benchmark `eyuansu62/agent-retrieval-bench` (ARB, arXiv:2607.24882).
+- Added `dreygur/knot` to `ops/mentions-seen.txt` and `## Surfaces` in `ops/distribution.md`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Recommend re-index on framework manifest changes alone (PR #3005, open)*: Fixes #3007. In codegraph, `status` failed to recommend re-indexing when dependencies in `package.json` changed without source file edits because sync detection only re-evaluated frameworks when source files were extracted. Contrast: trace-mcp's file watcher and invalidation layer monitors manifests (`package.json`, `Cargo.toml`, `go.mod`, etc.) as first-class invalidation triggers, automatically refreshing framework detection without manual re-index prompts or missed framework transitions.
+  - *Relink calls left with one candidate after definition deletion or rename (PR #3004, open)*: Fixes #3006. In codegraph, an ambiguous call parked as unresolved remained unlinked during incremental sync when one of the conflicting definitions was deleted or renamed; only a full re-index resolved it. Contrast: trace-mcp stores definitions and references in relational SQLite tables with reactive queries, incrementally resolving candidate symbol bindings when definitions are removed.
+  - *Deep symbol path retention in Flow exploration (PR #3003, open)*: Fixes #2970. In `codegraph_explore`'s Flow section and the `/api/flow` endpoint, `walkCalls` kept only one route per node and only replaced it with routes of equal length, causing deeper semantic call paths to requested symbols to be discarded in favor of shallow, unrelated paths. Contrast: trace-mcp's symbol traversal and `get_feature_context` uses PageRank and multi-path graph ranking to retain semantically relevant call chains rather than greedy breadth-first truncation.
+- **Graphify-Labs/graphify**:
+  - *File vs declaration ID collision when declaration matches extension (PR #4857, open)*: Fixes #4854. In Graphify, file nodes used extensionless stems while declarations used `make_id(stem, name)`. When a declaration name matched the file extension (e.g. `class Js` in `a.js` or `class Py` in `main.py`), both generated identical IDs, causing `add_node` to drop the declaration. Contrast: trace-mcp uses deterministic hierarchical symbol IDs incorporating file paths, AST scopes, and source coordinates, avoiding naming collisions.
+  - *Scala 3 extension method receiver scoping (PR #4856, open)*: Fixes #2044. In Scala 3, `extension_definition` nodes have no declaration name, causing extension methods to fall into file scope without edges to the extended type. PR #4856 inspects the first non-`using` parameter clause to bind members to the receiver type. Contrast: trace-mcp's Tree-sitter query suite natively supports Scala 3 extension methods and resolves extension targets into structured symbol relations.
+- **abhigyanpatwari/GitNexus**:
+  - *Opt-in refresh_index MCP tool (PR #3769, open)*: Closes #3524. Introduces an opt-in `refresh_index` tool behind `GITNEXUS_MCP_ENABLE_REFRESH=1`, allowing agents seeing behind/stale status to refresh the index without a shell. Contrast: trace-mcp's persistent background daemon (`@parcel/watcher`) updates the SQLite index incrementally in real time as files change, ensuring agents always query up-to-date code maps without invoking manual maintenance tools.
+  - *Drop unmaterialized member edges in parser worker (PR #3767, open)*: Fixes #3747. The parse worker previously emitted `HAS_METHOD` / `HAS_PROPERTY` edges to parent nodes within the file that were never materialized, causing `Unable to find primary key value` COPY database failures. Contrast: trace-mcp uses transactional SQLite writes with strict foreign keys and validated symbol staging, preventing orphaned edge insertion.
+- **oraios/serena**:
+  - *Ignore pattern bypass on UTF-8 BOM in .gitignore (PR #2233, open)*: When a `.gitignore` begins with a UTF-8 BOM (common with Windows PowerShell 5.1), the first pattern failed to match because the BOM adhered to the pattern text, causing ignored files to leak to the agent. Fixed by reading `.gitignore` with `utf-8-sig`. Contrast: trace-mcp normalizes encoding and strips BOMs when ingesting ignore specifications.
+- **DeusData/codebase-memory-mcp**:
+  - *Hardening uninitialized operand IDs on unmatched PlantUML openers (PR #2832, open)*: Iterates on #2818 / #2829 to ensure operand IDs are safely initialized on malformed PlantUML syntax, preventing ASan memory corruption. Contrast: trace-mcp relies on safe parsing and memory-managed AST evaluation.
+
+**Competitor pulse (as of 2026-10-29 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,068★ (+4), 1,608 forks (+1)
+- oraios/serena: 30,840★ (+6), 2,102 forks (=)
+- DeusData/codebase-memory-mcp: 47,770★ (+9), 3,929 forks (=)
+- tirth8205/code-review-graph: 32,468★ (+3), 2,959 forks (=)
+- colbymchenry/codegraph: 75,837★ (+20), 5,009 forks (+4)
+- abhigyanpatwari/GitNexus: 48,103★ (+3), 5,214 forks (=)
+- jgravelle/jcodemunch-mcp: 2,817★ (=), 372 forks (=)
+- continuedev/continue: 36,366★ (+3), 5,529 forks (+2)
+- Aider-AI/aider: 49,814★ (+6), 5,111 forks (+1)
+- Graphify-Labs/graphify: 138,325★ (+142), 13,184 forks (+10)
 - alperhankendi/Ctxo: 74★ (=), 10 forks (=)
 
 **Catalogs:** Moratorium holds.

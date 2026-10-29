@@ -396,5 +396,11 @@ yuzujr/buildfix                        # trace-mcp-%Y%m%d-%H%M%S.jsonl build log
 # skills/memory-and-context-0eed3a.md lists nikolai-vysotskyi/trace-mcp under agent memory and context, software engineering, and MCP tool integration:
 ravisingh11/agentbay-ultimate-list
 
+# ── Swept 2026-10-29 late afternoon pass (TRA-2773) ──
+# Genuine third-party benchmark & evaluation harness (archived Rust MCP experiment):
+# eval/adapters/tracemcp.sh and eval/adapters/tracemcp.setup.sh implement trace-mcp 3.42.0 get_feature_context adapter:
+dreygur/knot
+
+
 
 
