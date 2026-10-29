@@ -188,15 +188,36 @@ export class MemoryScheduler {
   /**
    * Stop the interval and wait for the serial queue to drain. After
    * `stop()` resolves no further stages will run.
+   * `timeoutMs` bounds the drain wait (default 5_000 ms) so a slow or wedged
+   * background stage cannot delay daemon shutdown past its deadline.
    */
-  async stop(): Promise<void> {
+  async stop(timeoutMs = 5_000): Promise<void> {
     this.stopped = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
     try {
-      await this.queue.drain();
+      if (timeoutMs > 0) {
+        let timer: NodeJS.Timeout | undefined;
+        const timeoutPromise = new Promise<'timeout'>((resolve) => {
+          timer = setTimeout(() => resolve('timeout'), timeoutMs);
+          timer.unref?.();
+        });
+        const outcome = await Promise.race([
+          this.queue.drain().then(() => 'drained' as const),
+          timeoutPromise,
+        ]);
+        if (timer) clearTimeout(timer);
+        if (outcome === 'timeout') {
+          logger.warn(
+            { timeoutMs, queueSize: this.queue.size },
+            'memory-scheduler: stop drain timed out — continuing shutdown',
+          );
+        }
+      } else {
+        await this.queue.drain();
+      }
     } catch {
       /* SerialQueue.drain swallows errors — defensive only */
     }

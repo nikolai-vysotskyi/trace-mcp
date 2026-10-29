@@ -27,9 +27,16 @@
  * Must stay below `PLIST_EXIT_TIMEOUT_SEC` (30s) in `src/daemon/lifecycle.ts`,
  * `scripts/postinstall-control-plane.mjs` and
  * `packages/app/src/main/daemon-plist.ts` so *we* decide when to give up, not
- * launchd's SIGKILL. The old 5s cut off cleanup that legitimately runs longer:
- * `stopProject()` awaits each project's in-flight initial index, and on a
- * machine with dozens of registered projects that regularly took 5-27s.
+ * launchd's SIGKILL.
+ *
+ * Individual shutdown phases are explicitly bounded to stay within this 20s budget:
+ * - Session transports closed concurrently: ~100ms
+ * - MemoryScheduler stage queue drain: bounded by 5_000ms
+ * - ProjectManager project teardowns: concurrent across projects, bounded by
+ *   `STOP_PROJECT_TEARDOWN_BUDGET_MS` (12_000ms)
+ * - httpServer connection close: idle sockets closed, callback wait bounded to 1_000ms
+ *   with forced socket close fallback.
+ * Total bounded worst-case shutdown <= 18s, safely below the 20s forced exit deadline.
  */
 export const DAEMON_SHUTDOWN_DEADLINE_MS = 20_000;
 
