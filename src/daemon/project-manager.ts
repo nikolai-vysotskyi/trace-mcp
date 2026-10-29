@@ -1972,7 +1972,10 @@ export class ProjectManager {
     // entry — the stored spelling when loaded (keeps registry/artifact calls
     // pass-through for raw-spelling entries), the caller string when never
     // loaded. stopProject() itself tolerates both spellings (managedMapKey).
-    const effective = this.projects.get(managedMapKey(this.projects, root) ?? root)?.root ?? root;
+    const effective =
+      this.projects.get(managedMapKey(this.projects, root) ?? root)?.root ??
+      getProject(root)?.root ??
+      root;
     await this.stopProject(root);
     let artifacts: RemoveArtifactsResult;
     try {
