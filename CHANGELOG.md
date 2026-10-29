@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.1...v3.42.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* correct Unicode symbol source offsets ([#1791](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1791)) ([4fafa11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4fafa1160f4150139f29de6730da1a65af011961))
+* **daemon:** bound HTTP connection drain on shutdown ([#1789](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1789)) ([2a772cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a772cf245ae3612a170fcddc23e5956020c257e))
+* **daemon:** bound project teardown and memory scheduler drain on shutdown (TRA-1761) ([#1796](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1796)) ([3f0ecb4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f0ecb40e0ea66b0023bcb2af7b03bf02981ddd8))
+* **daemon:** bound ProjectRelay cache and align session idle reap (TRA-1719) ([#1797](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1797)) ([f6d24d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f6d24d56b79ac0d3b8b60247669f6565687e3ae2))
+* support umbrella projects with nested git repos in risk hotspots (TRA-1690) ([#1794](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1794)) ([e00cdf2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e00cdf2f06a3bd8d32d579c10c55aa848d66f20e))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-10-29 18:00 (TRA-2773) ([#1795](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1795)) ([2e73c88](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2e73c88309fa4debfd093c232ed3e6cea10be2ff))
+* **ops:** outreach pass 2026-10-29 22:00 (TRA-2775) ([#1798](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1798)) ([b1d4eef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b1d4eef83ab542759eeb7c3d147166235138960f))
+* **ops:** record GitHub outreach and ecosystem sweep 2026-10-29 02:00 (TRA-2758) ([#1788](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1788)) ([ca26f22](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca26f229c1ca0d2b37004a09a8a993dc08a4e6e5))
+* **ops:** record GitHub outreach and ecosystem sweep 2026-10-29 08:00 (TRA-2768) ([#1792](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1792)) ([4d7336c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d7336c4f4eb249098eca107165deac1e6337eb1))
+* **ops:** record GitHub outreach and ecosystem sweep 2026-10-29 14:00 (TRA-2771) ([#1793](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1793)) ([34274eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/34274ebb662b89510c8eb0d2a099bbb8d2bbadec))
+* record daemon shutdown socket overrun ([#1787](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1787)) ([d3b7be1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d3b7be1f47992256aaf99d40968d6a30969d1f45))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group across 1 directory with 7 updates ([#1786](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1786)) ([355a61c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/355a61c073b64eb1955f43db50bad02b4624b611))
+* **app-deps:** bump the production-minor-patch group ([#1775](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1775)) ([0982a76](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0982a76e5fa01aaf926a365fca66547c4d52da2d))
+
 ## [3.42.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.0...v3.42.1) (2026-10-28)
 
 
