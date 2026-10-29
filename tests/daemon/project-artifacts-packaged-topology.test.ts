@@ -90,7 +90,7 @@ describe('packaged daemon topology cleanup on project delete (TRA-2778)', () => 
     // Seed registry.json with schema { version: 1, projects: { ... } }
     const testDbPath = path.join(indexDir, 'test-project-0123456789ab.db');
     fs.writeFileSync(testDbPath, '');
-    const canonicalTestRoot = fs.realpathSync(testRoot);
+    canonicalTestRoot = fs.realpathSync(testRoot);
     const registryData = {
       version: 1,
       projects: {
