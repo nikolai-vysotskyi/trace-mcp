@@ -8370,3 +8370,48 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Outreach pass, 2026-10-29 22:00 pass (TRA-2775): sweep clean, codegraph Rust lexical scope bindings (#3014) & sensitive cwd default project refusal (#3012) & Kotlin multi-class same-name resolution (#3013) & outside-type extensions (#3011), codebase-memory watcher cooldown pacing (#2840) & search_code relative path matching (#2841) & subagent CLI reminders (#2839)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 new repos outside seen list. Sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Rust lexical scope bindings and multi-crate module walks (PR #3014, open)*: Builds on #2308/#2955. In codegraph, `isRustNameInScope` previously treated every `use` in a file as flatly visible across the entire file, ignoring block braces, shadowing, and local `let` bindings; module path resolution mapped directory walks that broke on bare `crate::` / `super::` references, renames (`use x as y`), and multi-crate Cargo workspaces. Contrast: trace-mcp uses Tree-sitter scope trees where symbol bindings and scope lookups natively respect block nesting, shadowing, and lexical scopes across Rust files and multi-crate Cargo workspaces without ad-hoc path splitting.
+  - *Default project sensitive directory refusal (PR #3012, merged)*: Fixes #2929 follow-up. In codegraph, starting an MCP session from a sensitive cwd (e.g. `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config`, `/etc`, or `C:\Windows`) or with `--path` previously caused the server to open, index, start a file watcher, and spawn a daemon in the sensitive folder before individual tool-level path checks ran. Contrast: trace-mcp validates project roots against sensitive directories during workspace registration and path normalization before spawning background watchers or initializing project SQLite databases.
+  - *Kotlin same-named classes across different packages in multi-declaration files (PR #3013, merged)*: Lands #539. In codegraph, `resolveMethodOnType` resolved same-named candidate classes by matching import paths against file paths. In Kotlin, where multiple classes frequently live in a single file named after a utility (e.g., `Converters.kt`), the file path heuristic failed and picked the first candidate arbitrarily. Contrast: trace-mcp indexes qualified package and symbol coordinates in relational SQLite tables (`package.Class.method`), correctly mapping receiver call sites to imported declarations regardless of file name.
+  - *Kotlin extension call resolution on external library types (PR #3011, merged)*: Lands #2258. In codegraph, external imports (like Jetpack Compose's `Modifier`) previously caused all calls on `Modifier` to be treated as out-of-repo and discarded, preventing calls from linking to the project's own extension methods (e.g. `fun Modifier.secondaryItemAlpha()`). Contrast: trace-mcp parses Kotlin extension functions as distinct symbol definitions with receiver bindings, resolving local extension call sites even when the receiver type originates from an external package.
+- **DeusData/codebase-memory-mcp**:
+  - *Pacing watcher re-indexes by cost of last run to prevent monorepo CPU starvation (PR #2840, open)*: Closes #2835. In codebase-memory-mcp, any write during agent work reset the dirty signature, causing continuous full re-indexes every 5–60s on large repos that choked CPU away from interactive MCP queries. The fix adds a 3× duration backoff delay (capped at 30 min cooldown). Contrast: trace-mcp avoids full re-index loops entirely through `@parcel/watcher` and fine-grained incremental AST delta processing in SQLite, refreshing modified symbols in milliseconds without starving CPU or requiring artificial 30-minute indexing freezes.
+  - *Relative directory matching in search_code file_pattern (PR #2841, open)*: In codebase-memory-mcp, `file_pattern` was matched against file basenames instead of repo-relative paths, causing directory patterns (like `src/*.ts` or `dir/file.py`) to fail to match. Contrast: trace-mcp normalizes paths relative to the workspace root and executes glob matching against canonical repo-relative paths.
+  - *CLI reachability reminders for MCP-toolless subagents (PR #2839, open)*: Closes #2837. In codebase-memory-mcp, `SubagentStart` hooks match every agent, but subagents spawned without MCP tools received no fallback instructions on how to reach the index via CLI. Contrast: trace-mcp provides standalone CLI access (`npx trace-mcp ...`) with standard flags, as well as MCP stdio and HTTP daemon modes.
+
+**Competitor pulse (as of 2026-10-29 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,071★ (+3), 1,609 forks (+1)
+- oraios/serena: 30,845★ (+5), 2,102 forks (=)
+- DeusData/codebase-memory-mcp: 47,785★ (+15), 3,930 forks (+1)
+- tirth8205/code-review-graph: 32,473★ (+5), 2,959 forks (=)
+- colbymchenry/codegraph: 75,865★ (+28), 5,014 forks (+5)
+- abhigyanpatwari/GitNexus: 48,107★ (+4), 5,214 forks (=)
+- jgravelle/jcodemunch-mcp: 2,817★ (=), 372 forks (=)
+- continuedev/continue: 36,369★ (+3), 5,529 forks (=)
+- Aider-AI/aider: 49,814★ (=), 5,110 forks (-1)
+- Graphify-Labs/graphify: 138,481★ (+156), 13,201 forks (+17)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
