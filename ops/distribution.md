@@ -8415,3 +8415,47 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-30 02:00 pass (TRA-2780): sweep clean, codegraph CommonJS bracket exports (#3032) & browser host globals filtering (#3026) & intra-project dot-folder paths (#3028), codebase-memory CPU worker nice prioritization (#2838) & symlinked agent config detection (#2833)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 new repos outside seen list. Sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *CommonJS bracket notation function exports (`exports["name"] = ...`) (PR #3032, merged)*: Fixes #2896. Functions assigned to subscript expressions on `exports` or `module.exports` with string literal names previously generated no symbols in either the WASM or native extractors (which checked only `member_expression`). This left exported handlers unindexed and attributed their call references to file-level scope. Contrast: trace-mcp's Tree-sitter JavaScript/TypeScript AST extraction natively models subscript assignments with identifier-spelling string literals as exported function definitions, attaching call graphs to the exported symbol.
+  - *Browser host globals falsely resolving to project methods (PR #3026, merged)*: Fixes #2907. Untyped receiver calls on browser globals (`window.open`, `localStorage.getItem`, `location.reload`, `history.back`) fell back to fuzzy heuristics and single-name matching (confidence 0.7–0.9), creating hallucinated graph edges from standard DOM calls to project methods (e.g. `WindowService::open`, `StorageService::getItem`). The fix introduces a browser host globals filter (`JS_BROWSER_HOST_GLOBALS`) that declines edges when the receiver is exclusively used as an unbound host global. Contrast: trace-mcp relies on explicit symbol resolution and import linkage, avoiding heuristic fallback edges for standard environment host globals.
+  - *Intra-project folders starting with two dots treated as escaping root (PR #3028, merged)*: Fixes #1406. Naive `rel.startsWith('..')` checks treated folders like `..generated/` or `..cache/` within the repository root as external paths escaping the workspace, causing `tsconfig.json` path aliases (`@generated/*`), file watcher updates, and nested `.gitignore` handling to ignore valid in-repo files. Contrast: trace-mcp normalizes relative paths with proper segment boundary checks, distinguishing `..` parent traversals from names beginning with dots.
+- **DeusData/codebase-memory-mcp**:
+  - *Supervised index worker CPU priority lowering (PR #2838, open)*: Closes #2834. Full indexing saturated all available CPU cores, causing concurrent one-shot CLI commands and interactive MCP queries to double in wall-clock latency due to OS run-queue contention. The fix applies POSIX `setpriority(PRIO_PROCESS, 0, 10)` and Windows `BELOW_NORMAL_PRIORITY_CLASS` to index workers. Contrast: trace-mcp executes non-blocking incremental indexing passes via SQLite without saturating worker threads or starving interactive agent queries.
+  - *Symlinked agent configuration directories detection (PR #2833, open)*: Closes #2671. CLI agent detection used `lstat` + `S_ISDIR`, which fails for symlinked configuration directories (such as dotfiles symlinks for Zed or Cursor in `~/Library/Application Support/Zed` or `~/.cursor`). Fix updates directory existence checks to use `stat`. Contrast: trace-mcp resolves symlinks canonicalizing workspace and config locations safely without choking on dotfiles setups.
+
+**Competitor pulse (as of 2026-10-30 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,073★ (+2), 1,609 forks (=)
+- oraios/serena: 30,849★ (+4), 2,103 forks (+1)
+- DeusData/codebase-memory-mcp: 47,793★ (+8), 3,931 forks (+1)
+- tirth8205/code-review-graph: 32,477★ (+4), 2,960 forks (+1)
+- colbymchenry/codegraph: 75,880★ (+15), 5,017 forks (+3)
+- abhigyanpatwari/GitNexus: 48,106★ (-1), 5,213 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,818★ (+1), 372 forks (=)
+- continuedev/continue: 36,371★ (+2), 5,529 forks (=)
+- Aider-AI/aider: 49,816★ (+2), 5,110 forks (=)
+- Graphify-Labs/graphify: 138,612★ (+131), 13,217 forks (+16)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
