@@ -1525,6 +1525,13 @@ program
     let startupComplete = false;
 
     const httpServer = http.createServer(async (req, res) => {
+      if (daemonShuttingDown) {
+        res.setHeader('Connection', 'close');
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Daemon is shutting down' }));
+        return;
+      }
+
       const clientIp = req.socket.remoteAddress ?? 'unknown';
 
       // CORS: allow Electron renderer (and local dev) to read custom headers
@@ -3903,23 +3910,31 @@ program
       }
       sessionHandles.clear();
       sessionClients.clear();
-      // Close all session transports
-      for (const transport of sessionTransports.values()) {
-        await transport.close().catch(() => {});
-      }
+      // Close all session transports in parallel
+      const transportCloseStart = Date.now();
+      const transportCloses = Array.from(sessionTransports.values()).map((transport) =>
+        transport.close().catch(() => {}),
+      );
+      await Promise.allSettled(transportCloses);
+      logger.info(
+        { elapsedMs: Date.now() - transportCloseStart, count: transportCloses.length },
+        'Session transports closed',
+      );
       sessionTransports.clear();
       projectSessions.clear();
       projectRelay.dispose();
       idleMonitor.stop();
       // Drain scheduler stages while every DB is still open (stages read
       // per-project stores and the shared scheduler state).
+      const schedulerStopStart = Date.now();
       if (memorySchedulerInitPromise) {
         await memorySchedulerInitPromise.catch(() => {});
       }
       if (memoryScheduler) {
-        await memoryScheduler.stop();
+        await memoryScheduler.stop(5_000);
         memoryScheduler = null;
       }
+      logger.info({ elapsedMs: Date.now() - schedulerStopStart }, 'Memory scheduler stopped');
       if (activityPoker) clearInterval(activityPoker);
       if (stalenessTimer) clearInterval(stalenessTimer);
       if (updateWatchdog) clearInterval(updateWatchdog);

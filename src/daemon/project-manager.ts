@@ -82,13 +82,12 @@ const AI_COALESCE_WAIT_MS = 5_000;
  * ahead of the unsubscribe holds it draining a hung handler) and the
  * pipeline lock (handlers drained by `watcher.drain()` settle only when the
  * aborted index bails). Bounding any one of them alone still wedges behind
- * the others. Worst sequential path (this budget + the 5s bounded
- * `dispose()` drain) is 18s, inside the 20s `DAEMON_SHUTDOWN_DEADLINE_MS`
- * with margin left for the synchronous closes and `httpServer.close()`.
+ * the others. Bound is 12s, inside the 20s `DAEMON_SHUTDOWN_DEADLINE_MS`
+ * with margin left for memory scheduler, synchronous closes, and `httpServer.close()`.
  * `shutdown()` stops projects concurrently, so one slow project cannot eat
  * another's budget.
  */
-export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 13_000;
+export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 12_000;
 
 /**
  * How long a project may sit in `starting`/`indexing` before the vitals tick
@@ -1896,8 +1895,15 @@ export class ProjectManager {
     // cache the dispose call is mostly a no-op (the cache belongs to `db`),
     // but for any per-pipeline in-memory state the call drops references so
     // the heap can shrink between project lifecycles.
+    // Bound by remaining teardown budget so disposal cannot overrun the shutdown window.
     try {
-      await managed.pipeline.dispose();
+      const disposed = await waitWithTimeout(managed.pipeline.dispose(), remainingMs());
+      if (!disposed) {
+        logger.warn(
+          { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
+          'stopProject: pipeline.dispose still running after timeout — continuing teardown',
+        );
+      }
     } catch (err) {
       logger.warn(
         { error: err, projectRoot: root },
