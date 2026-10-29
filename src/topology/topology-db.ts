@@ -659,8 +659,11 @@ export class TopologyStore {
    * endpoints, events, edges, snapshots).
    * Returns counts of deleted rows for logging.
    */
-  removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
-    return this.subprojects.removeByRepoRoot(repoRoot);
+  removeByRepoRoot(
+    repoRoot: string,
+    projectRoot?: string,
+  ): { subprojects: number; services: number } {
+    return this.subprojects.removeByRepoRoot(repoRoot, projectRoot);
   }
 
   updateSubprojectSyncTime(id: number): void {

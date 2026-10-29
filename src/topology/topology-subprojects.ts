@@ -351,64 +351,121 @@ export class SubprojectOperations {
    * (e.g. `/tmp` vs `/private/tmp`, `/var` vs `/private/var` on macOS).
    * Returns counts of deleted rows for logging.
    */
-  removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
+  removeByRepoRoot(
+    repoRoot: string,
+    projectRoot?: string,
+  ): { subprojects: number; services: number } {
     const result = { subprojects: 0, services: 0 };
     const absRoot = path.resolve(repoRoot);
-    const candidateRoots = new Set<string>([repoRoot, absRoot]);
-    let real: string | undefined;
+    const candidateRepoRoots = new Set<string>([repoRoot, absRoot]);
+    let realRepo: string | undefined;
     try {
-      real = fs.realpathSync(absRoot);
-      candidateRoots.add(real);
+      realRepo = fs.realpathSync(absRoot);
+      candidateRepoRoots.add(realRepo);
     } catch {
       // Path may no longer exist on disk
     }
 
-    if (real) {
-      try {
-        const serviceRoots = this.db
-          .prepare('SELECT DISTINCT repo_root FROM services')
-          .all() as Array<{ repo_root: string }>;
-        for (const row of serviceRoots) {
-          if (candidateRoots.has(row.repo_root)) continue;
-          try {
-            if (fs.realpathSync(row.repo_root) === real) {
-              candidateRoots.add(row.repo_root);
-            }
-          } catch {}
-        }
-      } catch {}
+    for (const r of Array.from(candidateRepoRoots)) {
+      if (r.startsWith('/private/')) {
+        candidateRepoRoots.add(r.slice('/private'.length));
+      } else if (r.startsWith('/tmp/') || r.startsWith('/var/')) {
+        candidateRepoRoots.add(`/private${r}`);
+      }
+    }
 
+    const effectiveProjectRoot = projectRoot ?? repoRoot;
+    const absProjRoot = path.resolve(effectiveProjectRoot);
+    const candidateProjectRoots = new Set<string>([effectiveProjectRoot, absProjRoot]);
+    let realProj: string | undefined;
+    try {
+      realProj = fs.realpathSync(absProjRoot);
+      candidateProjectRoots.add(realProj);
+    } catch {
+      // Path may no longer exist on disk
+    }
+
+    for (const r of Array.from(candidateProjectRoots)) {
+      if (r.startsWith('/private/')) {
+        candidateProjectRoots.add(r.slice('/private'.length));
+      } else if (r.startsWith('/tmp/') || r.startsWith('/var/')) {
+        candidateProjectRoots.add(`/private${r}`);
+      }
+    }
+
+    // TRA-2782: Discover project_root aliases by checking registered project roots
+    // against the canonical path of this project. Only project roots matching realProj
+    // are included — preserving other projects' cross-repo subproject links intact.
+    if (realProj) {
       try {
-        const subRoots = this.db
-          .prepare('SELECT DISTINCT repo_root FROM subprojects')
-          .all() as Array<{ repo_root: string }>;
-        for (const row of subRoots) {
-          if (candidateRoots.has(row.repo_root)) continue;
+        const distinctProjRoots = this.db
+          .prepare('SELECT DISTINCT project_root FROM subprojects')
+          .all() as Array<{ project_root: string }>;
+        for (const row of distinctProjRoots) {
+          if (candidateProjectRoots.has(row.project_root)) continue;
           try {
-            if (fs.realpathSync(row.repo_root) === real) {
-              candidateRoots.add(row.repo_root);
+            if (fs.realpathSync(row.project_root) === realProj) {
+              candidateProjectRoots.add(row.project_root);
             }
           } catch {}
         }
       } catch {}
     }
 
-    const services: Array<{ id: number }> = [];
-    const selectSvc = this.db.prepare('SELECT id FROM services WHERE repo_root = ?');
-    for (const root of candidateRoots) {
-      for (const row of selectSvc.all(root) as Array<{ id: number }>) {
-        if (!services.some((s) => s.id === row.id)) {
-          services.push(row);
+    // Collect all subprojects scoped strictly to this project's candidate roots.
+    const selectScopedSub = this.db.prepare(
+      'SELECT id, repo_root, project_root FROM subprojects WHERE project_root = ?',
+    );
+    const subprojects: Array<{ id: number }> = [];
+    const seenSubIds = new Set<number>();
+
+    for (const projCandidate of Array.from(candidateProjectRoots)) {
+      const rows = selectScopedSub.all(projCandidate) as Array<{
+        id: number;
+        repo_root: string;
+        project_root: string;
+      }>;
+      for (const row of rows) {
+        if (!seenSubIds.has(row.id)) {
+          seenSubIds.add(row.id);
+          subprojects.push({ id: row.id });
+        }
+        candidateProjectRoots.add(row.project_root);
+        if (projectRoot === undefined || projectRoot === repoRoot) {
+          candidateRepoRoots.add(row.repo_root);
         }
       }
     }
 
-    const subprojects: Array<{ id: number }> = [];
-    const selectSub = this.db.prepare('SELECT id FROM subprojects WHERE repo_root = ?');
-    for (const root of candidateRoots) {
-      for (const row of selectSub.all(root) as Array<{ id: number }>) {
-        if (!subprojects.some((s) => s.id === row.id)) {
-          subprojects.push(row);
+    // If removing a standalone subproject (repoRoot != projectRoot), also delete that
+    // specific subproject row without wiping other subprojects in the project.
+    if (projectRoot !== undefined && projectRoot !== repoRoot) {
+      const selectSingleSub = this.db.prepare(
+        'SELECT id FROM subprojects WHERE repo_root = ? AND project_root = ?',
+      );
+      for (const repoCandidate of candidateRepoRoots) {
+        for (const projCandidate of candidateProjectRoots) {
+          const rows = selectSingleSub.all(repoCandidate, projCandidate) as Array<{
+            id: number;
+          }>;
+          for (const row of rows) {
+            if (!seenSubIds.has(row.id)) {
+              seenSubIds.add(row.id);
+              subprojects.push({ id: row.id });
+            }
+          }
+        }
+      }
+    }
+
+    const services: Array<{ id: number }> = [];
+    const selectSvc = this.db.prepare('SELECT id FROM services WHERE repo_root = ?');
+    const seenSvcIds = new Set<number>();
+    for (const root of candidateRepoRoots) {
+      for (const row of selectSvc.all(root) as Array<{ id: number }>) {
+        if (!seenSvcIds.has(row.id)) {
+          seenSvcIds.add(row.id);
+          services.push(row);
         }
       }
     }

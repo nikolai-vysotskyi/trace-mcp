@@ -113,7 +113,7 @@ function dropTopologyRows(
     // breakage in bundled distribution dist/cli.js (TRA-2778).
     const store = new TopologyStore(TOPOLOGY_DB_PATH);
     try {
-      return store.removeByRepoRoot(root);
+      return store.removeByRepoRoot(root, root);
     } finally {
       store.close();
     }

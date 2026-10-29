@@ -142,4 +142,87 @@ describe('removeProjectArtifacts — topology rows (TRA-2778)', () => {
       verifyStore.close();
     }
   });
+
+  it('preserves cross-repo subproject links in other projects when target project is removed', async () => {
+    const rootA = path.join(tmpProjects, 'project-a');
+    const rootB = path.join(tmpProjects, 'project-b');
+    const linkA = path.join(tmpProjects, 'link-a');
+    fs.mkdirSync(rootA, { recursive: true });
+    fs.mkdirSync(rootB, { recursive: true });
+    fs.symlinkSync(rootA, linkA, 'junction');
+
+    const { TOPOLOGY_DB_PATH, ensureGlobalDirs } = await import('../../global.js');
+    const { TopologyStore } = await import('../../topology/topology-db.js');
+    ensureGlobalDirs();
+
+    const store = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      // Project A self-registered (under symlink)
+      store.upsertSubproject({
+        name: 'service-a',
+        repoRoot: linkA,
+        projectRoot: linkA,
+      });
+      store.upsertService({
+        name: 'service-a',
+        repoRoot: linkA,
+        dbPath: path.join(linkA, 'index.db'),
+        serviceType: 'backend',
+      });
+
+      // Project B self-registered
+      store.upsertSubproject({
+        name: 'service-b',
+        repoRoot: rootB,
+        projectRoot: rootB,
+      });
+      store.upsertService({
+        name: 'service-b',
+        repoRoot: rootB,
+        dbPath: path.join(rootB, 'index.db'),
+        serviceType: 'backend',
+      });
+
+      // Project B registers Project A as a cross-repo dependency
+      store.upsertSubproject({
+        name: 'dep-a-in-b',
+        repoRoot: linkA,
+        projectRoot: rootB,
+      });
+    } finally {
+      store.close();
+    }
+
+    const { removeProjectArtifacts } = await import('../project-artifacts.js');
+    // Remove Project A via canonical root
+    const result = removeProjectArtifacts(rootA);
+
+    expect(result.topology.subprojects).toBe(1);
+    expect(result.topology.services).toBe(1);
+    expect(result.failures.filter((f) => f.tier === 'topology')).toEqual([]);
+
+    const verifyStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      // Subprojects of Project B MUST be preserved intact, including the cross-repo link to A
+      const bSubs = verifyStore.getSubprojectsByProject(rootB);
+      expect(bSubs.length).toBe(2);
+      const bRepoRoots = bSubs.map((s) => s.repo_root);
+      expect(bRepoRoots).toContain(rootB);
+      expect(bRepoRoots).toContain(linkA);
+
+      // Project A's own subprojects must be gone
+      const aSubs = verifyStore.getSubprojectsByProject(rootA);
+      expect(aSubs).toEqual([]);
+      const aLinkSubs = verifyStore.getSubprojectsByProject(linkA);
+      expect(aLinkSubs).toEqual([]);
+
+      // Project A service gone, Project B service intact
+      const remainingServices = verifyStore.getAllServices().map((s) => s.repo_root);
+      expect(remainingServices).toContain(rootB);
+      expect(remainingServices).not.toContain(rootA);
+      expect(remainingServices).not.toContain(linkA);
+    } finally {
+      verifyStore.close();
+    }
+  });
 });
