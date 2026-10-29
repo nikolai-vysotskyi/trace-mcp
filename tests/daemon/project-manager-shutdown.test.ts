@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/registry.js', () => ({
   listProjects: vi.fn(() => []),
+  getProject: vi.fn(() => null),
   unregisterProject: vi.fn(),
 }));
 
