@@ -93,4 +93,53 @@ describe('removeProjectArtifacts — topology rows (TRA-2778)', () => {
     expect(result.topology).toEqual({ subprojects: 0, services: 0 });
     expect(result.failures.filter((f) => f.tier === 'topology')).toEqual([]);
   });
+
+  it('drops topology rows when queried via canonical root but stored under symlink alias', async () => {
+    const targetDir = path.join(tmpProjects, 'target-project');
+    const linkDir = path.join(tmpProjects, 'link-project');
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.symlinkSync(targetDir, linkDir, 'junction');
+
+    const { TOPOLOGY_DB_PATH, ensureGlobalDirs } = await import('../../global.js');
+    const { TopologyStore } = await import('../../topology/topology-db.js');
+    ensureGlobalDirs();
+
+    const store = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      store.upsertSubproject({
+        name: 'service-symlink',
+        repoRoot: linkDir,
+        projectRoot: linkDir,
+      });
+      store.upsertService({
+        name: 'service-symlink',
+        repoRoot: linkDir,
+        dbPath: path.join(linkDir, 'index.db'),
+        serviceType: 'backend',
+      });
+    } finally {
+      store.close();
+    }
+
+    const { removeProjectArtifacts } = await import('../project-artifacts.js');
+    // Remove using targetDir (canonical / realpath)
+    const result = removeProjectArtifacts(targetDir);
+
+    expect(result.topology.subprojects).toBe(1);
+    expect(result.topology.services).toBe(1);
+    expect(result.failures.filter((f) => f.tier === 'topology')).toEqual([]);
+
+    const verifyStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      const remainingSubs = verifyStore.getAllSubprojects().map((s) => s.repo_root);
+      expect(remainingSubs).not.toContain(linkDir);
+      expect(remainingSubs).not.toContain(targetDir);
+
+      const remainingServices = verifyStore.getAllServices().map((s) => s.repo_root);
+      expect(remainingServices).not.toContain(linkDir);
+      expect(remainingServices).not.toContain(targetDir);
+    } finally {
+      verifyStore.close();
+    }
+  });
 });

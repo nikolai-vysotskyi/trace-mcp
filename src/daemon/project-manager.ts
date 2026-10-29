@@ -1972,9 +1972,16 @@ export class ProjectManager {
     // entry — the stored spelling when loaded (keeps registry/artifact calls
     // pass-through for raw-spelling entries), the caller string when never
     // loaded. stopProject() itself tolerates both spellings (managedMapKey).
+    let registryRoot: string | undefined;
+    try {
+      registryRoot = typeof getProject === 'function' ? getProject(root)?.root : undefined;
+    } catch {
+      // Mock compatibility: unit tests may mock ../registry.js without getProject export
+    }
     const effective =
       this.projects.get(managedMapKey(this.projects, root) ?? root)?.root ??
-      getProject(root)?.root ??
+      this.getProject(root)?.root ??
+      registryRoot ??
       root;
     await this.stopProject(root);
     let artifacts: RemoveArtifactsResult;
@@ -1993,6 +2000,9 @@ export class ProjectManager {
       };
     }
     unregisterProject(effective);
+    if (effective !== root) {
+      unregisterProject(root);
+    }
     // Mirror addProject(): a managed ancestor's watcher ignore list may have
     // been scoped around this now-unregistered root and would otherwise stay
     // stale (harmlessly over-excluding) until the next daemon restart.
