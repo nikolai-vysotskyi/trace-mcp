@@ -134,14 +134,14 @@ describe('packaged daemon topology cleanup on project delete (TRA-2778)', () => 
 
       db.prepare(`
         INSERT INTO subprojects (name, repo_root, project_root) VALUES (?, ?, ?)
-      `).run('test-proj', testRoot, testRoot);
+      `).run('test-proj', canonicalTestRoot, canonicalTestRoot);
       db.prepare(`
         INSERT INTO subprojects (name, repo_root, project_root) VALUES (?, ?, ?)
       `).run('other-proj', otherRoot, otherRoot);
 
       db.prepare(`
         INSERT INTO services (name, repo_root, db_path, service_type) VALUES (?, ?, ?, ?)
-      `).run('test-svc', testRoot, testDbPath, 'backend');
+      `).run('test-svc', canonicalTestRoot, testDbPath, 'backend');
       db.prepare(`
         INSERT INTO services (name, repo_root, db_path, service_type) VALUES (?, ?, ?, ?)
       `).run('other-svc', otherRoot, path.join(indexDir, 'other.db'), 'backend');
