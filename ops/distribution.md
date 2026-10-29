@@ -8216,3 +8216,53 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-29 08:00 pass (TRA-2768): mention sweep clean, codegraph Svelte script parse (#2997) & projectPath file resolution (#2996) & callers recursive site retention (#2994), Graphify cross-package Go receivers (#4853) & two-file undirected import cycles (#4852) & JS file/class ID collision (#4854), CBM C++ .inc classification (#2826), ecosystem triage doITmagic/rag-code-mcp & BehnamJalaliCo/CodeCortex
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet, no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream commit moved main; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Returned 0 repos outside seen list; all hits already classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Svelte self-closing script parse overrun (PR #2997, open)*: Follow-up to #2995/#2989 for Svelte components. Self-closing `<script src="..." />` tags in `<svelte:head>` were matched as opening tags by regex extraction, greedily capturing into the component's real `<script>` and discarding all symbols and markup between them ("parse produced no symbols"). Contrast: trace-mcp uses robust Tree-sitter parsers directly across languages instead of regex tag scanners, properly handling self-closing tags and embedded script blocks without greedy regex overrun.
+  - *File-as-projectPath resolution (PR #2996, open)*: Fixes #2982. Agents frequently pass a specific file rather than the root directory in `projectPath`, which failed with `isError` "Path is not a directory". PR #2996 normalizes file paths to their containing directory before project gating, worktree checks, and worker dispatch. Contrast: trace-mcp tools accept file paths, directory paths, or workspace roots smoothly, resolving paths relative to repo root or canonical paths without erroring out when a file is passed.
+  - *Retention of multiple and recursive call sites (PR #2994, open)*: Fixes #2909. `getCallers` previously dropped subsequent call sites from the same caller (via a `nearerThanBefore` gate), and completely dropped recursive calls because the caller set was seeded with the query node. Contrast: trace-mcp tracks all call sites with line numbers and handles recursive calls naturally in indexed SQLite symbol/reference tables.
+- **Graphify-Labs/graphify**:
+  - *Cross-package Go receiver method resolution (PR #4853, open)*: Refs #3368. Previous member-call fix (0.9.89) only resolved receivers typed in the same package; receivers typed from another package (`*plugincontext.Provider`, `plugins.Client`) were dropped because `qualified_type` (`pkg.Greeter`) was omitted from bare-name type tables. Contrast: trace-mcp indexes imports, packages, and cross-package symbol references across 81 languages including Go, mapping receiver method calls to imported package types without requiring bare-name hackarounds.
+  - *Preserving two-file import cycles in undirected graphs (PR #4852, open)*: Fixes #4839. In default undirected graph builds, bidirectional import edges collapsed into a single edge, causing two-file import cycles to report "None detected". PR stamps surviving edges with `reverse_runtime_import: true` to reconstruct direction during cycle detection. Contrast: trace-mcp maintains directed import edges natively in its graph representation, retaining exact cycle topologies without lossy bidirectional edge collapsing.
+  - *File vs class ID collision (Issue #4854, open)*: JavaScript file `bundle.min.js` and class `class Js` inside it both normalize to node ID `bundle_min_js`, silently dropping the class node and creating self-referencing `contains` edges. Contrast: trace-mcp separates file nodes and AST symbol nodes by distinct entity IDs and scoped symbols, preventing namespace collisions between file paths and contained declarations.
+- **DeusData/codebase-memory-mcp**:
+  - *C/C++ .inc fragment classification (PR #2826, open)*: Fixes #2825. Ambiguous `.inc` files were misclassified as BitBake or ObjectScript, dropping C/C++ declarations. PR adds heuristic C probe. Contrast: trace-mcp language detection handles ambiguous extensions with robust syntax heuristics and fallback parsers across 81 languages.
+- **Ecosystem & New Competitor Discovery**:
+  - *doITmagic/rag-code-mcp* (55★, release v1.0.8): Go-based MCP server using Ollama + Qdrant in Docker containers for semantic code navigation and RAG across Go, PHP, JS/TS, Python. Heavy infrastructure footprint compared to trace-mcp's zero-dependency, local-first SQLite architecture.
+  - *BehnamJalaliCo/CodeCortex* (8★, PyPI `codecortex-context-engine`): Open-source Python context intelligence engine for coding agents providing repository mapping, symbol resolution, evidence-aware retrieval, impact analysis, and guarded edits under Apache 2.0.
+
+**Competitor pulse (as of 2026-10-29 08:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,062★ (=), 1,605 forks (=)
+- oraios/serena: 30,822★ (+7), 2,101 forks (=)
+- DeusData/codebase-memory-mcp: 47,744★ (+13), 3,928 forks (-1)
+- tirth8205/code-review-graph: 32,459★ (+2), 2,958 forks (=)
+- colbymchenry/codegraph: 75,783★ (+27), 5,000 forks (+3)
+- abhigyanpatwari/GitNexus: 48,099★ (+3), 5,213 forks (=)
+- jgravelle/jcodemunch-mcp: 2,817★ (+2), 372 forks (=)
+- continuedev/continue: 36,359★ (=), 5,525 forks (-2)
+- Aider-AI/aider: 49,800★ (+5), 5,109 forks (-1)
+- Graphify-Labs/graphify: 137,973★ (+214), 13,152 forks (+19)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
