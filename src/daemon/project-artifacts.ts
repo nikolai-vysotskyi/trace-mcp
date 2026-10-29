@@ -113,7 +113,7 @@ function dropTopologyRows(
     // breakage in bundled distribution dist/cli.js (TRA-2778).
     const store = new TopologyStore(TOPOLOGY_DB_PATH);
     try {
-      return store.removeByRepoRoot(root);
+      return store.removeByRepoRoot(root, root);
     } finally {
       store.close();
     }
@@ -183,16 +183,24 @@ function dropDecisionRows(root: string, result: RemoveArtifactsResult): Decision
         { table: 'decision_clusters', key: 'clusters' },
         { table: 'project_memos', key: 'memos' },
       ];
-      for (const { table, key } of tables) {
-        try {
-          const info = db.prepare(`DELETE FROM ${table} WHERE project_root = ?`).run(root);
-          counts[key] = Number(info.changes ?? 0);
-        } catch (err) {
-          // Table may not exist on older DBs — ignore.
-          const msg = (err as Error)?.message ?? '';
-          if (!/no such table/i.test(msg)) {
-            logger.error({ err, table, root }, 'project-artifacts: decision table delete failed');
-            result.failures.push({ tier: `decisions.${table}`, error: String(err) });
+      const absRoot = path.resolve(root);
+      const candidateRoots = new Set<string>([root, absRoot]);
+      try {
+        const real = fs.realpathSync(absRoot);
+        candidateRoots.add(real);
+      } catch {}
+      for (const candidate of candidateRoots) {
+        for (const { table, key } of tables) {
+          try {
+            const info = db.prepare(`DELETE FROM ${table} WHERE project_root = ?`).run(candidate);
+            counts[key] += Number(info.changes ?? 0);
+          } catch (err) {
+            // Table may not exist on older DBs — ignore.
+            const msg = (err as Error)?.message ?? '';
+            if (!/no such table/i.test(msg)) {
+              logger.error({ err, table, root }, 'project-artifacts: decision table delete failed');
+              result.failures.push({ tier: `decisions.${table}`, error: String(err) });
+            }
           }
         }
       }
