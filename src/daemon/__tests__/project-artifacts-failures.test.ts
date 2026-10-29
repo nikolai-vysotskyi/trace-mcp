@@ -104,4 +104,30 @@ describe('removeProjectArtifacts — failure reporting (TRA-559)', () => {
       }),
     );
   });
+
+  it('successfully drops topology rows without throwing module resolution errors (TRA-2777)', async () => {
+    const root = path.join(tmpProjects, 'run-1');
+
+    const { TOPOLOGY_DB_PATH, ensureGlobalDirs } = await import('../../global.js');
+    ensureGlobalDirs();
+    const { TopologyStore } = await import('../../topology/topology-db.js');
+    const store = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      store.upsertSubproject({
+        name: 'test-sub',
+        repoRoot: root,
+        projectRoot: root,
+        dbPath: path.join(tmpHome, 'test.db'),
+      });
+      expect(store.getAllSubprojects().length).toBe(1);
+    } finally {
+      store.close();
+    }
+
+    const { removeProjectArtifacts } = await import('../project-artifacts.js');
+    const result = removeProjectArtifacts(root);
+
+    expect(result.failures.filter((f) => f.tier === 'topology')).toEqual([]);
+    expect(result.topology.subprojects).toBe(1);
+  });
 });
