@@ -391,4 +391,10 @@ nyktora/noctrace                       # noctrace-mcp.js Docker/container tracin
 tenproduct/langfuse-trace-mcp          # Langfuse trace inspection MCP server
 yuzujr/buildfix                        # trace-mcp-%Y%m%d-%H%M%S.jsonl build log file format
 
+# ── Swept 2026-10-29 afternoon pass (TRA-2771) ──
+# Genuine automated third-party AI skills/tools catalog dump (AgentBay, 0★, 0 forks):
+# skills/memory-and-context-0eed3a.md lists nikolai-vysotskyi/trace-mcp under agent memory and context, software engineering, and MCP tool integration:
+ravisingh11/agentbay-ultimate-list
+
+
 
