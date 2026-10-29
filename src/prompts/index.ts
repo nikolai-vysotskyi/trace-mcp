@@ -140,8 +140,9 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       if (hotspots.length > 0) {
         sections.push('## Risk Hotspots (high complexity + churn)\n');
         for (const h of hotspots) {
+          const commitsStr = h.commits === null ? 'n/a' : `${h.commits}`;
           sections.push(
-            `- ${h.file}: complexity=${h.max_cyclomatic}, commits=${h.commits}, score=${h.score.toFixed(2)}`,
+            `- ${h.file}: complexity=${h.max_cyclomatic}, commits=${commitsStr}, score=${h.score.toFixed(2)}`,
           );
         }
         sections.push('');

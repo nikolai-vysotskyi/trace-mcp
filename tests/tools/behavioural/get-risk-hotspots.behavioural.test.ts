@@ -141,7 +141,7 @@ describe('getHotspots() — behavioural contract', () => {
     const result = getHotspots(store, '/project');
     expect(result.length).toBe(1);
     expect(result[0].file).toBe('src/complex.ts');
-    expect(result[0].commits).toBe(0);
+    expect(result[0].commits).toBeNull();
     expect(result[0].confidence_level).toBe('low');
     // Fallback score = complexity alone (no log multiplier).
     expect(result[0].score).toBe(15);

@@ -12,7 +12,7 @@ import type { Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { safeGitEnv } from '../../utils/git-env.js';
-import { isGitRepo } from '../git/git-analysis.js';
+import { isGitRepo, mapRepoPathToCwd, resolveGitRoots } from '../git/git-analysis.js';
 import {
   type ConfidenceLevel,
   classifyConfidence,
@@ -209,31 +209,11 @@ interface GitFileInfo {
 
 /**
  * Get per-file git stats including fix-commit classification.
- * Uses a single `git log` call for efficiency.
+ * Collects across all resolved git roots (supporting umbrella repos).
  */
 function getGitFileStatsWithFixes(cwd: string, sinceDays: number): Map<string, GitFileInfo> {
-  const args = [
-    'log',
-    '--pretty=format:__COMMIT__%H|%aI|%aN|%s',
-    '--name-only',
-    '--no-merges',
-    '--diff-filter=ACDMR',
-    `--since=${sinceDays} days ago`,
-  ];
-
-  let output: string;
-  try {
-    output = execFileSync('git', args, {
-      cwd,
-      stdio: 'pipe',
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 30_000,
-      env: safeGitEnv(),
-    }).toString('utf-8');
-  } catch (e) {
-    logger.warn({ error: e }, 'git log failed for predictive intelligence');
-    return new Map();
-  }
+  const roots = resolveGitRoots(cwd);
+  if (roots.length === 0) return new Map();
 
   const FIX_PATTERN = /\b(fix|bug|patch|hotfix|repair|resolve|correct)\b/i;
 
@@ -248,37 +228,65 @@ function getGitFileStatsWithFixes(cwd: string, sinceDays: number): Map<string, G
     }
   >();
 
-  let currentDate: Date | null = null;
-  let currentAuthor: string | null = null;
-  let currentIsFix = false;
+  const args = [
+    'log',
+    '--pretty=format:__COMMIT__%H|%aI|%aN|%s',
+    '--name-only',
+    '--no-merges',
+    '--diff-filter=ACDMR',
+    `--since=${sinceDays} days ago`,
+  ];
 
-  for (const line of output.split('\n')) {
-    if (line.startsWith('__COMMIT__')) {
-      const parts = line.slice('__COMMIT__'.length).split('|');
-      currentDate = new Date(parts[1]);
-      currentAuthor = parts[2];
-      currentIsFix = FIX_PATTERN.test(parts[3] ?? '');
+  for (const root of roots) {
+    let output: string;
+    try {
+      output = execFileSync('git', args, {
+        cwd: root.dir,
+        stdio: 'pipe',
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30_000,
+        env: safeGitEnv(),
+      }).toString('utf-8');
+    } catch (e) {
+      logger.warn({ error: e, root: root.dir }, 'git log failed for predictive intelligence');
       continue;
     }
 
-    const trimmed = line.trim();
-    if (!trimmed || !currentDate || !currentAuthor) continue;
+    let currentDate: Date | null = null;
+    let currentAuthor: string | null = null;
+    let currentIsFix = false;
 
-    const existing = fileData.get(trimmed);
-    if (existing) {
-      existing.commits++;
-      existing.authors.add(currentAuthor);
-      if (currentIsFix) existing.fixCommits++;
-      if (currentDate < existing.firstDate) existing.firstDate = currentDate;
-      if (currentDate > existing.lastDate) existing.lastDate = currentDate;
-    } else {
-      fileData.set(trimmed, {
-        commits: 1,
-        authors: new Set([currentAuthor]),
-        firstDate: currentDate,
-        lastDate: currentDate,
-        fixCommits: currentIsFix ? 1 : 0,
-      });
+    for (const line of output.split('\n')) {
+      if (line.startsWith('__COMMIT__')) {
+        const parts = line.slice('__COMMIT__'.length).split('|');
+        currentDate = new Date(parts[1]);
+        currentAuthor = parts[2];
+        currentIsFix = FIX_PATTERN.test(parts[3] ?? '');
+        continue;
+      }
+
+      const trimmed = line.trim();
+      if (!trimmed || !currentDate || !currentAuthor) continue;
+
+      const mapped = mapRepoPathToCwd(root, trimmed, cwd);
+      if (!mapped) continue;
+
+      const existing = fileData.get(mapped);
+      if (existing) {
+        existing.commits++;
+        existing.authors.add(currentAuthor);
+        if (currentIsFix) existing.fixCommits++;
+        if (currentDate < existing.firstDate) existing.firstDate = currentDate;
+        if (currentDate > existing.lastDate) existing.lastDate = currentDate;
+      } else {
+        fileData.set(mapped, {
+          commits: 1,
+          authors: new Set([currentAuthor]),
+          firstDate: currentDate,
+          lastDate: currentDate,
+          fixCommits: currentIsFix ? 1 : 0,
+        });
+      }
     }
   }
 
@@ -304,6 +312,9 @@ function getGitFileStatsWithFixes(cwd: string, sinceDays: number): Map<string, G
  * Returns array of [commitHash, Set<filePath>].
  */
 function getCommitFileGroups(cwd: string, sinceDays: number): Array<{ files: Set<string> }> {
+  const roots = resolveGitRoots(cwd);
+  if (roots.length === 0) return [];
+
   const args = [
     'log',
     '--pretty=format:__COMMIT__%H',
@@ -313,37 +324,44 @@ function getCommitFileGroups(cwd: string, sinceDays: number): Array<{ files: Set
     `--since=${sinceDays} days ago`,
   ];
 
-  let output: string;
-  try {
-    output = execFileSync('git', args, {
-      cwd,
-      stdio: 'pipe',
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 30_000,
-      env: safeGitEnv(),
-    }).toString('utf-8');
-  } catch {
-    return [];
-  }
-
   const groups: Array<{ files: Set<string> }> = [];
-  let currentFiles: Set<string> | null = null;
 
-  for (const line of output.split('\n')) {
-    if (line.startsWith('__COMMIT__')) {
-      if (currentFiles && currentFiles.size > 0) {
-        groups.push({ files: currentFiles });
-      }
-      currentFiles = new Set();
+  for (const root of roots) {
+    let output: string;
+    try {
+      output = execFileSync('git', args, {
+        cwd: root.dir,
+        stdio: 'pipe',
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30_000,
+        env: safeGitEnv(),
+      }).toString('utf-8');
+    } catch (e) {
+      logger.warn({ error: e, root: root.dir }, 'git log failed for commit file groups');
       continue;
     }
-    const trimmed = line.trim();
-    if (trimmed && currentFiles) {
-      currentFiles.add(trimmed);
+
+    let currentFiles: Set<string> | null = null;
+
+    for (const line of output.split('\n')) {
+      if (line.startsWith('__COMMIT__')) {
+        if (currentFiles && currentFiles.size > 0) {
+          groups.push({ files: currentFiles });
+        }
+        currentFiles = new Set();
+        continue;
+      }
+      const trimmed = line.trim();
+      if (!trimmed || !currentFiles) continue;
+
+      const mapped = mapRepoPathToCwd(root, trimmed, cwd);
+      if (mapped) {
+        currentFiles.add(mapped);
+      }
     }
-  }
-  if (currentFiles && currentFiles.size > 0) {
-    groups.push({ files: currentFiles });
+    if (currentFiles && currentFiles.size > 0) {
+      groups.push({ files: currentFiles });
+    }
   }
 
   return groups;
