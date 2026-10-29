@@ -25,6 +25,7 @@ import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '.
 import { logger } from '../logger.js';
 import { getProject, isEphemeralProjectRoot, listProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 /** A tier that failed outright (as opposed to finding nothing to clean up). */
 export interface ArtifactFailure {
@@ -107,14 +108,9 @@ function dropTopologyRows(
 ): { subprojects: number; services: number } {
   if (!fs.existsSync(TOPOLOGY_DB_PATH)) return { subprojects: 0, services: 0 };
   try {
-    // Lazy import to avoid pulling better-sqlite3 unless a topology DB exists.
     // The store opens with a single writer connection — safe to close immediately.
-    // createRequire, not a bare `require`: the ESM bundle rewrites a bare
-    // `require` to an undefined variable in Node 22 ESM mode (TRA-2384).
-    const requireFn = createRequire(import.meta.url);
-    const { TopologyStore } = requireFn(
-      '../topology/topology-db.js',
-    ) as typeof import('../topology/topology-db.js');
+    // Static import from ../topology/topology-db.js avoids runtime resolution
+    // breakage in bundled distribution dist/cli.js (TRA-2778).
     const store = new TopologyStore(TOPOLOGY_DB_PATH);
     try {
       return store.removeByRepoRoot(root);
@@ -141,9 +137,6 @@ export async function sweepEphemeralTopology(): Promise<string[]> {
   if (!fs.existsSync(TOPOLOGY_DB_PATH)) return [];
   const dropped: string[] = [];
   try {
-    // Lazy import for the same reason as dropTopologyRows(): don't pull
-    // better-sqlite3 in unless there is a topology DB to open.
-    const { TopologyStore } = await import('../topology/topology-db.js');
     const store = new TopologyStore(TOPOLOGY_DB_PATH);
     try {
       for (const sub of store.getAllSubprojects()) {
