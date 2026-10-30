@@ -8459,3 +8459,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-30 08:00 pass (TRA-2792): sweep clean, codegraph template literal exports (#3042) & writer-lock timeouts (#3041) & glob matching (#3029), codebase-memory recursion signals (#2842), Graphify sibling Go structs (#4866) & Terraform cache paths (#4861), GitNexus DeepSWE harness (#3770) & opt-in refresh tool (#3769)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 new repos outside seen list. Sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Template literal default export false match (PR #3042, open)*: Fixes #2968. `statedDefaultExport` scanned comment-stripped source with regex `EXPORT_DEFAULT_HEAD`. When template literals (`${...}`) held nested templates, regex masker desync occurred, causing string contents like `export default NAME` inside template strings to be misidentified as top-level module default exports, hiding actual default exports. Fix rejects binding-style candidates inside enclosing functions or values. Contrast: trace-mcp uses Tree-sitter AST queries where template literals (`template_string`) and export statements (`export_statement`) occupy structurally distinct grammar nodes, immune to string/regex desynchronization.
+  - *Writer-lock live PID reaping on unready wedged daemons (PR #3041, open)*: Fixes #2918. When an acquiring process wrote `ready: false` to `writer.pid` but failed to complete catch-up, the PID remained alive with `ready: false` indefinitely, wedging all downstream queries for 28+ hours because stale lock detection only tested PID liveness. Fix adds a 10-minute timeout `WRITER_READY_TIMEOUT_MS` to reap live-but-unready locks. Contrast: trace-mcp relies on SQLite WAL concurrency with timeout/busy handlers and native daemon watchdog management instead of ad-hoc lock files requiring heuristic lock-stealing algorithms.
+  - *Whole-name glob matching & root anchoring in affected paths (PR #3029, merged)*: Fixes #1273. Hand-rolled unanchored regex conversion in `codegraph affected --filter` caused substring mismatches (e.g. `tests/**/*.py` missed top-level tests, matched `.bak` files, and matched prefix directories like `xe2e/`). Switched to picomatch. Contrast: trace-mcp uses standard picomatch globbing and AST-level query boundaries with explicit path normalization.
+- **DeusData/codebase-memory-mcp**:
+  - *Recursion metadata & self-call policy exposure in `trace_path` (PR #2842, open)*: Fixes #2816. Direct self-calls (`countdown`) returned `callees_total: 0` with `callees_total_relation: eq` because the static indexing pipeline intentionally omitted direct self-call edges, concealing recursion from agents. Fix exposes node-level `self_recursive`, `recursive`, and explicit `self_call_policy: omitted`. Contrast: trace-mcp natively models self-recursive calls and cycle edges in symbol call graphs without suppressing self-calls or corrupting callee totals.
+- **Graphify-Labs/graphify**:
+  - *Cross-file sibling struct field typing in Go packages (PR #4866, open)*: Refs #3368. In Go, struct definitions and methods frequently sit in separate files within the same package. Graphify constructed `go_type_table` strictly per-file, causing method receiver calls through fields (`s.field.M()`) to lose all `calls` edges when the struct was defined in a sibling file. Fix stores `_go_fields` on file nodes and resolves field owners across package files. Contrast: trace-mcp's Tree-sitter Go indexer indexes at package scope and resolves member calls across all files in the package namespace automatically.
+  - *Absolute project path normalization in Terraform AST cache (PR #4861, open)*: Fixes #4858. Copied Terraform/HCL AST caches retained absolute paths in node IDs, causing moved projects or cached CI rebuilds to generate diverging IDs from clean builds. Fix normalizes node IDs against scan root via `_terraform_scope` metadata and bumps cache schema. Contrast: trace-mcp stores repo-relative normalized paths in its SQLite schema from the start.
+- **abhigyanpatwari/GitNexus**:
+  - *Paired DeepSWE benchmark harness on EC2 (PR #3770, open)*: Added `eval/deepswe/` comparing baseline vs GitNexus CLI on 113 long-horizon multi-file tasks. Identified critical runtime pathology: Claude Code background task fan-out (`ENABLE_BACKGROUND_TASKS=1`) spawned 237 background agents, inflating a $3 capped session to $40.82.
+  - *Opt-in index-only `refresh_index` MCP tool (PR #3769, open)*: Closes #3524. Added `refresh_index` MCP tool gated by `GITNEXUS_MCP_ENABLE_REFRESH=1` allowing agents to pull stale indexes to HEAD without shell access.
+- **oraios/serena**:
+  - *Vue declaration exclusion in reference requests (PR #2236, open)*: Fixes #2219. Excluded declaration symbols from companion TypeScript reference lookups in Vue backend, preventing `safe_delete_symbol` from falsely considering declarations as active references.
+
+**Competitor pulse (as of 2026-10-30 08:00 pass vs 2026-10-30 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 25 forks (=)
+- yamadashy/repomix: 29,073★ (=), 1,609 forks (=)
+- oraios/serena: 30,856★ (+7), 2,103 forks (=)
+- DeusData/codebase-memory-mcp: 47,808★ (+15), 3,932 forks (+1)
+- tirth8205/code-review-graph: 32,487★ (+10), 2,959 forks (-1)
+- colbymchenry/codegraph: 75,918★ (+38), 5,020 forks (+3)
+- abhigyanpatwari/GitNexus: 48,117★ (+11), 5,213 forks (=)
+- jgravelle/jcodemunch-mcp: 2,820★ (+2), 372 forks (=)
+- continuedev/continue: 36,371★ (=), 5,530 forks (+1)
+- Aider-AI/aider: 49,822★ (+6), 5,111 forks (+1)
+- Graphify-Labs/graphify: 138,817★ (+205), 13,240 forks (+23)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
