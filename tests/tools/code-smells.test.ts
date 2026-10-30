@@ -1029,6 +1029,58 @@ const apiKey = 'sk-1234567890abcdef';
       expect(data.findings.every((f) => f.priority === 'high')).toBe(true);
     });
 
+    test('rejects invalid priority threshold with VALIDATION_ERROR (TRA-2788)', () => {
+      const result = scanCodeSmells(store, TEST_DIR, {
+        category: ['todo_comment'],
+        priority_threshold: 'critical' as any,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe('VALIDATION_ERROR');
+        expect(result.error.message).toMatch(/priority_threshold/);
+      }
+    });
+
+    test('filters boundary priority thresholds correctly: high, medium, low (TRA-2788)', () => {
+      writeFile(
+        store,
+        'src/boundary_priorities.ts',
+        `
+// FIXME: high priority item
+// TODO: medium priority item
+// REFACTOR: low priority item
+`,
+        'typescript',
+      );
+
+      const highResult = scanCodeSmells(store, TEST_DIR, {
+        scope: 'src/boundary_priorities.ts',
+        priority_threshold: 'high',
+      });
+      expect(highResult.isOk()).toBe(true);
+      const highData = highResult._unsafeUnwrap();
+      expect(highData.findings).toHaveLength(1);
+      expect(highData.findings.map((f) => f.priority)).toEqual(['high']);
+
+      const mediumResult = scanCodeSmells(store, TEST_DIR, {
+        scope: 'src/boundary_priorities.ts',
+        priority_threshold: 'medium',
+      });
+      expect(mediumResult.isOk()).toBe(true);
+      const mediumData = mediumResult._unsafeUnwrap();
+      expect(mediumData.findings).toHaveLength(2);
+      expect(mediumData.findings.map((f) => f.priority)).toEqual(['high', 'medium']);
+
+      const lowResult = scanCodeSmells(store, TEST_DIR, {
+        scope: 'src/boundary_priorities.ts',
+        priority_threshold: 'low',
+      });
+      expect(lowResult.isOk()).toBe(true);
+      const lowData = lowResult._unsafeUnwrap();
+      expect(lowData.findings).toHaveLength(3);
+      expect(lowData.findings.map((f) => f.priority)).toEqual(['high', 'medium', 'low']);
+    });
+
     test('respects scope filter', () => {
       writeFile(store, 'src/app/a.ts', '// TODO: in scope\n', 'typescript');
       writeFile(store, 'lib/b.ts', '// TODO: out of scope\n', 'typescript');

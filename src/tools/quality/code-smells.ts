@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
-import { ok, type TraceMcpResult } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -873,6 +873,11 @@ export function scanCodeSmells(
     limit?: number;
   } = {},
 ): TraceMcpResult<CodeSmellResult> {
+  if (opts.priority_threshold !== undefined && !(opts.priority_threshold in PRIORITY_ORDER)) {
+    return err(
+      validationError(`Invalid priority_threshold (high|medium|low): ${opts.priority_threshold}`),
+    );
+  }
   const categories = new Set(opts.category ?? ALL_CATEGORIES);
   const thresholdRank = priorityRank(opts.priority_threshold ?? 'low');
   const includeTests = opts.include_tests ?? false;
