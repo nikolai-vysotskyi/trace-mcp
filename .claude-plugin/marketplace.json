@@ -9,7 +9,7 @@
       "name": "trace-mcp",
       "source": "./.claude-plugin",
       "description": "Framework-aware code intelligence: semantic search, refactoring, change-impact, security scanning, and decision memory across 91 frameworks and 81 languages.",
-      "version": "3.42.4",
+      "version": "3.42.5",
       "author": {
         "name": "Nikolai Vysotskyi"
       }
