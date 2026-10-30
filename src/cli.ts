@@ -201,6 +201,7 @@ import { handleMemoryRequest } from './api/memory-routes.js';
 import { handleProjectStatsRequest } from './api/project-stats-routes.js';
 import { buildProjectFilesQuery } from './api/project-files-query.js';
 import { parseProjectSecurityQuery } from './api/project-security-query.js';
+import { parseProjectSmellsQuery } from './api/project-smells-query.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
 import { getTreeCacheStats } from './parser/tree-cache.js';
@@ -2357,25 +2358,29 @@ program
           return;
         }
         const managed = resolution.managed;
-        const categoryParam = url.searchParams.get('category');
-        const categories = categoryParam
-          ? categoryParam
-              .split(',')
-              .map((c) => c.trim())
-              .filter(Boolean)
-          : undefined;
-        const priorityThreshold = url.searchParams.get('priority_threshold') ?? undefined;
-        const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 2000);
+        const parsed = parseProjectSmellsQuery(url);
+        if (!parsed.ok) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: parsed.error }));
+          return;
+        }
         try {
-          type SmellOpts = NonNullable<Parameters<typeof scanCodeSmells>[2]>;
           const result = scanCodeSmells(managed.store, projectRoot, {
-            category: categories as SmellOpts['category'],
-            priority_threshold: priorityThreshold as SmellOpts['priority_threshold'],
-            limit,
+            category: parsed.value.category,
+            priority_threshold: parsed.value.priorityThreshold,
+            limit: parsed.value.limit,
           });
           if (result.isErr()) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: String(result.error) }));
+            const errObj = result.error;
+            const message =
+              'message' in errObj
+                ? errObj.message
+                : 'detail' in errObj
+                  ? errObj.detail
+                  : errObj.code;
+            const status = errObj.code === 'VALIDATION_ERROR' ? 400 : 500;
+            res.writeHead(status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: message }));
             return;
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
