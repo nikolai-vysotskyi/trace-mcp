@@ -8612,3 +8612,61 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-30 22:00 pass (TRA-2800): sweep clean, codegraph Cython preParse (#3094) & watch callback isolation (#3092) & package grouping (#3090) & worktree index clone (#3089), Graphify cross-JVM Java/Kotlin (#4879) & Cypher re-import labels (#4878) & import query string resolution (#4876) & extractor plugins (#4875), jcodemunch rename symbol diff (#1281) & policy fence parsing (#1280) & direct caller separation (#1279) & XAML event dead code (#1278), GitNexus diagnostic trial (#3778) & pruning lock (#3777) & LLM token cap rejection (#3776), Serena LSP shutdown timeout (#2238), trace-mcp 199★ (=, 1 to 200★)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits outside seen list; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Cython extraction via Python grammar preParse (PR #3094, open)*: Fixes #1819. Discovers and indexes `.pyx`/`.pxd`/`.pxi` files through the Python grammar by regex-rewriting Cython constructs (`cimport` -> `import`, `cdef`/`cpdef` class/func -> `class`/`def`, stripping C types and `nogil`/`except` modifiers) before AST parsing. Contrast: trace-mcp parses files using language-specific Tree-sitter CST grammars without ad-hoc text rewriting or regex stripping, avoiding offset misalignment and token corruption on embedded signatures.
+  - *Watch callback exception isolation (PR #3092, merged)*: Re-implements #3074, refs #2643. Prevents unhandled rejections in `FileWatcher.flush()` where a throwing user callback (`onSyncError`, `onDegraded`, `onSyncComplete`) terminated the host process. Contrast: trace-mcp isolates file watcher dispatch inside its daemon service using supervisory boundaries and per-event error recovery, protecting background connections from client callback failures.
+  - *Package-level file grouping (PR #3090, merged)*: Implements `codegraph files --format package` by traversing parent directories to locate package manifests (`package.json`, `composer.json`). Contrast: trace-mcp models monorepo and workspace boundaries (pnpm, npm, cargo, go) directly in its relational SQLite schema, mapping symbol boundaries to packages without directory-crawling overhead.
+  - *Worktree index cloning (PR #3089, open)*: Adds `codegraph clone` to copy `.codegraph/` indices between worktrees to avoid re-parsing on temporary branches. Contrast: trace-mcp's daemon caches AST and symbol tables centrally by git commit and content hash (`~/.trace/...`), enabling instant index sharing across worktrees without manual copying.
+- **Graphify-Labs/graphify**:
+  - *Cross-JVM Java/Kotlin symbol resolution (PR #4879, open)*: Unifies cross-file type indexing across `.java` and `.kt` files to resolve cross-language JVM imports and method invocations. Contrast: trace-mcp's symbol resolution engine normalizes symbol tables across language boundaries natively, supporting seamless polyglot interop.
+  - *Cypher re-import label updates (PR #4878, open)*: Fixes duplicate nodes and unique constraint violations when re-importing Cypher exports by matching nodes on stable IDs and updating labels separately. Contrast: trace-mcp uses SQLite relational tables with transactional primary key upserts, guaranteeing deterministic idempotency.
+  - *URL query string and fragment handling in JS/TS imports (PR #4876, open)*: Fixes phantom nodes when resolving imports with query parameters (e.g. `?v=134`). Contrast: trace-mcp uses `oxc-resolver`, adhering strictly to bundler and ESM resolution specifications.
+  - *Extractor plugin architecture (PR #4875, open)*: Allows installing third-party language extractor packages instead of modifying core python extractors.
+- **jgravelle/jcodemunch-mcp**:
+  - *Git rename awareness in symbol diffs (PR #1281, open)*: Fixes `get_changed_symbols` failing to diff renamed files against their old path at `since_sha`, which previously caused all moved symbols to be marked as newly added. Contrast: trace-mcp inspects git rename and copy deltas (`similarityIndex`) to track symbol migrations across file moves.
+  - *Markdown fence parsing for policy blocks (PR #1280, open)*: Corrects boundary detection when uninstalling or refreshing agent policy blocks in `CLAUDE.md`.
+  - *Call hierarchy direct vs indirect separation (PR #1279, open)*: Separates direct callers from transitive callers in `get_blast_radius` when `call_depth > 1`. Contrast: trace-mcp provides structured call graphs with explicit depth level categorization.
+  - *XAML view event handler dead code false positives (PR #1278, open)*: Prevents markup-wired WPF/Avalonia/MAUI event handlers from being marked as dead code. Contrast: trace-mcp's dead code analysis accounts for framework wiring and entry point attributes.
+- **abhigyanpatwari/GitNexus**:
+  - *Capped diagnostic evaluation trial (PR #3778, merged)*: Adds a manual diagnostic mode with $5 CLI cost caps per cell to profile evaluation pipelines.
+  - *Registry pruning race condition fix (PR #3777, open)*: Verifies deletion candidates under lock before storage pruning to protect recently registered workspaces.
+  - *Truncated LLM completion rejection (PR #3776, open)*: Rejects wiki generation when the LLM response is truncated at the token limit (`finish_reason: "length"`).
+- **oraios/serena**:
+  - *LSP termination grace period (PR #2238, open)*: Allows language server processes a timeout to finish clean shutdown before SIGKILL. Contrast: trace-mcp runs Tree-sitter parsers in-process without relying on external language server processes.
+
+**Competitor pulse (as of 2026-10-30 22:00 pass vs 2026-10-30 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (=, 1 away from 200★ milestone!), 24 forks (=)
+- yamadashy/repomix: 29,086★ (+4), 1,610 forks (=)
+- oraios/serena: 30,874★ (-2), 2,106 forks (+1)
+- DeusData/codebase-memory-mcp: 47,850★ (+13), 3,935 forks (=)
+- tirth8205/code-review-graph: 32,508★ (+8), 2,956 forks (=)
+- colbymchenry/codegraph: 75,997★ (+20), 5,025 forks (+2)
+- abhigyanpatwari/GitNexus: 48,134★ (+2), 5,218 forks (+3)
+- jgravelle/jcodemunch-mcp: 2,822★ (=), 372 forks (=)
+- continuedev/continue: 36,373★ (+2), 5,533 forks (+2)
+- Aider-AI/aider: 49,828★ (+3), 5,109 forks (-93)
+- Graphify-Labs/graphify: 139,334★ (+145), 13,288 forks (+19)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
