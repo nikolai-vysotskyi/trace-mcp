@@ -404,3 +404,7 @@ dreygur/knot
 
 
 
+
+# ── Swept 2026-10-30 evening pass (TRA-2798) ──
+# External audit campaign report by Roy Tong (campaigns/audit-report-2026-09.md tracking verified audits including trace-mcp #1175):
+roy-tong/verovo

@@ -8560,3 +8560,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-30 18:00 pass (TRA-2798): sweep clean (roy-tong/verovo audit report added to seen list), codegraph SFC self-closing script swallow (#3070) & FTS call symbol search (#3069) & Rust path attributes (#3064), Graphify cross-file AST definer ID (#4872), jcodemunch missing watchfiles exit (#1277) & idle watcher suppression (#1276), GitNexus fresh registration pruning (#3777) & token-capped wiki rejection (#3776), trace-mcp 199★ (+1)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 hit outside seen list: `roy-tong/verovo` (`campaigns/audit-report-2026-09.md`), tracking external audit findings across projects including trace-mcp #1175 (savings-report heuristic clarification). Added to `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Vue SFC self-closing script swallowing subsequent blocks (PR #3070, merged)*: Fixes #2989. In Vue single-file components, a self-closing `<script src="./legacy.js" />` was parsed together with following blocks, causing `<script setup>` and intermediate `<template>` component call trees to be dropped. Extracted regex logic into shared `src/extraction/sfc-script.ts` with explicit body-range checking. Contrast: trace-mcp uses Tree-sitter's concrete syntax tree grammar (`tree-sitter-vue`), where self-closing XML/HTML elements naturally produce bounded AST nodes without ad-hoc cross-tag regex parsing.
+  - *FTS search on pasted function calls (PR #3069, merged)*: Fixes #2971. In `codegraph query` and `codegraph_search`, queries containing call syntax like `leaf(entry)` stripped punctuation characters `( ) ^ " ' * :` before quoting, collapsing words into `leafentry*` and returning no results. Fixed by replacing punctuation characters with spaces. Contrast: trace-mcp tokenizes search queries against symbol names using SQLite FTS5 tokenizer boundaries, matching both receiver and argument identifiers cleanly.
+  - *Rust `#[path]` module declaration hierarchy (PR #3064, merged)*: Rust files loaded via non-standard `#[path = "..."]` attributes (e.g. in `fast-mlsirm` and Dioxus headless test suites) previously failed module placement or resolved `use super::*` to root crate namesakes. CodeGraph added a project-wide pass scanning for `#[path]` declarations. Contrast: trace-mcp resolves Rust `mod` declarations with path attributes relative to the declaring file's directory, linking lexical module trees accurately.
+  - *JS export default inside template literals (PR #3068, merged)*: Line-based export detection misidentified `export default` strings inside template literals as module exports. Contrast: trace-mcp parses template strings as string literal tokens in the AST, never confusing string content with AST export nodes.
+- **Graphify-Labs/graphify**:
+  - *Preserving primary AST definer node ID during cross-file dedup (PR #4872, open)*: Refs #4859. Cross-file symbol deduplication could overwrite an AST definer's ID with a secondary node from another file. Graphify now preserves the AST definer's original ID. Contrast: trace-mcp's relational schema uniquely identifies definitions by file ID and AST byte offset/symbol hierarchy, preventing node ID collisions across files.
+  - *Documentation alignment (PR #4873, open)*: Corrected stale language counts and updated docs from Claude-specific phrasing to general MCP clients.
+- **jgravelle/jcodemunch-mcp**:
+  - *Graceful exit on missing watchfiles dependency (PR #1277, open)*: CLI watcher commands (`watch`, `watch-all`, `watch-install`) crashed with uncaught errors when the optional `watchfiles` package was missing. Contrast: trace-mcp packages native watchers with fallback mechanisms and verifies optional dependencies cleanly.
+  - *Idle workspace watch suppression (PR #1276, open)*: Inactive or temporary indexes are now excluded from global watch loops to prevent file descriptor exhaustion. Contrast: trace-mcp daemon manages watch subscriptions based on active client sessions and LRU recency.
+- **abhigyanpatwari/GitNexus**:
+  - *Preserving fresh registrations during cache pruning (PR #3777, open)*: Cache pruning previously purged newly registered workspaces before background indexing completed. Contrast: trace-mcp uses transactional SQLite state machines with distinct status flags (`registered`, `indexing`, `ready`), preventing premature eviction.
+  - *Rejecting truncated LLM wiki completions (PR #3776, open)*: Detects when LLM-generated wiki documentation is cut off at the completion token limit and rejects incomplete outputs. Contrast: trace-mcp focuses on deterministic code intelligence extraction and strict structural validation.
+  - *Capped diagnostic evaluation trials (PR #3778, open)*: Introduces capped two-cell trials to control evaluation cost.
+
+**Competitor pulse (as of 2026-10-30 18:00 pass vs 2026-10-30 14:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (+1, one away from 200★ milestone!), 24 forks (=)
+- yamadashy/repomix: 29,082★ (+2), 1,610 forks (=)
+- oraios/serena: 30,876★ (+7), 2,105 forks (+1)
+- DeusData/codebase-memory-mcp: 47,837★ (+11), 3,935 forks (+2)
+- tirth8205/code-review-graph: 32,500★ (+5), 2,956 forks (-1)
+- colbymchenry/codegraph: 75,977★ (+14), 5,023 forks (=)
+- abhigyanpatwari/GitNexus: 48,132★ (+2), 5,215 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,822★ (+1), 372 forks (=)
+- continuedev/continue: 36,371★ (-1), 5,531 forks (=)
+- Aider-AI/aider: 49,825★ (-1), 5,202 forks (+91)
+- Graphify-Labs/graphify: 139,189★ (+129), 13,269 forks (+6)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
