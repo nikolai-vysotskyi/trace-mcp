@@ -607,3 +607,32 @@ The same read-only check found the current PID 59435 answering `/health`
 with `status: ok`. The last release workflow on 2026-10-28 had successful
 `build-app-mac` and `build-app-win` jobs. These checks do not establish
 sleep/wake recovery or a runtime reconnect under injected failure.
+
+---
+
+## 2026-10-31 — retained RSS with two loaded projects on v3.42.0
+
+Read-only field observation of the installed v3.42.0 daemon (PID 59435,
+uptime about 52 hours). From 2026-10-30 21:42 through 22:00 UTC, 19 consecutive
+one-minute vitals reported two loaded projects, `projects_indexing: 0`,
+1,649–1,653 MB RSS, and 878–881 MB heap used. The two-project ceiling above
+is 400 MB, so the RSS gap was at least 1,249 MB. The heap and RSS were nearly
+flat during this window; the sample demonstrates retained memory, not a
+positive leak rate over those 19 minutes. `projects_indexing: 0` alone is
+insufficient to prove strict idle, and the changing project set before and
+after the window prevents a same-project baseline comparison.
+
+`GET /health` answered HTTP 200 in under 1 ms during the check. A subsequent
+`GET /debug/memory`, after the loaded count had risen to four, reported about
+1,975 MB RSS, 990 MB heap used, 19 MB external memory, four project sessions,
+eight session transports, and one session-journal entry with zero compact
+bytes. The later reading is not directly comparable with the two-project
+plateau, but again rules out the compact session journal as the dominant
+retained allocation. A contemporaneous `vmmap -summary` reported a 1.3 GB
+physical footprint, so the large RSS is not entirely private memory pressure.
+
+The live log also recorded 8,638 watcher-driven `reindex-file` telemetry
+events in the preceding three hours, 8,470 with `indexed: 0`; these came from
+several projects. This is background activity, so do not label the plateau an
+isolated idle benchmark or infer that the watcher caused the retained memory.
+TRA-2061 remains the owner of memory attribution and the long-term slope.
