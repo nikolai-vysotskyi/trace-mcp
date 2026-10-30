@@ -8510,3 +8510,53 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-30 14:00 pass (TRA-2796): sweep clean, codegraph stale lock takeover (#3056) & Java static field calls (#3055) & Ruby instance vars (#3053), jcodemunch WAL reload storms (#1274), Graphify AST-tier collision precedence (#4871) & Go method values (#4868), GitNexus MCP cost driver profiling (#3773), Serena UTF-8 BOM .gitignore (#2233)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 new repos outside seen list. Sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Stale write-lock takeover race conditions (PR #3056, merged)*: Fixes multi-process lock-stealing race where multiple CodeGraph processes (MCP server, git hook sync, background indexer) starting after a crash all read a dead PID in `codegraph.lock`, unlinked it, and concurrently took the exclusive write lock, corrupting index state. Also fixes false-stale detection on empty locks during creation or `EPERM` cross-user processes. Contrast: trace-mcp avoids ad-hoc PID-file lock stealing; SQLite's native WAL-mode concurrency and OS file locks handle multiple readers and serialize writers cleanly with configurable busy handlers.
+  - *Java static field method calls & interface constant indexing (PR #3055, merged)*: Fixes #1949. Java calls on static type fields like `Consts.HELPER.go()`, `Holder.SHARED.run()`, and enum constant methods (`Color.RED.hex()`) previously fell through to fuzzy name-matching heuristics because receiver typing only inspected local variables and enclosing class fields. Additionally, `constant_declaration` in interfaces was unindexed by both engines. Contrast: trace-mcp extracts Tree-sitter AST nodes for interface constants and resolves static member access paths against qualified type declarations, avoiding fuzzy string guessing.
+  - *Ruby instance variable type inference from initialize (PR #3053, merged)*: Fixes missing call edges for calls on instance variables (e.g. `@writer.flush` where `@writer = CacheWriter.new(...)` in `initialize`). Previously, 100% of instance variable calls remained unlinked (e.g. 2,780 in activesupport, 3,239 in actionpack). Contrast: trace-mcp parses Ruby instance variable assignments in initializer scopes, linking member method call sites to candidate types.
+- **jgravelle/jcodemunch-mcp**:
+  - *Shared index reloading stamp cascade on SQLite WAL/-shm reads (PR #1274, open)*: In multi-agent environments sharing one index, opening a WAL-mode SQLite database creates an empty `-wal` and touches `-shm`. Jcodemunch's cache invalidation treated any modification time/size change on `-wal` or `-shm` as an index write, triggering an infinite reload cascade: each agent search caused all other agents to reload the entire 34k-symbol index and embedding matrix, degrading median search latency from 0.5 ms to 3.7 s. Contrast: trace-mcp executes directly against embedded SQLite tables in WAL mode without fragile external cache stamps or full-matrix reloading cascades across concurrent reader sessions.
+- **Graphify-Labs/graphify**:
+  - *Collision ranking preferring AST over semantic inference (PR #4871, open)*: When a symbol definition collided between direct AST extraction and semantic inference, Graphify's collision ranking lacked tier prioritization, allowing inferred nodes to supersede concrete AST declarations. PR adds AST-tier preference to `_collision_rank`. Contrast: trace-mcp enforces AST syntax ground-truth as primary records in SQLite relational schema, strictly separating parser facts from heuristic inference.
+  - *Go method values as indirect call arguments (PR #4868, open)*: Refs #1566. In Go, route registration or worker pools frequently pass method values as arguments (e.g. `routing.Wrap(hs.CheckDatasourceHealth)` or `r.Get("/health", s.Health)`). Graphify's call extraction only inspected invoked expressions, ignoring argument method values and leaving registered route handlers without incoming caller edges. Contrast: trace-mcp traverses call arguments to resolve function and method references, ensuring callback and route registration sites link to handler declarations.
+- **abhigyanpatwari/GitNexus**:
+  - *MCP cost driver profiling & capped evaluation trials (PR #3773, open)*: Following eval run 40943092445 exposing an MCP cost premium, GitNexus introduced diagnostic instrumentation to break down MCP tool latency, context expansion, redundant reads, and token usage, alongside an offline planner for capped benchmark trials. Contrast: trace-mcp was designed from day one around token efficiency and compact symbol maps, preventing context blowout and repeated source file reads by AI coding agents.
+- **oraios/serena**:
+  - *UTF-8 BOM in `.gitignore` breaking pattern matching (PR #2233, open)*: When `.gitignore` files contain a UTF-8 Byte Order Mark (common with PowerShell `Set-Content -Encoding utf8`), Serena failed to recognize the first pattern because the BOM remained attached to the rule. Switched to `utf-8-sig`. Contrast: trace-mcp strips leading BOMs when parsing ignore files and configuration manifests.
+
+**Competitor pulse (as of 2026-10-30 14:00 pass vs 2026-10-30 08:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 198★ (=), 24 forks (-1)
+- yamadashy/repomix: 29,080★ (+7), 1,610 forks (+1)
+- oraios/serena: 30,869★ (+13), 2,104 forks (+1)
+- DeusData/codebase-memory-mcp: 47,826★ (+18), 3,933 forks (+1)
+- tirth8205/code-review-graph: 32,495★ (+8), 2,957 forks (-2)
+- colbymchenry/codegraph: 75,963★ (+45), 5,023 forks (+3)
+- abhigyanpatwari/GitNexus: 48,130★ (+13), 5,213 forks (=)
+- jgravelle/jcodemunch-mcp: 2,821★ (+1), 372 forks (=)
+- continuedev/continue: 36,372★ (+1), 5,531 forks (+1)
+- Aider-AI/aider: 49,826★ (+4), 5,111 forks (=)
+- Graphify-Labs/graphify: 139,060★ (+243), 13,263 forks (+23)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
