@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.2...v3.42.3) (2026-10-29)
+
+
+### Bug Fixes
+
+* **daemon:** resolve TopologyStore statically in project-artifacts (TRA-2778) ([#1800](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1800)) ([1e76044](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e7604427256ce953985aeb3344cd7528fd47251))
+* **daemon:** tolerate symlink aliases in topology and project removal (TRA-2782) ([#1805](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1805)) ([0a4e6f4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a4e6f4434d943cc7c532838c796baab49b71659))
+* **registry:** tolerate symlink aliases in unregisterProject (TRA-2778) ([#1802](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1802)) ([7aaa24f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7aaa24fbe759b2fe8e3828d483241e3fc58a7665))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-10-30 02:00 (TRA-2780) ([#1804](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1804)) ([f5c8e91](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f5c8e91bdb3b5c477c58db47e01fb1e82b53a89f))
+
+
+### Tests
+
+* **daemon:** restore project removal CI coverage (TRA-2781) ([#1803](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1803)) ([551fca3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/551fca3693cee2dfae38994f52bbb1c1ad1af333))
+
 ## [3.42.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.1...v3.42.2) (2026-10-29)
 
 
