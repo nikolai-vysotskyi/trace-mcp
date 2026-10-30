@@ -8670,3 +8670,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-31 02:00 pass (TRA-2805): sweep clean (h0rn3t/graft casing alias recorded), codegraph external base class shadowing (#3109) & Mojo grammar WASM (#3108) & synth interval throttle (#3107) & local binding shadowing (#3106) & PEP 695 generics base list (#3105) & local-only init (#3104), Graphify Type.Member endpoint resolution (#4893) & weakest-hop confidence (#4892) & collapsed edge evidence preservation (#4891) & C# method type labeling (#4889), Serena Full document sync in-memory edits (#2239), GitNexus trial eval harness validation (#3779) & registry pruning lock (#3777), trace-mcp 199★ (=, 1 to 200★ milestone)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 hit returned: `h0rn3t/graft` (lowercase repo name variant of previously evaluated `h0rn3t/Graft`, row 122 in distribution table; RESEARCH.md benchmark citation). Added `h0rn3t/graft` casing alias to `ops/mentions-seen.txt`.
+- Re-verified sweep: 0 hits outside seen list; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *External base class shadowing fix (PR #3109, merged)*: Fixes an issue where a base class imported from outside the project (e.g. `from enum import Enum`, `from pydantic import BaseModel`) linked incorrectly to an in-project class with the same name. Contrast: trace-mcp uses precise lexical scope resolution with `oxc-resolver` and tree-sitter AST symbol tables, tagging imported external identifiers with their package provenance and preventing name collisions with project-local declarations.
+  - *Mojo language grammar indexing (PR #3108, open)*: Adds Mojo language support via WASM grammar (`whistlebee/tree-sitter-mojo` compiled with Emscripten). Contrast: trace-mcp indexes its 81 languages using native Node Tree-sitter binaries rather than WASM, avoiding runtime emulation boundaries and memory-copy overhead across large monorepos.
+  - *Edge synthesis interval throttle (PR #3107, merged)*: Introduces `CODEGRAPH_SYNTH_MIN_INTERVAL_MS` to prevent long-lived instances from rebuilding synthesized edges on every minor file change in TypeScript/Vue projects. Contrast: trace-mcp avoids whole-graph edge re-synthesis via fine-grained SQLite incremental index updates that dirty only affected dependency subgraphs.
+  - *Local variable shadowing module function (PR #3106, open)*: Fixes #3037 where a function-local lambda or assignment (e.g., `flat = lambda ...`) failed to shadow a module-level function of the same name, producing spurious `calls` edges. Contrast: trace-mcp models nested lexical scopes explicitly (block -> function -> module), ensuring local bindings shadow parent scopes.
+  - *PEP 695 generic type parameters base list parsing (PR #3105, open)*: Fixes Python 3.12 PEP 695 generics (`class Repo[T](Base[T]):`) where generic parameters caused the base list parser to fail. Contrast: trace-mcp parses Tree-sitter CSTs where type parameters are distinct AST nodes, extracting base classes reliably regardless of generics syntax.
+  - *Local-only repository initialization (PR #3104, merged)*: Adds `--local-only` to avoid generating `.codegraph/.gitignore` in git tracking for single users. Contrast: trace-mcp maintains all indexes and caches centrally in `~/.trace/` indexed by commit SHA and content hash, leaving user worktrees completely untouched.
+- **Graphify-Labs/graphify**:
+  - *Type.Member endpoint resolution (PR #4893, open)*: Fixes #4884 where `graphify path` resolved `Type.Method` queries to the containing class rather than the target member method. Contrast: trace-mcp resolves exact member selectors (`Class#method` / `Class.method`) directly to the member symbol entity and line span.
+  - *Path confidence as weakest hop (PR #4892, open)*: Computes multi-hop path confidence as the minimum confidence across intermediate edges. Contrast: trace-mcp exposes edge provenance and categorizes call chains (verified AST vs dynamic re-export vs framework injection) without collapsing edge semantics into a single scalar.
+  - *Preserving weaker evidence in collapsed edges (PR #4891, open)*: Keeps lower-ranked duplicate edge evidence in an `also_seen` list instead of dropping it during deduplication. Contrast: trace-mcp records distinct call-site rows and references in relational SQLite tables, preserving full multi-site provenance.
+  - *C# method type qualifying (PR #4889, open)*: Labels C# method nodes with their enclosing class/interface rather than bare `.Name()`, avoiding ambiguity between identical method names across interfaces and implementations. Contrast: trace-mcp qualifies symbols with full namespace and enclosing type hierarchy.
+- **oraios/serena**:
+  - *Full document sync in-memory edits (PR #2239, open)*: Sends full text updates instead of ranged edits to language servers that negotiated `TextDocumentSyncKind.Full`. Contrast: trace-mcp runs Tree-sitter directly in-process without LSP daemon subprocesses, eliminating document synchronization race conditions and protocol mismatch failures.
+- **abhigyanpatwari/GitNexus**:
+  - *Trial evaluation harness validation (PR #3779, open)*: Validates task dependency checkouts and Actions summary telemetry for diagnostic evaluations.
+  - *Storage pruning race condition fix (PR #3777, merged)*: Fixes race where newly registered workspaces were purged during storage cleanup before indexing finished. Contrast: trace-mcp manages index storage using atomic SQLite transactions and LRU access timestamps.
+- **jgravelle/jcodemunch-mcp**:
+  - *Status*: PRs #1281 (git rename awareness in symbol diffs), #1280 (policy fence parsing in `CLAUDE.md`), #1279 (call hierarchy direct vs indirect separation), and #1278 (XAML view event handler dead code false positives) remain open without changes.
+
+**Competitor pulse (as of 2026-10-31 02:00 pass vs 2026-10-30 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (=, 1 to 200★ milestone), 24 forks (=)
+- yamadashy/repomix: 29,092★ (+6), 1,612 forks (+2)
+- oraios/serena: 30,877★ (+3), 2,108 forks (+2)
+- DeusData/codebase-memory-mcp: 47,859★ (+9), 3,936 forks (+1)
+- tirth8205/code-review-graph: 32,512★ (+4), 2,958 forks (+2)
+- colbymchenry/codegraph: 76,011★ (+14), 5,028 forks (+3)
+- abhigyanpatwari/GitNexus: 48,134★ (=), 5,218 forks (=)
+- jgravelle/jcodemunch-mcp: 2,823★ (+1), 372 forks (=)
+- continuedev/continue: 36,376★ (+3), 5,533 forks (=)
+- Aider-AI/aider: 49,830★ (+2), 5,110 forks (+1)
+- Graphify-Labs/graphify: 139,430★ (+96), 13,298 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.

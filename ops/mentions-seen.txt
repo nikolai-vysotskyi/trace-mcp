@@ -279,6 +279,7 @@ wkoch/xrai
 # Genuine third-party citation & benchmark reference: RESEARCH.md cites trace-mcp
 # ("Honest PR-review bench: −72.7% input tokens... A model for honest reporting"):
 h0rn3t/Graft
+h0rn3t/graft
 # Name collision: unrelated microservices architecture using internal Cloud Run service
 # account / container name "trace-mcp" for BigQuery telemetry export (infra/03-service-accounts.sh, CLAUDE.md):
 vaibhavidhumal4/TRACE
