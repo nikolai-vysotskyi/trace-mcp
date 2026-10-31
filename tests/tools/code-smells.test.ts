@@ -785,12 +785,101 @@ const DOMAINS = {
       expect(credFindings).toHaveLength(0);
     });
 
+    test('does not flag CSS custom property names as credentials in design-token context (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/theme.ts',
+        `
+export function getContrastRow() {
+  return {
+    token: '--on-accent',
+    surface: '--accent-fill',
+    hover: '--color-primary-hover',
+    cssVar: 'var(--on-accent)',
+  };
+}
+`,
+        'typescript',
+      );
+
+      // Also verify when in a non-theme path with neighboring CSS context (like contrastTable)
+      writeFile(
+        store,
+        'scripts/design-tokens.mjs',
+        `
+function contrastTable() {
+  const rows = [];
+  rows.push({
+    appearance: 'dark',
+    token: '--on-accent',
+    surface: '--accent-fill',
+  });
+  return rows;
+}
+`,
+        'javascript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(0);
+    });
+
+    test('still flags --prefixed credentials outside CSS/design-token context (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/cli-auth.ts',
+        `
+export function getCliToken() {
+  const token = '--sk-9f3a2b1c7d4e8f01-prod-secret';
+  return token;
+}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(1);
+      expect(credFindings[0].file).toBe('src/cli-auth.ts');
+    });
+
+    test('still flags --prefixed credentials when theme or color is in nearby config (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/app-config.ts',
+        `
+export const appConfig = {
+  theme: 'dark',
+  color: 'blue',
+  apiKey: '--sk-live-9f3a2b1c7d4e8f01-prod-secret',
+};
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(1);
+      expect(credFindings[0].file).toBe('src/app-config.ts');
+    });
+
     test('still flags a real-looking API key (true positive)', () => {
       writeFile(
         store,
         'src/api.ts',
         `
 const apiKey = 'sk-abcdef0123456789ABCDEF0123456789abcdef01';
+const token = 'ghp_0123456789abcdefghijklmnopqrstuvwxyz';
 `,
         'typescript',
       );
