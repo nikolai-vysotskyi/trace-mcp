@@ -40,12 +40,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 35 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 36 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(35);
+    expect(Number(row!.value)).toBe(36);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -93,6 +93,7 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     expect(names.has('idx_ranking_pins_expires')).toBe(true);
     expect(names.has('idx_pass_cache_created')).toBe(true);
     expect(names.has('idx_files_language')).toBe(true);
+    expect(names.has('idx_routes_controller_symbol')).toBe(true);
   });
 
   it('core graph tables ship in the same fresh init (regression guard)', () => {
@@ -210,11 +211,11 @@ describe('migration 34 -> 35 (TRA-2282: idx_files_language)', () => {
     // Now re-open with initializeDatabase — triggers migration 35
     const upgradedDb = initializeDatabase(dbPath);
 
-    // Verify schema_version is now 35
+    // Verify schema_version is now >= 35
     const v35Version = upgradedDb
       .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
       .get() as { value: string };
-    expect(v35Version.value).toBe('35');
+    expect(Number(v35Version.value)).toBeGreaterThanOrEqual(35);
 
     // Verify migration 35 is recorded in schema_migrations
     const migRow = upgradedDb
@@ -238,6 +239,95 @@ describe('migration 34 -> 35 (TRA-2282: idx_files_language)', () => {
       .all('typescript') as { path: string }[];
     expect(tsFiles).toHaveLength(1);
     expect(tsFiles[0]?.path).toBe('src/test.ts');
+
+    upgradedDb.close();
+  });
+});
+
+describe('migration 35 -> 36 (TRA-2810: idx_routes_controller_symbol)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('migration-36-');
+  });
+
+  afterEach(() => {
+    removeTmpDir(tmpDir);
+  });
+
+  it('upgrades existing v35 database to v36 and creates idx_routes_controller_symbol', () => {
+    const dbPath = path.join(tmpDir, 'test-v35.db');
+    // Initialize DB then simulate v35 state
+    const seedDb = initializeDatabase(dbPath);
+    // Drop the v36 index and revert schema_meta / schema_migrations
+    seedDb.exec('DROP INDEX IF EXISTS idx_routes_controller_symbol');
+    seedDb.prepare("UPDATE schema_meta SET value = '35' WHERE key = 'schema_version'").run();
+    seedDb.prepare('DELETE FROM schema_migrations WHERE version = 36').run();
+
+    // Insert test file, symbol, and route
+    seedDb
+      .prepare(
+        "INSERT INTO files (path, language, status, byte_length, content_hash, indexed_at) VALUES ('src/routes.ts', 'typescript', 'ok', 123, 'hash1', '2026-10-31T00:00:00Z')",
+      )
+      .run();
+    seedDb
+      .prepare(
+        "INSERT INTO symbols (file_id, symbol_id, name, kind, byte_start, byte_end) VALUES (1, 'routes::handler', 'handler', 'function', 0, 10)",
+      )
+      .run();
+    seedDb
+      .prepare(
+        "INSERT INTO routes (method, uri, file_id, controller_symbol_id) VALUES ('GET', '/api/test', 1, 1)",
+      )
+      .run();
+    seedDb.close();
+
+    // Verify v35 state before reopening with initializeDatabase
+    const checkDb = new Database(dbPath);
+    const v35Version = checkDb
+      .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+      .get() as { value: string };
+    expect(v35Version.value).toBe('35');
+    const idxBefore = checkDb
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_routes_controller_symbol'",
+      )
+      .get();
+    expect(idxBefore).toBeUndefined();
+    checkDb.close();
+
+    // Now re-open with initializeDatabase — triggers migration 36
+    const upgradedDb = initializeDatabase(dbPath);
+
+    // Verify schema_version is now 36
+    const v36Version = upgradedDb
+      .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+      .get() as { value: string };
+    expect(v36Version.value).toBe('36');
+
+    // Verify migration 36 is recorded in schema_migrations
+    const migRow = upgradedDb
+      .prepare('SELECT version FROM schema_migrations WHERE version = 36')
+      .get() as { version: number } | undefined;
+    expect(migRow).toBeDefined();
+    expect(migRow!.version).toBe(36);
+
+    // Verify idx_routes_controller_symbol index exists
+    const idxAfter = upgradedDb
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_routes_controller_symbol'",
+      )
+      .get() as { name: string } | undefined;
+    expect(idxAfter).toBeDefined();
+    expect(idxAfter!.name).toBe('idx_routes_controller_symbol');
+
+    // Verify query plan uses idx_routes_controller_symbol and avoids SCAN routes
+    const plan = upgradedDb
+      .prepare('EXPLAIN QUERY PLAN DELETE FROM symbols WHERE file_id = ?')
+      .all(1) as Array<{ detail: string }>;
+    const planDetails = plan.map((p) => p.detail).join('\n');
+    expect(planDetails).toContain('idx_routes_controller_symbol');
+    expect(planDetails).not.toContain('SCAN routes');
 
     upgradedDb.close();
   });
