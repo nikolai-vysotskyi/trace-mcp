@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.5...v3.42.6) (2026-10-30)
+
+
+### Bug Fixes
+
+* **daemon:** validate priority_threshold in /api/projects/smells (TRA-2788) ([#1815](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1815)) ([8023b57](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8023b57ca000e6383fd23921e2b20ea86516ef80))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-10-31 02:00 (TRA-2805) ([#1813](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1813)) ([9a47678](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a476783fcff752098e6dbd4746d868bdb967df4))
+* record two-project daemon RSS plateau ([#1812](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1812)) ([f53615b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f53615b708ce79c08c703746299f19589b26eadc))
+
 ## [3.42.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.4...v3.42.5) (2026-10-30)
 
 
