@@ -785,12 +785,38 @@ const DOMAINS = {
       expect(credFindings).toHaveLength(0);
     });
 
+    test('does not flag CSS custom property names as credentials (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/theme.ts',
+        `
+export function getContrastRow() {
+  return {
+    token: '--on-accent',
+    surface: '--accent-fill',
+    hover: '--color-primary-hover',
+    cssVar: 'var(--on-accent)',
+  };
+}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(0);
+    });
+
     test('still flags a real-looking API key (true positive)', () => {
       writeFile(
         store,
         'src/api.ts',
         `
 const apiKey = 'sk-abcdef0123456789ABCDEF0123456789abcdef01';
+const token = 'ghp_0123456789abcdefghijklmnopqrstuvwxyz';
 `,
         'typescript',
       );
