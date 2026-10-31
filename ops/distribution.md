@@ -8727,3 +8727,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-31 08:00 pass (TRA-2814): sweep clean (roy-tong/Verovo casing alias recorded), codegraph folder require package.json main (#3133) & overload argument fit (#3132) & workspace root boundary (#3130) & Tauri IPC linking (#3129) & Razor inline script linking (#3128), codebase-memory search_code repo-relative path (#2841) & recursion metadata (#2842) & watcher cost pacing (#2840), GitNexus MCP protocol metadata (#3788) & Java Optional tests (#3784), serena Lean CI skip (#2241), trace-mcp 199★ (=, 1 to 200★ milestone)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 hit returned: `roy-tong/Verovo` (casing alias of `roy-tong/verovo`, already audited in TRA-2798; citation in `campaigns/audit-report-2026-09.md` referencing token-accounting audit and trace-mcp #1175). Added `roy-tong/Verovo` casing alias to `ops/mentions-seen.txt`.
+- Re-verified sweep: 0 hits outside seen list; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Folder require package.json main resolution (PR #3133, open)*: Fixes an issue where relative require of a folder (`require('..')`, `require('../')`, `require('./lib/inner')`) tried `<dir>` + extension and index files without reading `package.json` `main`. Now reads `main` before falling back to index files for JS/TS/ArkTS. Contrast: trace-mcp delegates Node.js module and directory resolution to `oxc-resolver`, which natively and spec-compliantly evaluates `package.json` (`main`, `exports`, conditional mappings) with built-in cache layers.
+  - *Self-overload argument fit retargeting (PR #3132, open)*: In `retargetSelfOverload`, when multiple sibling overloads match argument count, routes to the first declared overload instead of retaining the excluded overload. Contrast: trace-mcp represents overloaded functions with distinct symbol IDs or explicit signatures in SQLite tables, avoiding declaration-order guesswork for call edges.
+  - *Workspace root boundary enforcement (PR #3130, open)*: In `loadWorkspacePackages`, rejects workspace glob entries that resolve outside the project root (`../sibling`, `../*`), which previously caused outside packages to be treated as local imports. Contrast: trace-mcp enforces strict project root boundary checks (`isSubpath` / canonical paths) across all scanners and resolvers; workspace package discovery is strictly contained within the project root.
+  - *Tauri frontend-to-Rust command and event synthesis (PR #3129, merged)*: Adds a synthesis pass `tauriEdges` linking frontend `invoke('cmd')` to Rust `#[tauri::command]` functions and pairing `emit` / listener event hops across IPC. Contrast: trace-mcp maintains lean, high-throughput static AST symbol indexes and relational call graphs; dynamic multi-language IPC dispatch hops are handled via targeted symbol and reference queries without injecting synthetic non-AST edges into the core database.
+  - *Razor inline script extraction and linking (PR #3128, merged)*: Extracts inline `<script>` blocks in `.cshtml` and `.razor` views, masks template directives offset-for-offset, and links view nodes to JavaScript functions. Contrast: trace-mcp parses template and component files (Vue, Svelte, JSX, TSX, HTML) via dedicated Tree-sitter grammars while isolating embedded script blocks into language-appropriate AST parsers.
+- **DeusData/codebase-memory-mcp**:
+  - *search_code repo-relative path matching (PR #2841, merged)*: Fixes #2836 where `search_code` only matched `file_pattern` against file basenames, returning 0 results for directory patterns like `src/cli/*.c`. Implements `search_code_path_glob_match` against repo-relative paths when `/` is present. Contrast: trace-mcp uses standard minimatch globbing against normalized repo-relative paths across all tools, providing uniform glob semantics regardless of path separators or directory depth.
+  - *Expose recursion metadata in trace_path (PR #2842, open)*: Surfaces recursive cycle and traversal depth metadata in path tracing responses.
+  - *Watcher re-index pacing by prior run cost (PR #2840, open)*: Introduces dynamic debounce/pacing for file watchers based on execution time of previous indexing pass. Contrast: trace-mcp relies on fine-grained incremental SQLite updates dirtying only modified files and affected dependency subgraphs, keeping per-save incremental indexing latency negligible without requiring aggressive watcher throttling.
+- **abhigyanpatwari/GitNexus**:
+  - *MCP protocol metadata verification (PR #3788, open)*: Adds assertions for MCP protocol version and server capabilities handshake.
+  - *Java Optional receiver test consolidation (PR #3784, open)*: Streamlines test cases for Java Optional receiver method chains.
+- **oraios/serena**:
+  - *Skip Lean action CI probes (PR #2241, open)*: Optimizes CI workflow by bypassing redundant Lean language probes on non-Lean updates.
+  - *Status*: PR #2239 (Full document sync in-memory edits) remains open without changes.
+- **jgravelle/jcodemunch-mcp**:
+  - *Cross-tool file pattern consistency and rate-limiting (PR #1283, open)*: Unifies glob pattern parsing across MCP tools and adds a configurable `rate_limit` flag.
+
+**Competitor pulse (as of 2026-10-31 08:00 pass vs 2026-10-31 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (=, 1 to 200★ milestone), 24 forks (=)
+- yamadashy/repomix: 29,094★ (+2), 1,612 forks (=)
+- oraios/serena: 30,883★ (+6), 2,108 forks (=)
+- DeusData/codebase-memory-mcp: 47,873★ (+14), 3,937 forks (+1)
+- tirth8205/code-review-graph: 32,512★ (=), 2,958 forks (=)
+- colbymchenry/codegraph: 76,023★ (+12), 5,033 forks (+5)
+- abhigyanpatwari/GitNexus: 48,138★ (+4), 5,219 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,823★ (=), 372 forks (=)
+- continuedev/continue: 36,380★ (+4), 5,534 forks (+1)
+- Aider-AI/aider: 49,833★ (+3), 5,110 forks (=)
+- Graphify-Labs/graphify: 139,548★ (+118), 13,319 forks (+21)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
