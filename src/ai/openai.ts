@@ -7,7 +7,14 @@ import { logger } from '../logger.js';
 import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import { combineAbortSignals } from './abort.js';
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  FinishReason,
+  GenerateResult,
+  InferenceService,
+} from './interfaces.js';
 import { parseOpenAIStream } from './sse.js';
 
 interface OpenAIConfig {
@@ -185,10 +192,10 @@ class OpenAIInferenceService implements InferenceService {
     this.label = `${providerLabel} chat @ ${redactBaseUrlForLogs(baseUrl)}`;
   }
 
-  async generate(
+  async generateDetailed(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
-  ): Promise<string> {
+  ): Promise<GenerateResult> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
@@ -219,11 +226,36 @@ class OpenAIInferenceService implements InferenceService {
           throw new Error(`${this.label} failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
         }
 
-        const data = (await resp.json()) as { choices: { message: { content: string } }[] };
-        return data.choices[0]?.message?.content ?? '';
+        const data = (await resp.json()) as {
+          choices?: {
+            message?: { content?: string | null; refusal?: string | null };
+            finish_reason?: string;
+          }[];
+        };
+        const choice = data.choices?.[0];
+        const rawReason = choice?.finish_reason;
+        let finishReason: FinishReason = 'unknown';
+        if (rawReason === 'length') finishReason = 'length';
+        else if (rawReason === 'content_filter' || choice?.message?.refusal)
+          finishReason = 'content_filter';
+        else if (rawReason === 'stop') finishReason = 'stop';
+
+        return {
+          text: choice?.message?.content ?? '',
+          finishReason,
+          rawFinishReason: rawReason,
+        };
       },
       { label: this.label },
     );
+  }
+
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string> {
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
   }
 
   async *generateStream(

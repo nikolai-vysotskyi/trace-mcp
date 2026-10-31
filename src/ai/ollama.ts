@@ -11,6 +11,8 @@ import type {
   ChatMessage,
   EmbeddingService,
   EmbeddingTask,
+  FinishReason,
+  GenerateResult,
   InferenceService,
 } from './interfaces.js';
 import { parseOllamaChatStream } from './sse.js';
@@ -146,10 +148,10 @@ class OllamaInferenceService implements InferenceService {
     private model: string,
   ) {}
 
-  async generate(
+  async generateDetailed(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
-  ): Promise<string> {
+  ): Promise<GenerateResult> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
@@ -181,11 +183,28 @@ class OllamaInferenceService implements InferenceService {
           throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
         }
 
-        const data = (await resp.json()) as { response: string };
-        return data.response;
+        const data = (await resp.json()) as { response?: string; done_reason?: string };
+        const rawReason = data.done_reason;
+        let finishReason: FinishReason = 'unknown';
+        if (rawReason === 'length') finishReason = 'length';
+        else if (rawReason === 'stop') finishReason = 'stop';
+
+        return {
+          text: data.response ?? '',
+          finishReason,
+          rawFinishReason: rawReason,
+        };
       },
       { label: 'Ollama generate' },
     );
+  }
+
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string> {
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
   }
 
   async *generateStream(

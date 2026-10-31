@@ -242,3 +242,183 @@ describe('LLMReranker — numbered scores + scaled budget (GH#1442)', () => {
     expect(DEFAULT_RERANK_MAX_CANDIDATES).toBe(100);
   });
 });
+
+describe('LLMReranker — safe diagnostics and failure classification (TRA-2803)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined as never);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  const docs = [
+    { id: 1, text: 'Secret doc 1' },
+    { id: 2, text: 'Secret doc 2' },
+    { id: 3, text: 'Secret doc 3' },
+    { id: 4, text: 'Secret doc 4' },
+  ];
+
+  it('classifies empty response from token_limit (finishReason: length) and hints to raise tokens', async () => {
+    const inference: InferenceService = {
+      generate: vi.fn(async () => ''),
+      generateDetailed: vi.fn(async () => ({
+        text: '',
+        finishReason: 'length',
+        rawFinishReason: 'MAX_TOKENS',
+      })),
+    };
+    const reranker = new LLMReranker(inference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+
+    const warnCall = warnSpy.mock.calls.find(
+      (c) => typeof c[0] === 'object' && (c[0] as Record<string, unknown>).reason === 'token_limit',
+    );
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![0] as Record<string, unknown>;
+    expect(payload.reason).toBe('token_limit');
+    expect(payload.responseLength).toBe(0);
+    expect(payload.expectedScores).toBe(4);
+    expect(payload.finishReason).toBe('MAX_TOKENS');
+    expect(payload.hint).toBe('raise ai.rerank_max_tokens');
+  });
+
+  it('classifies empty content on HTTP 200 (finishReason: stop) without false token hint', async () => {
+    const inference: InferenceService = {
+      generate: vi.fn(async () => ''),
+      generateDetailed: vi.fn(async () => ({
+        text: '',
+        finishReason: 'stop',
+        rawFinishReason: 'stop',
+      })),
+    };
+    const reranker = new LLMReranker(inference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+
+    const warnCall = warnSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === 'object' && (c[0] as Record<string, unknown>).reason === 'empty_content',
+    );
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![0] as Record<string, unknown>;
+    expect(payload.reason).toBe('empty_content');
+    expect(payload.responseLength).toBe(0);
+    expect(payload.expectedScores).toBe(4);
+    expect(payload.finishReason).toBe('stop');
+    expect(payload.hint).toContain('empty response on successful HTTP');
+    expect(payload.hint).not.toBe('raise ai.rerank_max_tokens');
+  });
+
+  it('classifies content_filter refusal without raising token hint', async () => {
+    const inference: InferenceService = {
+      generate: vi.fn(async () => ''),
+      generateDetailed: vi.fn(async () => ({
+        text: '',
+        finishReason: 'content_filter',
+        rawFinishReason: 'SAFETY',
+      })),
+    };
+    const reranker = new LLMReranker(inference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+
+    const warnCall = warnSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === 'object' && (c[0] as Record<string, unknown>).reason === 'content_filter',
+    );
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![0] as Record<string, unknown>;
+    expect(payload.reason).toBe('content_filter');
+    expect(payload.finishReason).toBe('SAFETY');
+    expect(payload.hint).toContain('safety policy');
+  });
+
+  it('bypasses fallback inference services without emitting parse failure warnings', async () => {
+    const fallbackInference: InferenceService = {
+      isFallback: true,
+      generate: vi.fn(async () => ''),
+      generateDetailed: vi.fn(async () => ({ text: '', finishReason: 'unsupported' })),
+    };
+    const reranker = new LLMReranker(fallbackInference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+    expect(fallbackInference.generate).not.toHaveBeenCalled();
+    expect(fallbackInference.generateDetailed).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('classifies non-empty unparseable response as unparseable', async () => {
+    const inference: InferenceService = {
+      generate: vi.fn(async () => 'I am an AI assistant and here is my thought'),
+      generateDetailed: vi.fn(async () => ({
+        text: 'I am an AI assistant and here is my thought',
+        finishReason: 'stop',
+      })),
+    };
+    const reranker = new LLMReranker(inference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+
+    const warnCall = warnSpy.mock.calls.find(
+      (c) => typeof c[0] === 'object' && (c[0] as Record<string, unknown>).reason === 'unparseable',
+    );
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![0] as Record<string, unknown>;
+    expect(payload.reason).toBe('unparseable');
+    expect(payload.responseLength).toBe(43);
+    expect(payload.hint).toContain('response did not contain parseable scores');
+  });
+
+  it('safely handles transport errors without leaking query params or prompts', async () => {
+    const inference: InferenceService = {
+      generate: vi.fn(async () => {
+        throw new Error('Connection refused to https://api.openai.com/v1?key=sk-secret123');
+      }),
+    };
+    const reranker = new LLMReranker(inference);
+
+    const result = await reranker.rerank('query', docs, 4);
+    expect(result.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+
+    const warnCall = warnSpy.mock.calls.find(
+      (c) =>
+        typeof c[0] === 'object' && (c[0] as Record<string, unknown>).reason === 'transport_error',
+    );
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![0] as Record<string, unknown>;
+    expect(payload.reason).toBe('transport_error');
+    expect(payload.error).not.toContain('sk-secret123');
+    expect(JSON.stringify(warnCall)).not.toContain('Secret doc');
+  });
+
+  it('ensures warnings NEVER log prompt text, document content, or response bodies', async () => {
+    const sensitiveDoc = 'SUPER_SENSITIVE_API_KEY_OR_PROMPT_DATA';
+    const docsWithSecret = [
+      { id: 1, text: sensitiveDoc },
+      { id: 2, text: 'Other' },
+    ];
+    const inference: InferenceService = {
+      generate: vi.fn(async () => 'Some unparseable text with CONFIDENTIAL_DATA'),
+    };
+    const reranker = new LLMReranker(inference);
+
+    await reranker.rerank('find secret credentials', docsWithSecret, 2);
+
+    for (const call of warnSpy.mock.calls) {
+      const serialized = JSON.stringify(call);
+      expect(serialized).not.toContain(sensitiveDoc);
+      expect(serialized).not.toContain('SUPER_SENSITIVE');
+      expect(serialized).not.toContain('CONFIDENTIAL_DATA');
+      expect(serialized).not.toContain('find secret credentials');
+    }
+  });
+});
