@@ -740,13 +740,11 @@ export function createServer(
   const aiProvider: AIProvider = createAIProvider(config);
   const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
   const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-  const reranker: RerankerService | null = config.ai?.enabled
-    ? new LLMReranker(
-        aiProvider.fastInference(),
-        config.ai.rerank_max_tokens,
-        config.ai.rerank_max_candidates,
-      )
-    : null;
+  const fastInference = aiProvider.fastInference();
+  const reranker: RerankerService | null =
+    config.ai?.enabled && !fastInference.isFallback
+      ? new LLMReranker(fastInference, config.ai.rerank_max_tokens, config.ai.rerank_max_candidates)
+      : null;
 
   function guardPath(
     filePath: string,

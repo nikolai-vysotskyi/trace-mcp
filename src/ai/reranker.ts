@@ -32,6 +32,23 @@ export function resolveRerankMaxTokens(baseMaxTokens: number, docCount: number):
   return Math.max(baseMaxTokens, scaled);
 }
 
+export type RerankFailureReason =
+  | 'token_limit'
+  | 'empty_content'
+  | 'unsupported'
+  | 'content_filter'
+  | 'unparseable'
+  | 'empty_response'
+  | 'transport_error';
+
+export interface RerankFailureDetails {
+  responseLength: number;
+  expectedScores: number;
+  reason: RerankFailureReason;
+  finishReason?: string;
+  hint?: string;
+}
+
 export class LLMReranker implements RerankerService {
   /**
    * Parse-failure warns already emitted. The dead-reranker condition persists
@@ -68,6 +85,16 @@ export class LLMReranker implements RerankerService {
     if (documents.length === 0) return [];
     if (documents.length <= 1) return documents.map((d) => ({ id: d.id, score: 1 }));
 
+    // If inference service is an inactive fallback (e.g. embedding-only ONNX/Voyage,
+    // or fast_inference disabled), return original order directly without emitting
+    // misleading parse-failure warnings.
+    if (this.inference.isFallback) {
+      return documents.slice(0, topK).map((d, i) => ({
+        id: d.id,
+        score: documents.length - i,
+      }));
+    }
+
     // Cap candidates before prompting: the RRF-fused head holds the best
     // candidates, so the tail beyond the cap would only burn tokens (GH#1442).
     const docs =
@@ -81,33 +108,74 @@ export class LLMReranker implements RerankerService {
         documents: docsText,
       });
 
-      const response = await this.inference.generate(prompt, {
-        maxTokens: resolveRerankMaxTokens(this.maxTokens, docs.length),
+      const maxTokens = resolveRerankMaxTokens(this.maxTokens, docs.length);
+      const options = {
+        maxTokens,
         temperature: PROMPTS.rerank.temperature,
-      });
+      };
+
+      const result = this.inference.generateDetailed
+        ? await this.inference.generateDetailed(prompt, options)
+        : { text: await this.inference.generate(prompt, options) };
+
+      const response = result.text ?? '';
+      const finishReason = result.finishReason;
+      const rawFinishReason = result.rawFinishReason;
 
       const scores = this.parseScores(response, docs.length);
       if (!scores) {
         // Warn, not debug: an empty/unparseable rerank response means every
         // semantic search just paid full LLM latency for an RRF fallback.
-        // The classic cause is a reasoning model burning the output budget —
-        // hence the actionable hint (GH#1423). Throttled: the condition
-        // persists per process, so only the first few are loud.
+        // Classify the failure reason with safe diagnostics (no response body,
+        // no prompts, no secrets). Throttled: the condition persists per process,
+        // so only the first few are loud.
         this.parseFailureWarns++;
-        if (this.parseFailureWarns <= MAX_PARSE_FAILURE_WARNS) {
-          logger.warn(
-            {
-              responseLength: response.length,
-              expectedScores: docs.length,
-              hint: 'raise ai.rerank_max_tokens',
-            },
-            'Reranker: failed to parse scores, keeping original order',
-          );
+
+        let reason: RerankFailureReason;
+        let hint: string;
+
+        if (response.trim().length === 0) {
+          if (finishReason === 'length') {
+            reason = 'token_limit';
+            hint = 'raise ai.rerank_max_tokens';
+          } else if (finishReason === 'content_filter') {
+            reason = 'content_filter';
+            hint = 'content filtered by provider safety policy';
+          } else if (finishReason === 'unsupported' || this.inference.isFallback) {
+            reason = 'unsupported';
+            hint = 'inference provider does not support generation';
+          } else if (finishReason === 'stop') {
+            reason = 'empty_content';
+            hint = 'provider returned empty response on successful HTTP';
+          } else {
+            reason = 'empty_response';
+            hint =
+              'provider returned empty response; check provider logs or raise ai.rerank_max_tokens if using a reasoning model';
+          }
         } else {
-          logger.debug(
-            { responseLength: response.length, expectedScores: docs.length },
-            'Reranker: failed to parse scores, keeping original order',
-          );
+          if (finishReason === 'length') {
+            reason = 'token_limit';
+            hint = 'raise ai.rerank_max_tokens';
+          } else {
+            reason = 'unparseable';
+            hint = 'response did not contain parseable scores';
+          }
+        }
+
+        const logPayload: Record<string, unknown> = {
+          responseLength: response.length,
+          expectedScores: docs.length,
+          reason,
+          hint,
+        };
+        if (rawFinishReason || finishReason) {
+          logPayload.finishReason = rawFinishReason ?? finishReason;
+        }
+
+        if (this.parseFailureWarns <= MAX_PARSE_FAILURE_WARNS) {
+          logger.warn(logPayload, 'Reranker: failed to parse scores, keeping original order');
+        } else {
+          logger.debug(logPayload, 'Reranker: failed to parse scores, keeping original order');
         }
         return documents.slice(0, topK).map((d, i) => ({
           id: d.id,
@@ -132,7 +200,16 @@ export class LLMReranker implements RerankerService {
         .map((d) => ({ id: d.id, score: 0 }));
       return [...head, ...tail];
     } catch (e) {
-      logger.warn({ error: e }, 'Reranker failed, keeping original order');
+      // Safe error diagnosis: sanitize message and exclude prompts, response bodies, and secrets
+      const rawMsg = e instanceof Error ? e.message : String(e);
+      const safeMsg = rawMsg.split('?')[0].slice(0, 200);
+      logger.warn(
+        {
+          reason: 'transport_error',
+          error: safeMsg,
+        },
+        'Reranker failed, keeping original order',
+      );
       return documents.slice(0, topK).map((d, i) => ({
         id: d.id,
         score: documents.length - i,

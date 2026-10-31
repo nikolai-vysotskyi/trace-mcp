@@ -39,11 +39,30 @@ export interface ChatMessage {
   content: string;
 }
 
+export type FinishReason =
+  | 'stop'
+  | 'length'
+  | 'content_filter'
+  | 'error'
+  | 'unsupported'
+  | 'unknown';
+
+export interface GenerateResult {
+  text: string;
+  finishReason?: FinishReason;
+  rawFinishReason?: string;
+}
+
 export interface InferenceService {
   generate(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string>;
+  generateDetailed?(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<GenerateResult>;
+  readonly isFallback?: boolean;
   generateStream?(
     messages: ChatMessage[],
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },

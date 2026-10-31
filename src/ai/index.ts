@@ -16,6 +16,8 @@ import type {
   ChatMessage,
   EmbeddingService,
   EmbeddingTask,
+  FinishReason,
+  GenerateResult,
   InferenceService,
 } from './interfaces.js';
 import { OllamaProvider } from './ollama.js';
@@ -193,10 +195,22 @@ class TrackedInferenceService implements InferenceService {
     private url: string,
   ) {}
 
+  get isFallback(): boolean {
+    return (this.inner as { isFallback?: boolean })?.isFallback === true;
+  }
+
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
+  }
+
+  async generateDetailed(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<GenerateResult> {
     const entry = aiTracker.start('generate', this.provider, this.model, this.url, prompt.length);
     const span = getGlobalTelemetrySink().startSpan('ai.generate', {
       'ai.method': 'generate',
@@ -209,10 +223,12 @@ class TrackedInferenceService implements InferenceService {
     });
     const t0 = Date.now();
     try {
-      const result = await this.inner.generate(prompt, options);
+      const result: GenerateResult = this.inner.generateDetailed
+        ? await this.inner.generateDetailed(prompt, options)
+        : { text: await this.inner.generate(prompt, options) };
       const dur = Date.now() - t0;
-      aiTracker.finish(entry, 'ok', dur, result.length);
-      span.setAttributes({ 'ai.output_size': result.length, duration_ms: dur });
+      aiTracker.finish(entry, 'ok', dur, result.text.length);
+      span.setAttributes({ 'ai.output_size': result.text.length, duration_ms: dur });
       span.end();
       return result;
     } catch (err) {
@@ -532,6 +548,8 @@ export type {
   AIProvider,
   ChatMessage,
   EmbeddingService,
+  FinishReason,
+  GenerateResult,
   InferenceService,
   RerankerService,
   VectorStore,
