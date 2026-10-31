@@ -8887,3 +8887,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-31 22:00 pass (TRA-2821): sweep clean (0 new hits across 9 patterns), trace-mcp reaches 200★ milestone (+1), codegraph const function-alias handover (#3142) & Python ancestor module import (#3141) & Laravel route use-imports (#3140), GitNexus impact token-budget trimming & 75% output reduction (#3793), codebase-memory Go bare init suppression (#2862), Graphify quadratic import walk fix (#4907) & case-differing ID collision fix (#4908)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Flow through const function-alias handover (PR #3142, merged)*: Fixes flow regression where module-level function handovers (e.g. `export const extname = (isWin ? win32.extname : posix.extname)`) broke resolution because the const lacked an edge to held functions. Introduces a new `constAliasEdges` synthesis pass (`src/resolution/const-alias-synthesizer.ts`) creating heuristic synthetic `calls` edges (`synthesizedBy: 'const-alias'`). Contrast: trace-mcp tracks AST declaration and reference bindings directly in SQLite without requiring heuristic synthetic call-edge passes.
+  - *Python script import of ancestor module (PR #3141, merged)*: Fixes regression where `from test import TestCase` in subdirectories (`modules/vector-sets/tests/*.py`) failed to resolve to sibling/ancestor runner scripts (`test.py`) when ancestor folder is not a designated project root. `resolvePythonModule` now walks ancestor directories nearest-first. Contrast: trace-mcp resolves Python imports using tree-sitter AST queries paired with repo-wide file path index and `sys.path` conventions, avoiding lost edges across test subtrees.
+  - *Laravel route controller resolution via use imports (PR #3140, open)*: Fixes #2975 where route controller was resolved purely by short name, ignoring `use` statements in route files (e.g. `use App\Http\Controllers\Admin\UserController;` vs top-level `UserController`), causing handler edges to point at wrong controllers. Contrast: trace-mcp's PHP/Laravel framework extractor parses PHP AST use-declarations and fully qualified class names directly at route registration call sites (`Route::get(...)`), guaranteeing exact controller and action mapping without short-name collisions.
+  - *Chained new (#3139) & wildcard static call (#3138) Java import visibility*: Both remain open in review.
+- **abhigyanpatwari/GitNexus**:
+  - *Smaller agent output & token-budget trimming for impact (PR #3793, open)*: Fixes massive agent token costs observed in DeepSWE trials (where `impact` was 194 KB across 35 calls, single calls up to 22 KB, costing ~2.1M input tokens). Reduces output by 75% (225 KB -> 57 KB) by removing redundant per-symbol `processes` arrays within `byDepth`, removing pretty-print indentation, and adding `--max-tokens` trimming that drops whole records while keeping valid JSON. Contrast: This directly validates trace-mcp's core thesis — trace-mcp was architected from inception for agent token minimization, deterministic budget caps, compact TOON/JSON responses, and graph summaries, delivering >70% token savings compared to raw exploration.
+  - *Java overload resolution by JLS phases (PR #3791, open)*: Remains open in review.
+- **DeusData/codebase-memory-mcp**:
+  - *Suppress Go bare init binding (PR #2862, open)*: Prevents bare `init` identifiers (closures, parameters, `package init` clauses) from incorrectly binding to unrelated methods named `init` via short-name fallback. Adds `cbm_go_suppress_bare_init_bind`. Contrast: trace-mcp respects Go language specification semantics directly in its Tree-sitter AST query rules, distinguishing package init functions (`func init()`) and local bindings from receiver methods (`receiver.init()`).
+  - *Angular HttpClient method inference (PR #2854, open)*: Remains open in review.
+- **Graphify-Labs/graphify**:
+  - *Stop walking every edge for each JS/TS import (PR #4907, open)*: Fixes severe performance bottleneck where `_apply_symbol_resolution_facts` walked every edge for every import, causing `graphify update` to hang on mid-sized TS repos. Indexes reference edges by source file once before the loop. Contrast: trace-mcp stores relations in SQLite with indexed lookups (`file_id`, `caller_id`, `callee_id`), making edge traversal and symbol resolution $O(1)$ per edge rather than quadratic graph walks.
+  - *Case-differing declaration ID collision separation (PR #4908, open)*: Prevents `class Foo` and `function foo` in the same file from normalizing to the same ID and creating spurious self-loops (`Foo -> Foo`). Contrast: trace-mcp's symbol identifiers incorporate entity kind, file path, and AST range, preventing collisions across distinct declarations.
+  - *Scoped json.include for project configs (PR #4911, open)*: Adds `.graphifyrc` policy to include non-standard json configs. Contrast: trace-mcp framework detectors handle configuration files natively without manual inclusion lists.
+- **oraios/serena**:
+  - *Status*: PR #2243 (stdio LS pipe release on shutdown) and PR #2242 (Vue implementation queries via TS companion) remain open in review.
+- **jgravelle/jcodemunch-mcp**:
+  - *Status*: PR #1283 (file pattern consistency across tools and rate-limiting) remains open.
+
+**Competitor pulse (as of 2026-10-31 22:00 pass vs 2026-10-31 18:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 200★ (+1, 200★ milestone reached!), 24 forks (=)
+- yamadashy/repomix: 29,098★ (=), 1,614 forks (+1)
+- oraios/serena: 30,950★ (+20), 2,115 forks (+3)
+- DeusData/codebase-memory-mcp: 47,897★ (+5), 3,938 forks (+1)
+- tirth8205/code-review-graph: 32,521★ (+3), 2,959 forks (+1)
+- colbymchenry/codegraph: 76,078★ (+18), 5,040 forks (+5)
+- abhigyanpatwari/GitNexus: 48,150★ (-1), 5,220 forks (=)
+- jgravelle/jcodemunch-mcp: 2,827★ (=), 371 forks (=)
+- continuedev/continue: 36,385★ (+2), 5,536 forks (=)
+- Aider-AI/aider: 49,851★ (+3), 5,112 forks (=)
+- Graphify-Labs/graphify: 139,921★ (+109), 13,347 forks (+7)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
