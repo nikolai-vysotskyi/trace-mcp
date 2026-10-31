@@ -476,9 +476,8 @@ const CSS_PROPERTY_RE = /^(?:var\(--[a-zA-Z0-9_-]+\)|--[a-zA-Z0-9_-]+)$/;
 const CSS_CONTEXT_PATH_RE =
   /(?:design-tokens?|themes?|styles?|colors?|palette|contrast|\.(?:css|scss|sass|less|styl))\b/i;
 
-/** Property or identifier contexts indicating CSS / design tokens / color contrast. */
-const CSS_CONTEXT_LINE_RE =
-  /\b(?:surface|contrast|appearance|palette|cssVar|customProperties|styleSheet|theme|colors?)\b/i;
+/** Property or identifier contexts indicating CSS custom properties / color contrast. */
+const CSS_CONTEXT_LINE_RE = /\b(?:surface|contrast|palette|cssVar|customProperties|styleSheet)\b/i;
 
 /** File-path / parent-property contexts where credential-like keys are domain names, not secrets. */
 const MAPPING_CONTEXT_PATH_RE =
@@ -563,18 +562,23 @@ function detectHardcodedValues(lines: string[], filePath: string): CodeSmellFind
       const m = re.exec(line);
       if (!m) continue;
 
-      // Check false positives on line + path
+      // Check false positives on line + path.
+      // Environment access and config property access patterns (`process.env`, `config.`)
+      // only apply to lines, not file paths (e.g. `src/app-config.ts` must not be
+      // suppressed by `config.`).
       let isFP = false;
       for (const fp of pattern.falsePositives) {
-        if (fp.test(line) || fp.test(filePath)) {
+        if (fp.test(line)) {
+          isFP = true;
+          break;
+        }
+        if (!fp.source.includes('process') && !fp.source.includes('config') && fp.test(filePath)) {
           isFP = true;
           break;
         }
       }
       if (isFP) continue;
 
-      // Contextual credential filter — drop ORM type maps, domain taxonomies,
-      // local-LLM placeholders, etc.
       if (pattern.name === 'hardcoded_credential') {
         const value = m[1] ?? '';
         if (!isLikelyCredentialValue(value, line, filePath, lines, i)) continue;

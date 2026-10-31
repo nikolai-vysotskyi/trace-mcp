@@ -850,6 +850,29 @@ export function getCliToken() {
       expect(credFindings[0].file).toBe('src/cli-auth.ts');
     });
 
+    test('still flags --prefixed credentials when theme or color is in nearby config (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/app-config.ts',
+        `
+export const appConfig = {
+  theme: 'dark',
+  color: 'blue',
+  apiKey: '--sk-live-9f3a2b1c7d4e8f01-prod-secret',
+};
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(1);
+      expect(credFindings[0].file).toBe('src/app-config.ts');
+    });
+
     test('still flags a real-looking API key (true positive)', () => {
       writeFile(
         store,
