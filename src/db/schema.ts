@@ -7,7 +7,7 @@ import { backfillSymbolHeritage } from './heritage.js';
 import { installSlowStatementGuard } from './slow-statement.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
-const SCHEMA_VERSION = 35;
+const SCHEMA_VERSION = 36;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -331,6 +331,9 @@ CREATE TABLE IF NOT EXISTS symbol_heritage (
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);
 CREATE INDEX IF NOT EXISTS idx_files_language ON files(language);
+-- v36 (TRA-2810): index routes(controller_symbol_id) so deleting symbols
+-- doesn't table-scan routes on foreign key check (2.28s event-loop stall).
+CREATE INDEX IF NOT EXISTS idx_routes_controller_symbol ON routes(controller_symbol_id);
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -1954,6 +1957,13 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // language don't table-scan files or trick the optimizer into a full
     // Cartesian product when sqlite_stat1 is skewed or stale.
     db.exec('CREATE INDEX IF NOT EXISTS idx_files_language ON files(language)');
+  },
+  36: (db) => {
+    // TRA-2810: index routes(controller_symbol_id) so deleting symbols
+    // doesn't table-scan routes on foreign key check (2.28s event-loop stall).
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_routes_controller_symbol ON routes(controller_symbol_id)',
+    );
   },
 };
 
