@@ -8943,3 +8943,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-01 02:00 pass (TRA-2824): sweep clean (0 new hits across 9 patterns), codegraph declare module priority (#3157) & Nim support (#3156) & Python sibling script import (#3155), GitNexus Python field reader synthesis (#3795), codebase-memory Go bare init binding merged (#2862) & ADR sidecar (#2864), Graphify reference edge index 34x speedup (#4913)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *JS/TS declare module priority over real modules regression fix (PR #3157, merged)*: Fixes regression where `declare module` stubs in `.d.ts` hijacked bare specifier imports from actual implementation files across packages in monorepos (e.g. React hooks stubbing `shared/ReactFeatureFlags` stealing 94 imports from `ReactFeatureFlags.js`). Scopes declared modules to their enclosing package/dependents and prioritizes repository implementation modules over ambient declarations. Contrast: trace-mcp's symbol indexing distinguishes declarations from definitions and prioritizes concrete implementations via project-aware path resolution in SQLite, avoiding ambient mock/stub hijacking.
+  - *Nim language support with module resolution (PR #3156, open)*: Adds Nim (`.nim`, `.nims`, `.nimble`) support using tree-sitter AST queries, extracting types, methods (dispatching on first parameter), objects, templates, and search-path module resolution. Contrast: trace-mcp focuses on mainstream commercial languages with rich symbol graphs (TypeScript, JavaScript, Python, Go, Rust, Java, C#, PHP, C/C++), delivering deep cross-file reference indexing and framework route detection rather than expanding into niche languages with custom search-path resolvers.
+  - *Python sibling script import in package folder (PR #3155, merged)*: Fixes regression where script imports of sibling modules in folders containing `__init__.py` were lost. Introduces `pythonModuleOfScript` fallback. Contrast: trace-mcp models Python modules directly via repository-relative file paths and sys.path rules, resolving both package and standalone script sibling imports without separate fallback passes.
+  - *Missing drive compile cache hang on Windows (PR #3152, merged)*: Fixes unmounted drive / missing TEMP hanging `module.enableCompileCache()` on Windows.
+- **abhigyanpatwari/GitNexus**:
+  - *Python field readers & incomplete cross-language results (PR #3795, open)*: Fixes #3794 where attribute reads (e.g. `r.failures`) were omitted from scope query, and constructor instance attributes (`self.value = ...` in `__init__`) lacked property nodes and class-owned definitions. Synthesizes constructor instance fields and surfaces incomplete result bounds to `context` and `impact`. Contrast: trace-mcp extracts class properties, constructor assignments, and field accesses natively during Tree-sitter AST extraction, associating `self.field` declarations with enclosing class symbols without ad-hoc provider synthesis passes.
+  - *Smaller agent output & token-budget trimming for impact (PR #3793, open)*: Remains open in review. Validates trace-mcp's core design on token budget minimization.
+  - *Java overload resolution by JLS phases (PR #3791, open)*: Remains open in review.
+- **DeusData/codebase-memory-mcp**:
+  - *Suppress Go bare init binding (PR #2862, merged)*: Merged! Bare `init` identifiers no longer incorrectly bind to package init or methods named init via short-name fallback.
+  - *ADR sidecar follow-ups (PR #2864, open)*: Follow-up refinements to memory store sidecar architecture from #2315 review.
+  - *Angular HttpClient method inference (PR #2854, open)*: Remains open in review.
+- **Graphify-Labs/graphify**:
+  - *Reference edge index by source file to eliminate quadratic import walk (PR #4913, open)*: Pre-indexes reference edges by source file during `_apply_symbol_resolution_facts` to replace $O(\text{imports} \times \text{edges})$ loop with linear lookup, dropping rebuild time on 21k-node corpus from 14m 7s to 24.3s (34.8x speedup). Contrast: trace-mcp uses relational SQLite schema with indices on `(file_id, caller_id, callee_id)`, making symbol resolution and edge queries naturally $O(1)$ per edge rather than requiring in-memory index dictionaries.
+  - *Scoped json.include for project configs (PR #4911, open)* & *Case-differing declaration ID separation (PR #4908, open)*: Remain open in review.
+- **oraios/serena**:
+  - *Status*: PR #2243 (stdio LS pipe release on shutdown) and PR #2242 (Vue implementation queries via TS companion) remain open in review.
+- **jgravelle/jcodemunch-mcp**:
+  - *Status*: PR #1283 (file pattern consistency across tools and rate-limiting) remains open.
+
+**Competitor pulse (as of 2026-11-01 02:00 pass vs 2026-10-31 22:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 200★ (=, steady at milestone), 24 forks (=)
+- yamadashy/repomix: 29,100★ (+2), 1,614 forks (=)
+- oraios/serena: 30,953★ (+3), 2,115 forks (=)
+- DeusData/codebase-memory-mcp: 47,904★ (+7), 3,940 forks (+2)
+- tirth8205/code-review-graph: 32,522★ (+1), 2,960 forks (+1)
+- colbymchenry/codegraph: 76,085★ (+7), 5,042 forks (+2)
+- abhigyanpatwari/GitNexus: 48,152★ (+2), 5,220 forks (=)
+- jgravelle/jcodemunch-mcp: 2,827★ (=), 371 forks (=)
+- continuedev/continue: 36,385★ (=), 5,537 forks (+1)
+- Aider-AI/aider: 49,854★ (+3), 5,112 forks (=)
+- Graphify-Labs/graphify: 139,990★ (+69), 13,350 forks (+3)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
