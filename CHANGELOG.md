@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.7...v3.42.8) (2026-10-31)
+
+
+### Bug Fixes
+
+* **ai:** classify reranker empty response and add safe diagnostics (TRA-2803) ([#1824](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1824)) ([b0ca167](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b0ca167926b2ee7e3282b35d05b9a99ce3cf523b))
+
+
+### Performance
+
+* **db:** index routes(controller_symbol_id) to eliminate table scan on symbol deletion ([#1822](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1822)) ([95fb8a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/95fb8a8e2308c43aa3b0f897145b7cfaa88f5e11))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-11-01 02:00 (TRA-2824) ([#1825](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1825)) ([b092938](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b092938431c022aea2d3bc6a05eeca47a4614615))
+
 ## [3.42.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.6...v3.42.7) (2026-10-31)
 
 
