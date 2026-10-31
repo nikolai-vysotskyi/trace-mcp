@@ -469,8 +469,16 @@ const ORM_TYPE_TOKENS = new Set<string>([
 /** kebab-case English label, length < 30 — e.g. `local-no-key`, `no-encryption`. */
 const KEBAB_LABEL_RE = /^[a-z]+(?:-[a-z]+)+$/;
 
-/** CSS custom property / design token name (e.g. `--on-accent`, `--accent-fill`, `var(--on-accent)`). */
-const CSS_PROPERTY_RE = /^(?:var\()?--[a-zA-Z0-9_-]+\)?$/;
+/** CSS custom property / design token name or var() reference (e.g. `--on-accent`, `var(--accent-fill)`). */
+const CSS_PROPERTY_RE = /^(?:var\(--[a-zA-Z0-9_-]+\)|--[a-zA-Z0-9_-]+)$/;
+
+/** File-path regex for CSS / theme / design-token contexts. */
+const CSS_CONTEXT_PATH_RE =
+  /(?:design-tokens?|themes?|styles?|colors?|palette|contrast|\.(?:css|scss|sass|less|styl))\b/i;
+
+/** Property or identifier contexts indicating CSS / design tokens / color contrast. */
+const CSS_CONTEXT_LINE_RE =
+  /\b(?:surface|contrast|appearance|palette|cssVar|customProperties|styleSheet|theme|colors?)\b/i;
 
 /** File-path / parent-property contexts where credential-like keys are domain names, not secrets. */
 const MAPPING_CONTEXT_PATH_RE =
@@ -494,8 +502,23 @@ function isLikelyCredentialValue(
   // ORM column-type identifier.
   if (ORM_TYPE_TOKENS.has(value.toLowerCase())) return false;
 
-  // CSS custom property / design token name (e.g. `--on-accent`, `--accent-fill`).
-  if (CSS_PROPERTY_RE.test(value)) return false;
+  // CSS custom property / design token name (e.g. `--on-accent`, `var(--accent-fill)`).
+  // Gated to design-token / theme / CSS contexts (path or surrounding properties)
+  // to avoid suppressing CLI-style flags or secrets prefixed with `--` (TRA-2787).
+  if (CSS_PROPERTY_RE.test(value)) {
+    if (CSS_CONTEXT_PATH_RE.test(filePath) || CSS_CONTEXT_LINE_RE.test(line)) {
+      return false;
+    }
+    const scanStart = Math.max(0, lineIdx - 3);
+    const scanEnd = Math.min(surroundingLines.length - 1, lineIdx + 3);
+    for (let k = scanStart; k <= scanEnd; k++) {
+      if (k === lineIdx) continue;
+      const neighbor = surroundingLines[k];
+      if (neighbor && CSS_CONTEXT_LINE_RE.test(neighbor)) {
+        return false;
+      }
+    }
+  }
 
   // Kebab-case English label (e.g. `local-no-key`, `no-encryption`, `authentication`).
   if (KEBAB_LABEL_RE.test(value) && value.length < 30) return false;

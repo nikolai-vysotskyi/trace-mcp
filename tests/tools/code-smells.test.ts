@@ -785,7 +785,7 @@ const DOMAINS = {
       expect(credFindings).toHaveLength(0);
     });
 
-    test('does not flag CSS custom property names as credentials (TRA-2787)', () => {
+    test('does not flag CSS custom property names as credentials in design-token context (TRA-2787)', () => {
       writeFile(
         store,
         'src/theme.ts',
@@ -802,12 +802,52 @@ export function getContrastRow() {
         'typescript',
       );
 
+      // Also verify when in a non-theme path with neighboring CSS context (like contrastTable)
+      writeFile(
+        store,
+        'scripts/design-tokens.mjs',
+        `
+function contrastTable() {
+  const rows = [];
+  rows.push({
+    appearance: 'dark',
+    token: '--on-accent',
+    surface: '--accent-fill',
+  });
+  return rows;
+}
+`,
+        'javascript',
+      );
+
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
       const credFindings = result
         ._unsafeUnwrap()
         .findings.filter((f) => f.tag === 'hardcoded_credential');
       expect(credFindings).toHaveLength(0);
+    });
+
+    test('still flags --prefixed credentials outside CSS/design-token context (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/cli-auth.ts',
+        `
+export function getCliToken() {
+  const token = '--sk-9f3a2b1c7d4e8f01-prod-secret';
+  return token;
+}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(1);
+      expect(credFindings[0].file).toBe('src/cli-auth.ts');
     });
 
     test('still flags a real-looking API key (true positive)', () => {
