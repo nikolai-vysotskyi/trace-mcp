@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.6...v3.42.7) (2026-10-31)
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-10-31 08:00 (TRA-2814) ([#1816](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1816)) ([940a494](https://github.com/nikolai-vysotskyi/trace-mcp/commit/940a494fcb4556fc03ffd3638a3bc36587f5d17c))
+* **ops:** outreach pass 2026-10-31 14:00 (TRA-2817) ([#1818](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1818)) ([0e54520](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e545202dfe193f9b6dfd397e7cc7e4e70951603))
+* **ops:** outreach pass 2026-10-31 18:00 (TRA-2819) ([#1819](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1819)) ([47d7517](https://github.com/nikolai-vysotskyi/trace-mcp/commit/47d7517943de86ba2e6a3ace5fa30710ba3c77ca))
+* **ops:** outreach pass 2026-10-31 22:00 (TRA-2821) ([#1820](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1820)) ([633fd93](https://github.com/nikolai-vysotskyi/trace-mcp/commit/633fd9346c3b1b6b717e09dc10b16bc7c755bf79))
+
 ## [3.42.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.5...v3.42.6) (2026-10-30)
 
 
