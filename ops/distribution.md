@@ -8836,3 +8836,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Outreach pass, 2026-10-31 18:00 pass (TRA-2819): sweep clean (0 new hits across 9 patterns), codegraph chained new (#3139) & wildcard static call (#3138) Java import visibility, serena stdio LS pipe release on shutdown (#2243) & Vue implementation via TS companion (#2242), GitNexus covered test consolidation (#3792), trace-mcp 199★ (=, 1 to 200★ milestone)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Chained new expression Java import visibility (PR #3139, open)*: Follow-up to #2976 fixing `new Util().run()` dropping call links when the receiver class is imported via an on-demand wildcard import (`import com.x.b.*;`). Contrast: trace-mcp indexes AST type declarations into SQLite with explicit file-level import scope bindings, resolving chained invocations through normalized receiver type symbols without dropped call edges.
+  - *Java static call wildcard import visibility (PR #3138, open)*: Fixes #2976 where static call `Util.log()` under wildcard import linked a same-named class in an unimported package (`com.x.a.Util`) instead of the imported package (`com.x.b.Util`). Contrast: trace-mcp enforces strict import scoping during symbol resolution, preventing unimported package symbols from colliding with in-scope wildcard matches.
+  - *Caller-aware expect/actual resolution in Kotlin Multiplatform (#3136) & Vue component contract (#3135)*: Both remain open in review.
+- **oraios/serena**:
+  - *Release stdio language-server subprocess pipes on shutdown (PR #2243, open)*: Closes stdout/stderr in `finally` and releases stdin on shutdown or unexpected termination, eliminating ResourceWarnings and Vue test leaks. Contrast: trace-mcp embeds Tree-sitter parsers directly in-process with SQLite storage; no external LSP subprocesses or stdio pipe lifecycle tracking required.
+  - *Vue implementation queries via companion TypeScript server (PR #2242, open)*: Fixes #2218 where `find_implementations` routed `textDocument/implementation` to Vue LS (which returned -32601 MethodNotFound) by proxying implementation requests to the companion TypeScript language server. Contrast: trace-mcp analyzes `.vue` Single File Components directly within its unified AST graph, resolving interface implementations natively without multi-server protocol negotiation.
+- **abhigyanpatwari/GitNexus**:
+  - *Consolidate covered integration cases (PR #3792, open)*: Removes 10 redundant integration cases across 9 resolver test files where assertions are subsumed by stronger retained tests.
+  - *Java overload resolution by JLS phases (PR #3791, open)*: Implements JLS invocation phases; remains open in review.
+- **DeusData/codebase-memory-mcp**:
+  - *Angular HttpClient method inference (PR #2854, open)* & *Recursion metadata in trace_path (PR #2842, open)*: Both remain open in review.
+- **jgravelle/jcodemunch-mcp**:
+  - *Status*: PR #1283 (file pattern consistency across tools and rate-limiting) remains open.
+
+**Competitor pulse (as of 2026-10-31 18:00 pass vs 2026-10-31 14:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (=, 1 to 200★ milestone), 24 forks (=)
+- yamadashy/repomix: 29,098★ (=), 1,613 forks (=)
+- oraios/serena: 30,930★ (+16), 2,112 forks (+2)
+- DeusData/codebase-memory-mcp: 47,892★ (+7), 3,937 forks (-1)
+- tirth8205/code-review-graph: 32,518★ (+2), 2,958 forks (=)
+- colbymchenry/codegraph: 76,060★ (+18), 5,035 forks (=)
+- abhigyanpatwari/GitNexus: 48,151★ (+4), 5,220 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,827★ (+3), 371 forks (-1)
+- continuedev/continue: 36,383★ (+2), 5,536 forks (+1)
+- Aider-AI/aider: 49,848★ (+6), 5,112 forks (+2)
+- Graphify-Labs/graphify: 139,812★ (+107), 13,340 forks (+6)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
