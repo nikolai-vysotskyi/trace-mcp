@@ -8783,3 +8783,56 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-10-31 14:00 pass (TRA-2817): sweep clean (0 new hits across 9 patterns), codegraph Kotlin expect/actual actual caller reach (#3136) & Vue component contract graph layer (#3135), codebase-memory Angular HttpClient method inference (#2854) & SubagentStart CLI fallback hook (#2839), GitNexus JLS phases overload resolution (#3791), trace-mcp 199★ (=, 1 to 200★ milestone)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *Caller-aware expect/actual resolution in Kotlin Multiplatform (PR #3136, open)*: Fixes #3033 where Java calls to KMP objects incorrectly linked `commonMain` `expect` declarations instead of platform `actual` declarations (which exist in JVM bytecode). Introduces `kmpSourceSet` detection and `jvmExpectActualPick` so Java and non-common callers route to the platform actual while `commonMain` callers keep `expect`. Contrast: trace-mcp parses multiplatform projects via source-root mapping and tree-sitter AST queries, isolating platform-specific implementation files from shared abstractions without fragile tie-breaker heuristics.
+  - *Vue component contract in graph (PR #3135, open)*: Adds component API metadata (`props`, `emits`, `slots`, `exposed`), cross-file type imports with root-checked reads, template event wiring (`@event="handler"` reference edges), and an opt-in `codegraph_component` tool. Contrast: trace-mcp provides native Tree-sitter parsing for `.vue` Single File Components, extracting template tags and `<script>` AST nodes directly into universal symbol and call graphs without requiring separate specialized component tools.
+  - *Folder require package.json main (#3133) & Overload fit (#3132)*: Both remain open in review.
+- **DeusData/codebase-memory-mcp**:
+  - *Angular HttpClient method inference (PR #2854, open)*: Fixes #2768 where Angular `HttpClient` calls (`this.http.get`) were misclassified as server route registrations and linked to wrong HTTP verbs due to unconstrained `__route__ANY__`. Evaluates client service pattern matching before route registration heuristics and propagates detected HTTP verbs. Contrast: trace-mcp separates client invocation call graphs from framework route registrations using explicit AST callee signatures, avoiding conflation of client HTTP calls with server routing endpoints.
+  - *SubagentStart CLI fallback hook (PR #2839, merged)*: Adds a prompt fallback reminder instructing subagents spawned without MCP tools to invoke `codebase-memory-mcp cli <tool> --help`. Contrast: trace-mcp tools are natively discoverable across MCP, stdio, and HTTP endpoints, and trace-mcp presets support flexible client capabilities without requiring prompt injection workarounds.
+  - *macOS runners update (PR #2849, merged)*: Upgrades CI runners to macos-15 and pins deployment target to 14.0.
+- **abhigyanpatwari/GitNexus**:
+  - *Java overload resolution by JLS phases (PR #3791, open)*: Implements JLS strict, loose, and variable-arity invocation phases followed by most-specific selection for Java overloads, maintaining explicit caller counts and uncertainty receipts when resolution cannot be guaranteed. Contrast: trace-mcp computes relational call edges based on syntax-level type annotations and symbol scopes with fast SQLite indices, keeping analysis overhead minimal and deterministic.
+  - *Java Optional receiver test consolidation (PR #3784, merged)*: Merged consolidation of Optional receiver chain test scenarios.
+- **oraios/serena**:
+  - *Status*: PR #2241 (skip Lean CI probes) and PR #2239 (SolidLSP full document sync in-memory edits) remain open without changes.
+- **jgravelle/jcodemunch-mcp**:
+  - *Status*: PR #1283 (file pattern consistency across tools and rate-limiting) remains open.
+
+**Competitor pulse (as of 2026-10-31 14:00 pass vs 2026-10-31 08:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 199★ (=, 1 to 200★ milestone), 24 forks (=)
+- yamadashy/repomix: 29,098★ (+4), 1,613 forks (+1)
+- oraios/serena: 30,914★ (+31), 2,110 forks (+2)
+- DeusData/codebase-memory-mcp: 47,885★ (+12), 3,938 forks (+1)
+- tirth8205/code-review-graph: 32,516★ (+4), 2,958 forks (=)
+- colbymchenry/codegraph: 76,042★ (+19), 5,035 forks (+2)
+- abhigyanpatwari/GitNexus: 48,147★ (+9), 5,219 forks (=)
+- jgravelle/jcodemunch-mcp: 2,824★ (+1), 372 forks (=)
+- continuedev/continue: 36,381★ (+1), 5,535 forks (+1)
+- Aider-AI/aider: 49,842★ (+9), 5,110 forks (=)
+- Graphify-Labs/graphify: 139,705★ (+157), 13,334 forks (+15)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
