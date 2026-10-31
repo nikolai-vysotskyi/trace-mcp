@@ -13,6 +13,8 @@ import type {
   ChatMessage,
   EmbeddingService,
   EmbeddingTask,
+  FinishReason,
+  GenerateResult,
   InferenceService,
 } from './interfaces.js';
 import { parseAnthropicStream } from './sse.js';
@@ -53,10 +55,10 @@ class AnthropicInferenceService implements InferenceService {
     private model: string,
   ) {}
 
-  async generate(
+  async generateDetailed(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
-  ): Promise<string> {
+  ): Promise<GenerateResult> {
     return withRetry(
       async () => {
         const resp = await fetch(`${BASE_URL}/v1/messages`, {
@@ -82,12 +84,31 @@ class AnthropicInferenceService implements InferenceService {
         }
 
         const data = (await resp.json()) as {
-          content: { type: string; text?: string }[];
+          content?: { type: string; text?: string }[];
+          stop_reason?: string;
         };
-        return data.content?.find((c) => c.type === 'text')?.text ?? '';
+        const rawReason = data.stop_reason;
+        let finishReason: FinishReason = 'unknown';
+        if (rawReason === 'max_tokens') finishReason = 'length';
+        else if (rawReason === 'refusal') finishReason = 'content_filter';
+        else if (rawReason === 'end_turn' || rawReason === 'stop_sequence') finishReason = 'stop';
+
+        return {
+          text: data.content?.find((c) => c.type === 'text')?.text ?? '',
+          finishReason,
+          rawFinishReason: rawReason,
+        };
       },
       { label: 'Anthropic generate' },
     );
+  }
+
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string> {
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
   }
 
   async *generateStream(

@@ -19,6 +19,8 @@ import type {
   ChatMessage,
   EmbeddingService,
   EmbeddingTask,
+  FinishReason,
+  GenerateResult,
   InferenceService,
 } from './interfaces.js';
 
@@ -112,10 +114,10 @@ class VertexAIInferenceService implements InferenceService {
     private model: string,
   ) {}
 
-  async generate(
+  async generateDetailed(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
-  ): Promise<string> {
+  ): Promise<GenerateResult> {
     return withRetry(
       async () => {
         const resp = await fetch(modelUrl(this.cfg, this.model, 'generateContent'), {
@@ -143,12 +145,42 @@ class VertexAIInferenceService implements InferenceService {
         }
 
         const data = (await resp.json()) as {
-          candidates: { content: { parts: { text: string }[] } }[];
+          candidates?: {
+            content?: { parts?: { text?: string }[] };
+            finishReason?: string;
+          }[];
+          promptFeedback?: { blockReason?: string };
         };
-        return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        const candidate = data.candidates?.[0];
+        const rawReason = candidate?.finishReason ?? data.promptFeedback?.blockReason;
+        let finishReason: FinishReason = 'unknown';
+        if (candidate?.finishReason === 'MAX_TOKENS') finishReason = 'length';
+        else if (
+          candidate?.finishReason === 'SAFETY' ||
+          candidate?.finishReason === 'RECITATION' ||
+          data.promptFeedback?.blockReason
+        ) {
+          finishReason = 'content_filter';
+        } else if (candidate?.finishReason === 'STOP') {
+          finishReason = 'stop';
+        }
+
+        return {
+          text: candidate?.content?.parts?.[0]?.text ?? '',
+          finishReason,
+          rawFinishReason: rawReason,
+        };
       },
       { label: 'Vertex generate' },
     );
+  }
+
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string> {
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
   }
 
   async *generateStream(

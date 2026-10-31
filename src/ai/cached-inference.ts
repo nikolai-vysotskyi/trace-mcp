@@ -4,7 +4,7 @@
  */
 
 import type { InferenceCache } from './inference-cache.js';
-import type { InferenceService } from './interfaces.js';
+import type { GenerateResult, InferenceService } from './interfaces.js';
 
 export class CachedInferenceService implements InferenceService {
   constructor(
@@ -13,18 +13,33 @@ export class CachedInferenceService implements InferenceService {
     private model: string,
   ) {}
 
+  get isFallback(): boolean {
+    return (this.inner as { isFallback?: boolean })?.isFallback === true;
+  }
+
   async generate(
     prompt: string,
     options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
-    const cached = this.cache.get(this.model, prompt, options?.maxTokens);
-    if (cached !== null) return cached;
+    const res = await this.generateDetailed(prompt, options);
+    return res.text;
+  }
 
-    const response = await this.inner.generate(prompt, options);
-    if (response) {
-      this.cache.set(this.model, prompt, response, options?.maxTokens);
+  async generateDetailed(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<GenerateResult> {
+    const cached = this.cache.get(this.model, prompt, options?.maxTokens);
+    if (cached !== null) return { text: cached, finishReason: 'stop' };
+
+    const res: GenerateResult = this.inner.generateDetailed
+      ? await this.inner.generateDetailed(prompt, options)
+      : { text: await this.inner.generate(prompt, options) };
+
+    if (res.text) {
+      this.cache.set(this.model, prompt, res.text, options?.maxTokens);
     }
-    return response;
+    return res;
   }
 
   invalidate(prompt: string, maxTokens?: number): void {
