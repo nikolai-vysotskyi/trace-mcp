@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-02T06:36:01.907Z"
+updated: "2026-11-03T06:28:09.961Z"
 active_users:
-  day: 47
-  week: 210
-  month: 390
+  day: 61
+  week: 189
+  month: 393
   first_ping_date: "2026-08-29"
-  days_observed: 66
+  days_observed: 67
   month_window_full: true
-events_28d: 2631
+events_28d: 2673
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2631
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 184473549
-  tokens_saved_raw: 214046708
-  usd_saved: 184.47
+  tokens_saved: 185301731
+  tokens_saved_raw: 215930155
+  usd_saved: 185.3
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 58
+  days: 59
   capped_days: 2
-  raw_ratio: 1.16
+  raw_ratio: 1.17
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 287
+  new_installs_28d: 292
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 12
+  retention_dau_mau_pct: 16
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,39 +159,39 @@ usage:
 # against `ops/arrivals.md` in private project repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1503
-  "upgrade": 742
-  "new": 287
-  "downgrade": 53
-  "(not set)": 45
+  "active": 1512
+  "upgrade": 772
+  "new": 292
+  "downgrade": 55
+  "(not set)": 42
 by_version:
   "3.38.0": 168
-  "3.34.6": 76
+  "3.34.6": 72
   "3.37.10": 57
   "3.34.8": 47
   "3.36.7": 47
   "3.34.7": 43
   "3.37.0": 43
+  "3.42.7": 43
   "3.41.0": 42
   "3.42.1": 36
+  "3.42.4": 35
   "3.37.6": 34
   "3.40.0": 32
   "3.37.7": 31
-  "3.42.4": 29
   "3.37.4": 28
-  "3.42.0": 27
+  "3.42.0": 28
   "3.39.0": 26
   "3.36.6": 25
   "3.37.9": 25
   "3.36.3": 24
   "3.36.0": 23
   "3.36.5": 21
-  "3.42.6": 20
-  "3.42.7": 20
+  "3.42.6": 21
   "3.37.3": 16
   "3.35.0": 11
 
@@ -211,7 +211,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 951
+  at_or_above: 978
   below: 0
   unknown: 0
   pct: 100
@@ -257,23 +257,23 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 133
+  "(not set)": 132
   "United Arab Emirates": 90
-  "United States": 24
+  "United States": 26
   "Russia": 20
   "China": 13
   "Thailand": 9
   "Brazil": 7
   "France": 6
   "Germany": 6
-  "Türkiye": 6
   "Australia": 5
   "Canada": 5
   "Chile": 5
   "Indonesia": 5
   "Italy": 5
+  "Poland": 5
+  "Türkiye": 5
   "Egypt": 4
-  "Poland": 4
   "South Korea": 4
   "Netherlands": 3
   "Pakistan": 3
@@ -282,8 +282,8 @@ by_country:
   "Austria": 2
   "Iran": 2
 by_client:
-  "unknown": 263
-  "claude-code": 90
+  "unknown": 266
+  "claude-code": 91
   "codex-mcp-client": 42
   "antigravity-client": 21
   "opencode": 17
@@ -297,13 +297,13 @@ by_client:
   "Visual Studio Code": 3
   "grok-shell-trace": 3
   "grok-shell-trace-mcp": 3
+  "bb-plugin-trace-mcp": 2
   "kilo": 2
   "kimi-code": 2
   "local-agent-mode-trace": 2
   "mcpenv": 2
   "pi-mcp-trace-mcp": 2
-  "bb-plugin-trace-mcp": 1
+  "Cline": 1
   "bench": 1
   "cli": 1
   "count-advertised-tools": 1
-  "dsh-mcp-client": 1
