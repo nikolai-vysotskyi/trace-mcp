@@ -936,6 +936,7 @@ const NESTED_REPO_SCAN_SKIP_DIRS = new Set([
   'target',
   '.next',
   '.nuxt',
+  '.output',
   '.turbo',
   '.cache',
 ]);

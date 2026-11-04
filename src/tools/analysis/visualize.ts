@@ -190,6 +190,7 @@ const GRAPH_EXCLUDE_DIRS = new Set([
   '.venv',
   '.next',
   '.nuxt',
+  '.output',
   'coverage',
   '.turbo',
   '.cache',

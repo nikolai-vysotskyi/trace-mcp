@@ -186,6 +186,7 @@ const EXCLUDE_DIRS = new Set([
   '__pycache__',
   '.next',
   '.nuxt',
+  '.output',
   'coverage',
   '.cache',
   'tmp',

@@ -24,6 +24,7 @@ export const BASE_EXCLUDE = [
   '**/storage/**',
   '**/bootstrap/cache/**',
   '**/.nuxt/**',
+  '**/.output/**',
   '**/.next/**',
   '**/.venv/**',
   '**/venv/**',

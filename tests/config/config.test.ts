@@ -131,6 +131,8 @@ describe('config', () => {
       'src/main.ts',
       // Zig build cache: generated .zig must not be enumerated.
       'work/.zig-cache/o/abc123/build.zig',
+      // Nuxt production build output: chunks and server bundles must not be enumerated.
+      'work/.output/server/chunks/index.mjs',
       // Run outputs with indexed-unrelated extensions.
       'work/run.log',
       'work/model.bin',
@@ -147,6 +149,7 @@ describe('config', () => {
     const config = (await loadConfig(tmpDir))._unsafeUnwrap();
     for (const p of [
       '**/.zig-cache/**',
+      '**/.output/**',
       '**/*.tar.gz',
       '**/*.bin',
       '**/*.log',
@@ -170,6 +173,7 @@ describe('config', () => {
     expect(matched).toContain('src/main.ts');
     expect(matched).toContain('src/bin/tool.rs');
     expect(matched.some((m) => m.includes('.zig-cache/'))).toBe(false);
+    expect(matched.some((m) => m.includes('.output/'))).toBe(false);
 
     // The file-level patterns gate the watcher (same picomatch call it uses),
     // even though fast-glob would never enumerate these extensions anyway.
@@ -189,11 +193,12 @@ describe('config', () => {
     tmpDir = createTmpDir('trace-mcp-test-');
     fs.writeFileSync(
       path.join(tmpDir, '.trace-mcp.json'),
-      JSON.stringify({ exclude: ['.zig-cache/**'] }),
+      JSON.stringify({ exclude: ['.zig-cache/**', '.output/**'] }),
     );
 
     const config = (await loadConfig(tmpDir))._unsafeUnwrap();
     expect(config.exclude).toContain('**/.zig-cache/**');
+    expect(config.exclude).toContain('**/.output/**');
   });
 
   it('loads .trace-mcp.json config file', async () => {
