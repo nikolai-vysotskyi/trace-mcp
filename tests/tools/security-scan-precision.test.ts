@@ -1465,6 +1465,94 @@ async def unsafe_query(conn, user_filter: str):
     expect(result.findings[0].severity).toBe('critical');
   });
 
+  test('still detects Python SQL injection when unrelated function defines a constant with the same name (TRA-2900 cross-function recall)', () => {
+    writeFile(
+      store,
+      'src/shadowed_repo.py',
+      `
+def unrelated_helper():
+    name = 'constant_table'
+    return name
+
+async def run_query(conn, user_table):
+    name = user_table
+    await conn.execute(f"SELECT * FROM {name}")
+`,
+      'python',
+    );
+
+    const result = scan(['sql_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-89');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('still detects Python SQL injection when parameter shadows unrelated local constant (TRA-2900 cross-function recall)', () => {
+    writeFile(
+      store,
+      'src/param_shadow.py',
+      `
+def helper():
+    table = 'safe_table'
+    return table
+
+async def query(conn, table: str):
+    await conn.execute(f"SELECT * FROM {table}")
+`,
+      'python',
+    );
+
+    const result = scan(['sql_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-89');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('still detects command injection when unrelated function defines a constant with the same name (TRA-2900 cross-function recall)', () => {
+    writeFile(
+      store,
+      'scripts/cross_func_cmd.py',
+      `
+def helper():
+    cmd = 'echo safe'
+    return cmd
+
+def run(user_input):
+    cmd = user_input
+    os.system(f"run {cmd}")
+`,
+      'python',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-78');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('still detects JS/TS SQL injection when unrelated function defines a constant with the same name (TRA-2900 cross-function recall)', () => {
+    writeFile(
+      store,
+      'src/cross_func.ts',
+      `
+function helper() {
+  const name = 'safe_table';
+  return name;
+}
+function runQuery(db: any, userTable: string) {
+  const name = userTable;
+  db.query(\`SELECT * FROM \${name}\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scan(['sql_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-89');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
   test('demotes fetch using apiBase template literal to low confidence (TRA-2900)', () => {
     writeFile(
       store,

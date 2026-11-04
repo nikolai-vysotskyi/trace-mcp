@@ -383,42 +383,111 @@ const RULES: SecurityRule[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Backward guard scan & scope utilities
+// ---------------------------------------------------------------------------
+
+/** How far above a sink to look for a guard or local assignment before giving up. */
+const GUARD_WINDOW = 40;
+
+/**
+ * A line that opens a function/method body — the top of the block we scan.
+ * Control-flow braces (`if`, `try`, `for`, …) do NOT stop the walk: a guard
+ * normally sits above them, at the top of the enclosing function.
+ * Matches JS/TS functions, methods, arrows, and Python def/class definitions.
+ */
+const BLOCK_OPENER_RE =
+  /\bfunction\b|=>\s*\{|^\s*(?:async\s+)?def\s+[A-Za-z_]\w*\s*\(|^\s*class\s+[A-Za-z_]\w*|^\s*(?:(?:export|public|private|protected|static|async|readonly)\s+)*(?!if\b|for\b|while\b|switch\b|catch\b|do\b|return\b)[A-Za-z_$][\w$]*\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/;
+
+/** `assertFoo(x)` / `invariant(x)` — a validator that throws on bad input. */
+const ASSERT_CALL_RE = /\b(?:assert|invariant|ensure|require|validate|check)[A-Za-z_$]*\s*\(/;
+
+/** A conditional that exits the block — `if (...) return|throw|continue`. */
+const EXIT_RE = /\b(?:return|throw|continue|process\.exit)\b/;
+
+function escapeForRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ---------------------------------------------------------------------------
 // Light reaching-defs: resolve template-literal interpolations to constants
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve an identifier in a file to a literal string by scanning upward
- * for a top-level `const X = '...'` / `let X = "..."` / `var X = \`...\``
- * binding. Only matches single-string RHS (no interpolation, no concat).
+ * Resolve an identifier in a file to a literal string by:
+ * 1. Scanning backward within the enclosing function/method block for a local assignment.
+ * 2. Scanning for a module-level (top-level, zero indentation) constant binding.
  *
- * Returns the literal string value (without quotes) or null when:
- * - identifier is reassigned or shadowed,
- * - RHS contains interpolation `${...}`, concatenation `+`, or a call,
- * - identifier is a function parameter (we cannot prove constness),
- * - binding is not found in the file.
+ * Prevents cross-function name collisions where a local constant in one function
+ * masks an untrusted parameter in another function (TRA-2900).
  */
 function resolveStringBindingInFile(
   lines: string[],
   ident: string,
   fromLine: number,
 ): string | null {
-  // Walk backward from fromLine to line 0 looking for a const/let/var binding (or bare assignment in Python).
-  const constRe = new RegExp(
-    `^\\s*(?:export\\s+)?(?:(?:const|let|var)\\s+)?${ident}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
+  const escapedIdent = escapeForRegex(ident);
+  const localAssignRe = new RegExp(
+    `^\\s*(?:(?:const|let|var)\\s+)?${escapedIdent}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
   );
-  const interpolatedRhsRe = new RegExp(
-    `^\\s*(?:export\\s+)?(?:(?:const|let|var)\\s+)?${ident}\\s*[:=].*[\\$\\{\\+]`,
-  );
-  // Search the entire file (not just upward) — bindings can appear below in TS due to hoisting at module scope.
-  for (let i = 0; i < lines.length; i++) {
+  const localNonConstRe = new RegExp(`^\\s*(?:(?:const|let|var)\\s+)?${escapedIdent}\\s*[:=]`);
+
+  // Scan backward within the enclosing function/method body up to BLOCK_OPENER_RE
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine - 1; i >= stop; i--) {
     const line = lines[i];
-    const m = constRe.exec(line);
-    if (m) return m[2];
-    if (i !== fromLine && interpolatedRhsRe.test(line)) {
-      // Identifier is bound to a non-literal expression — cannot prove constness.
+    const m = localAssignRe.exec(line);
+    if (m) {
+      // Found assignment in the same block. Ensure ident is not reassigned between line i and fromLine.
+      let clean = true;
+      for (let k = i + 1; k < fromLine; k++) {
+        if (localNonConstRe.test(lines[k])) {
+          clean = false;
+          break;
+        }
+      }
+      if (clean) return m[2];
       return null;
     }
+    // If assigned to non-literal or expression locally, fail closed.
+    if (localNonConstRe.test(line)) {
+      return null;
+    }
+    if (BLOCK_OPENER_RE.test(line)) {
+      // Check if ident is a parameter in the function/method signature.
+      const paramRe = new RegExp(`(?:\\(|,)\\s*${escapedIdent}\\s*(?:[,:=)]|$)`);
+      if (paramRe.test(line)) {
+        return null;
+      }
+      break;
+    }
   }
+
+  // Scan for module-level (top-level) constant binding.
+  // In Python, module-level bindings must start at column 0 (no leading whitespace).
+  // In JS/TS, module-level bindings must be at top level with export / const / let / var.
+  // Indented assignments inside other functions must NEVER be matched as module constants.
+  const topLevelConstRe = new RegExp(
+    `^(?:(?:export\\s+)?(?:const|let|var)\\s+|)${escapedIdent}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
+  );
+  const topLevelNonConstRe = new RegExp(
+    `^(?:(?:export\\s+)?(?:const|let|var)\\s+|)${escapedIdent}\\s*[:=].*[\\$\\{\\+]`,
+  );
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s/.test(line)) continue;
+
+    const m = topLevelConstRe.exec(line);
+    if (m) {
+      for (let j = 0; j < lines.length; j++) {
+        if (j !== i && !/^\s/.test(lines[j]) && topLevelNonConstRe.test(lines[j])) {
+          return null;
+        }
+      }
+      return m[2];
+    }
+  }
+
   return null;
 }
 
@@ -767,31 +836,6 @@ const SSRF_BASE_IDENT_RE =
   /^(?:BASE|API|URL|BASE_URL|API_BASE|baseUrl|apiBase|apiUrl|apiEndpoint|endpoint|daemonUrl|url|base|api)$/i;
 
 const LOCAL_URL_LITERAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?/i;
-
-// ---------------------------------------------------------------------------
-// Backward guard scan — a validator a few lines above the sink
-// ---------------------------------------------------------------------------
-
-/** How far above a sink to look for a guard before giving up. */
-const GUARD_WINDOW = 40;
-
-/**
- * A line that opens a function/method body — the top of the block we scan.
- * Control-flow braces (`if`, `try`, `for`, …) do NOT stop the walk: a guard
- * normally sits above them, at the top of the enclosing function.
- */
-const BLOCK_OPENER_RE =
-  /\bfunction\b|=>\s*\{|^\s*(?:(?:export|public|private|protected|static|async|readonly)\s+)*(?!if\b|for\b|while\b|switch\b|catch\b|do\b|return\b)[A-Za-z_$][\w$]*\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/;
-
-/** `assertFoo(x)` / `invariant(x)` — a validator that throws on bad input. */
-const ASSERT_CALL_RE = /\b(?:assert|invariant|ensure|require|validate|check)[A-Za-z_$]*\s*\(/;
-
-/** A conditional that exits the block — `if (...) return|throw|continue`. */
-const EXIT_RE = /\b(?:return|throw|continue|process\.exit)\b/;
-
-function escapeForRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Extract the full expression of each `${...}` interpolation on `line`.
