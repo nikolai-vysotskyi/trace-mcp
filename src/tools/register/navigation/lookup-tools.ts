@@ -24,6 +24,7 @@ import {
   storeObservation,
 } from '../../../observation-pack.js';
 import { emptyIndexHint, fallbackOutline } from '../../navigation/zero-index.js';
+import { isBinaryFile } from '../../../shared/binary-extensions.js';
 import { isDangerousProjectRoot } from '../../../dangerous-root.js';
 import {
   listProjects,
@@ -549,6 +550,35 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         }
       }
       if (result.isErr()) {
+        if (existsOnDisk) {
+          const absPath = path.isAbsolute(filePath)
+            ? path.resolve(filePath)
+            : path.resolve(projectRoot, normalizedPath);
+          if (!isBinaryFile(absPath)) {
+            try {
+              const stat = fs.statSync(absPath);
+              if (stat.isFile() && stat.size <= 1024 * 1024) {
+                const fbResult = fallbackOutline(projectRoot, normalizedPath);
+                markExplored(normalizedPath);
+                markToolConsultation(projectRoot, 'get_outline', { path: normalizedPath });
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: encode({
+                        ...fbResult,
+                        _hint: `File '${normalizedPath}' is not indexed in project '${projectRoot}'. Extracted outline on-the-fly. Run reindex or adjust include/exclude to index it permanently.`,
+                      }),
+                    },
+                  ],
+                };
+              }
+            } catch {
+              /* fall through to NOT_FOUND error */
+            }
+          }
+        }
+
         const error =
           result.error.code === 'NOT_FOUND' && !result.error.reason
             ? notFound(

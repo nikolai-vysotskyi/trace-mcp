@@ -139,6 +139,51 @@ describe('get_outline — auto-index on NOT_FOUND (TRA-4)', () => {
     expect(typeof body.error.help).toBe('string');
     expect(body.error.help.length).toBeGreaterThan(0);
   });
+
+  it('falls back to regex outline for an existing file outside configured include (TRA-2897)', async () => {
+    // File in scratchpad/ which is outside config.include (['src/**/*.ts'])
+    fs.mkdirSync(path.join(tmpDir, 'scratchpad'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'scratchpad', 'pool_check.py'),
+      'class PoolChecker:\n    def check_pool(self):\n        pass\n\ndef helper():\n    return 42\n',
+    );
+
+    const res = await outline({ path: 'scratchpad/pool_check.py' });
+    expect(res.isError).toBeFalsy();
+    const body = JSON.parse(res.content[0].text);
+    expect(body.fallback).toBe(true);
+    expect(body.file).toBe('scratchpad/pool_check.py');
+    const symbolNames = body.symbols.map((s: { name: string }) => s.name);
+    expect(symbolNames).toContain('PoolChecker');
+    expect(symbolNames).toContain('check_pool');
+    expect(symbolNames).toContain('helper');
+
+    // Consultation marker must be placed so follow-up reads are authorized
+    const markerDir = path.join(
+      os.tmpdir(),
+      `trace-mcp-consulted-${crypto.createHash('sha256').update(tmpDir).digest('hex').slice(0, 12)}`,
+    );
+    const marker = path.join(
+      markerDir,
+      crypto.createHash('sha256').update('scratchpad/pool_check.py').digest('hex'),
+    );
+    expect(fs.existsSync(marker)).toBe(true);
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  });
+
+  it('rejects binary files outside include with NOT_FOUND and not_indexed reason (TRA-2897)', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'scratchpad'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'scratchpad', 'image.png'),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    );
+
+    const res = await outline({ path: 'scratchpad/image.png' });
+    expect(res.isError).toBe(true);
+    const body = JSON.parse(res.content[0].text);
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(body.error.reason).toBe('not_indexed');
+  });
 });
 
 describe('get_outline — descendant projects and root sessions (TRA-2243)', () => {
