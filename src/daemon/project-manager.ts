@@ -426,7 +426,7 @@ export class ProjectManager {
   /** Set up and start indexing for a single project. */
   async addProject(
     projectRoot: string,
-    opts?: { watch?: boolean; persist?: boolean },
+    opts?: { watch?: boolean; persist?: boolean; dbPath?: string },
   ): Promise<ManagedProject> {
     projectRoot = managerKey(projectRoot);
     const pending = this.pendingAdds.get(projectRoot);
@@ -444,7 +444,7 @@ export class ProjectManager {
 
   private async addProjectOnce(
     projectRoot: string,
-    opts?: { watch?: boolean; persist?: boolean },
+    opts?: { watch?: boolean; persist?: boolean; dbPath?: string },
   ): Promise<ManagedProject> {
     if (!fs.existsSync(projectRoot)) {
       throw new Error(`Project directory does not exist: ${projectRoot}`);
@@ -479,17 +479,18 @@ export class ProjectManager {
     }
     const config = configResult.value;
 
-    // TRA-38: prefer the registry's already-resolved dbPath (set moments ago
-    // by setupProject(), which may have reused a same-git-remote sibling's
-    // existing DB instead of a fresh one) over recomputing it from scratch.
-    // Worktrees are deliberately excluded — they already share one dbPath
-    // via `indexRoot` (the main worktree root), a separate, pre-existing
-    // mechanism this must not disturb. Read-mostly subprojects (persist
-    // false, never registered) simply find nothing and fall through to the
-    // same getDbPath() call this line has always made.
-    const dbPath = worktreeInfo
-      ? getDbPath(indexRoot)
-      : (getProject(indexRoot)?.dbPath ?? getDbPath(indexRoot));
+    // TRA-38 / TRA-2898: prefer an explicit opts.dbPath or the registry's
+    // already-resolved dbPath (set moments ago by setupProject(), which may have
+    // reused a same-git-remote sibling's existing DB). Read-mostly / unpersisted
+    // projects (persist: false, never written to registry.json) route their DB
+    // to EPHEMERAL_INDEX_DIR so they are subject to age-based sweep and never
+    // leave unreferenced orphan DBs in INDEX_DIR.
+    const dbPath = opts?.dbPath
+      ? opts.dbPath
+      : worktreeInfo
+        ? getDbPath(indexRoot)
+        : (getProject(indexRoot)?.dbPath ??
+          (persist ? getDbPath(indexRoot) : getDbPath(indexRoot, { ephemeral: true })));
     ensureGlobalDirs();
 
     // TRA-304: this process is about to hold `dbPath` open for the project's

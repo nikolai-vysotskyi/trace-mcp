@@ -21,7 +21,14 @@ import path from 'node:path';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { deleteStatusSentinelsForRoot } from '../server/heartbeat.js';
 import { DB_FAMILY_SUFFIXES } from '../utils/db-family.js';
-import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
+import {
+  DECISIONS_DB_PATH,
+  EPHEMERAL_INDEX_DIR,
+  getDbPath,
+  projectHash,
+  projectName,
+  TOPOLOGY_DB_PATH,
+} from '../global.js';
 import { logger } from '../logger.js';
 import { getProject, isEphemeralProjectRoot, listProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
@@ -249,9 +256,16 @@ export function removeProjectArtifacts(
   // session/task-cache files, which are themselves named off this same
   // dbPath — see local-backend.ts's `sharedDbPath.replace(/\.db$/, ...)`).
   const registryEntry = typeof getProject === 'function' ? getProject(absRoot) : null;
-  const indexDbBase =
-    registryEntry?.dbPath ??
-    path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
+  let indexDbBase = registryEntry?.dbPath ?? getDbPath(absRoot);
+  if (!registryEntry && !fs.existsSync(indexDbBase)) {
+    const altDir = indexDbBase.startsWith(`${EPHEMERAL_INDEX_DIR}${path.sep}`)
+      ? INDEX_DIR
+      : EPHEMERAL_INDEX_DIR;
+    const altPath = path.join(altDir, path.basename(indexDbBase));
+    if (fs.existsSync(altPath)) {
+      indexDbBase = altPath;
+    }
+  }
   const dbBasenameMatch = path.basename(indexDbBase).match(/^(.+)-([0-9a-f]{12})\.db$/i);
   const name = dbBasenameMatch ? dbBasenameMatch[1] : projectName(absRoot);
   const hash = dbBasenameMatch ? dbBasenameMatch[2] : projectHash(absRoot);
