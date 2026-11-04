@@ -24,6 +24,7 @@ import {
   isDevCheckoutEntry,
   isEphemeralInstallPath,
   LAUNCHD_PLIST_PATH,
+  LEGACY_TRACE_MCP_HOME,
   RESTART_MARKER_PATH,
   TRACE_MCP_HOME,
 } from '../global.js';
@@ -327,32 +328,127 @@ export function checkDaemonRuntimeIntact(cliDir: string): string[] {
   return problems;
 }
 
-// ── Platform: macOS (launchd) ───────────────────────────────────────
+// ── Platform: macOS (launchd) & Daemon Spawn ────────────────────────
 
-function resolveTraceMcpBinary(): string {
-  // Prefer the launcher shim at ~/.trace-mcp/bin/trace-mcp. The shim resolves
-  // Node + dist/cli.js at runtime from launcher.env, so the plist survives
-  // node-version swaps (nvm/Herd/volta). Without this, the plist embeds a
+export function resolveTraceMcpBinary(opts?: {
+  home?: string;
+  isWin?: boolean;
+  argv1?: string;
+}): string {
+  // Prefer the launcher shim at ~/.trace/bin/trace (or trace.cmd on Windows). The shim resolves
+  // Node + dist/cli.js at runtime from launcher.env, so the daemon survives
+  // node-version swaps (nvm/Herd/volta). Without this, daemon configuration embeds a
   // concrete cli.js path; if the user later switches Node, the daemon respawns
   // forever pointed at a stale binary that may not exist or may be from an
   // older trace-mcp install.
-  const shimName = isWin ? 'trace-mcp.cmd' : 'trace-mcp';
-  const shimPath = path.join(TRACE_MCP_HOME, 'bin', shimName);
-  if (fs.existsSync(shimPath)) {
-    return shimPath;
+  const isWindows = opts?.isWin ?? isWin;
+  const homeDir = opts?.home ?? TRACE_MCP_HOME;
+  // Align shim path with installer: primary is trace.cmd (Windows) / trace (POSIX).
+  // Legacy pre-rename destination was trace-mcp.cmd (Windows) / trace-mcp (POSIX).
+  const candidateNames = isWindows ? ['trace.cmd', 'trace-mcp.cmd'] : ['trace', 'trace-mcp'];
+
+  const override = process.env.TRACE_BIN?.trim() || process.env.TRACE_MCP_BIN?.trim();
+  if (override && fs.existsSync(override)) {
+    return path.resolve(override);
   }
+
+  for (const name of candidateNames) {
+    const shimPath = path.join(homeDir, 'bin', name);
+    if (fs.existsSync(shimPath)) {
+      return shimPath;
+    }
+  }
+
+  // Also check legacy ~/.trace-mcp/bin if homeDir is not already ~/.trace-mcp
+  try {
+    const legacyHome = LEGACY_TRACE_MCP_HOME;
+    if (path.resolve(legacyHome) !== path.resolve(homeDir)) {
+      for (const name of candidateNames) {
+        const legacyShimPath = path.join(legacyHome, 'bin', name);
+        if (fs.existsSync(legacyShimPath)) {
+          return legacyShimPath;
+        }
+      }
+    }
+  } catch {
+    /* ignore homedir resolution errors */
+  }
+
   // Fallback: currently-running binary if it's the CLI.
-  const argv1 = process.argv[1];
-  if (argv1 && fs.existsSync(argv1) && /trace-mcp/.test(argv1)) {
+  const argv1 = opts?.argv1 ?? process.argv[1];
+  if (argv1 && fs.existsSync(argv1) && /(?:trace-mcp|trace)/.test(argv1)) {
     return path.resolve(argv1);
   }
+
   try {
-    const cmd = isWin ? 'where trace-mcp' : 'which trace-mcp';
-    const out = execSync(cmd, { encoding: 'utf-8' }).trim();
-    return out.split(/\r?\n/)[0];
+    const commands = isWindows
+      ? ['where trace', 'where trace-mcp']
+      : ['which trace', 'which trace-mcp'];
+    for (const cmd of commands) {
+      try {
+        const out = execSync(cmd, { encoding: 'utf-8' }).trim();
+        const first = out.split(/\r?\n/)[0]?.trim();
+        if (first && fs.existsSync(first)) {
+          return first;
+        }
+      } catch {
+        // try next
+      }
+    }
   } catch {
-    throw new Error('Could not find trace-mcp binary in PATH');
+    // ignore
   }
+
+  throw new Error('Could not find trace binary in PATH');
+}
+
+export interface DaemonSpawnInvocation {
+  command: string;
+  args: string[];
+  shell: boolean;
+}
+
+export function resolveDaemonSpawnInvocation(
+  binaryPath: string,
+  port: number,
+  opts?: { isWin?: boolean; execPath?: string },
+): DaemonSpawnInvocation {
+  const isWindows = opts?.isWin ?? isWin;
+  const execPath = opts?.execPath ?? process.execPath;
+  const isJs = /\.[cm]?js$/i.test(binaryPath);
+
+  if (isJs) {
+    // Legacy installation without shim or JS fallback:
+    // Run directly via Node (process.execPath) with shell: false.
+    // This avoids:
+    // 1. Invoking cmd.exe which triggers Windows file associations for .js (opening VS Code/editor)
+    // 2. Node DEP0190 deprecation warning on Windows
+    // 3. Command injection or path-with-spaces quoting bugs
+    return {
+      command: execPath,
+      args: [binaryPath, 'serve-http', '--port', String(port)],
+      shell: false,
+    };
+  }
+
+  if (isWindows) {
+    // When spawning a .cmd/.bat shim on Windows, passing an args array with shell: true
+    // triggers Node's DEP0190 deprecation warning.
+    // Restructure into a single command string without an args array to avoid DEP0190.
+    const quotedBinary =
+      binaryPath.includes(' ') && !binaryPath.startsWith('"') ? `"${binaryPath}"` : binaryPath;
+    return {
+      command: `${quotedBinary} serve-http --port ${port}`,
+      args: [],
+      shell: true,
+    };
+  }
+
+  return {
+    command: binaryPath,
+    args: ['serve-http', '--port', String(port)],
+    shell: false,
+  };
 }
 
 function resolvePathEnv(): string {
@@ -364,6 +460,11 @@ function resolvePathEnv(): string {
 
 function generatePlist(binaryPath: string, port: number): string {
   const envPath = resolvePathEnv();
+  const isJs = /\.[cm]?js$/i.test(binaryPath);
+  const progArgs = isJs
+    ? [process.execPath, binaryPath, 'serve-http', '--port', String(port)]
+    : [binaryPath, 'serve-http', '--port', String(port)];
+  const progArgsXml = progArgs.map((arg) => `    <string>${arg}</string>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- ${PLIST_MARKER} -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -373,10 +474,7 @@ function generatePlist(binaryPath: string, port: number): string {
   <string>${PLIST_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${binaryPath}</string>
-    <string>serve-http</string>
-    <string>--port</string>
-    <string>${port}</string>
+${progArgsXml}
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -1149,12 +1247,13 @@ function ensureDaemonGeneric(port: number): EnsureResult {
   }
 
   try {
-    const child = spawn(binaryPath, ['serve-http', '--port', String(port)], {
+    const { command, args, shell } = resolveDaemonSpawnInvocation(binaryPath, port);
+    const child = spawn(command, args, {
       detached: true,
       stdio: ['ignore', logFd, logFd],
       cwd: TRACE_MCP_HOME,
       env: { ...process.env, TRACE_MCP_MANAGED_BY: 'spawn' },
-      shell: isWin,
+      shell,
       windowsHide: true,
     });
     child.unref();

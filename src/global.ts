@@ -97,7 +97,7 @@ function migrateLegacyHomeDir(target: string, legacy: string): boolean {
  * process.env.HOME (and thus os.homedir()) may point to the agent root.
  * Normal operations, state dirs and the LaunchAgent plist must target the real user.
  */
-function resolveUserHome(): string {
+export function resolveUserHome(): string {
   try {
     const userDbHome = os.userInfo().homedir;
     if (userDbHome && fs.existsSync(userDbHome)) {
@@ -137,6 +137,8 @@ const { home: TRACE_MCP_HOME_RESOLVED, migrated: TRACE_MCP_HOME_MIGRATED_RESOLVE
 })();
 
 export const TRACE_MCP_HOME = TRACE_MCP_HOME_RESOLVED;
+
+export const LEGACY_TRACE_MCP_HOME = path.join(resolveUserHome(), '.trace-mcp');
 
 /**
  * True only for the single run that performed the `~/.trace-mcp` -> `~/.trace`

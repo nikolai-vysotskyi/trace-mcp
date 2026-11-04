@@ -37,6 +37,7 @@ import {
   REGISTRY_PATH,
   TOPOLOGY_DB_PATH,
   TRACE_MCP_HOME,
+  LEGACY_TRACE_MCP_HOME,
   getDbPath,
   getSnapshotPath,
 } from '../global.js';
@@ -52,6 +53,7 @@ export {
   REGISTRY_PATH,
   TOPOLOGY_DB_PATH,
   TRACE_MCP_HOME,
+  LEGACY_TRACE_MCP_HOME,
   getDbPath,
   getSnapshotPath,
 };
