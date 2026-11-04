@@ -383,42 +383,111 @@ const RULES: SecurityRule[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Backward guard scan & scope utilities
+// ---------------------------------------------------------------------------
+
+/** How far above a sink to look for a guard or local assignment before giving up. */
+const GUARD_WINDOW = 40;
+
+/**
+ * A line that opens a function/method body — the top of the block we scan.
+ * Control-flow braces (`if`, `try`, `for`, …) do NOT stop the walk: a guard
+ * normally sits above them, at the top of the enclosing function.
+ * Matches JS/TS functions, methods, arrows, and Python def/class definitions.
+ */
+const BLOCK_OPENER_RE =
+  /\bfunction\b|=>\s*\{|^\s*(?:async\s+)?def\s+[A-Za-z_]\w*\s*\(|^\s*class\s+[A-Za-z_]\w*|^\s*(?:(?:export|public|private|protected|static|async|readonly)\s+)*(?!if\b|for\b|while\b|switch\b|catch\b|do\b|return\b)[A-Za-z_$][\w$]*\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/;
+
+/** `assertFoo(x)` / `invariant(x)` — a validator that throws on bad input. */
+const ASSERT_CALL_RE = /\b(?:assert|invariant|ensure|require|validate|check)[A-Za-z_$]*\s*\(/;
+
+/** A conditional that exits the block — `if (...) return|throw|continue`. */
+const EXIT_RE = /\b(?:return|throw|continue|process\.exit)\b/;
+
+function escapeForRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ---------------------------------------------------------------------------
 // Light reaching-defs: resolve template-literal interpolations to constants
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve an identifier in a file to a literal string by scanning upward
- * for a top-level `const X = '...'` / `let X = "..."` / `var X = \`...\``
- * binding. Only matches single-string RHS (no interpolation, no concat).
+ * Resolve an identifier in a file to a literal string by:
+ * 1. Scanning backward within the enclosing function/method block for a local assignment.
+ * 2. Scanning for a module-level (top-level, zero indentation) constant binding.
  *
- * Returns the literal string value (without quotes) or null when:
- * - identifier is reassigned or shadowed,
- * - RHS contains interpolation `${...}`, concatenation `+`, or a call,
- * - identifier is a function parameter (we cannot prove constness),
- * - binding is not found in the file.
+ * Prevents cross-function name collisions where a local constant in one function
+ * masks an untrusted parameter in another function (TRA-2900).
  */
 function resolveStringBindingInFile(
   lines: string[],
   ident: string,
   fromLine: number,
 ): string | null {
-  // Walk backward from fromLine to line 0 looking for a const/let/var binding.
-  const constRe = new RegExp(
-    `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${ident}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
+  const escapedIdent = escapeForRegex(ident);
+  const localAssignRe = new RegExp(
+    `^\\s*(?:(?:const|let|var)\\s+)?${escapedIdent}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
   );
-  const interpolatedRhsRe = new RegExp(
-    `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${ident}\\s*[:=].*[\\$\\{\\+]`,
-  );
-  // Search the entire file (not just upward) — bindings can appear below in TS due to hoisting at module scope.
-  for (let i = 0; i < lines.length; i++) {
+  const localNonConstRe = new RegExp(`^\\s*(?:(?:const|let|var)\\s+)?${escapedIdent}\\s*[:=]`);
+
+  // Scan backward within the enclosing function/method body up to BLOCK_OPENER_RE
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine - 1; i >= stop; i--) {
     const line = lines[i];
-    const m = constRe.exec(line);
-    if (m) return m[2];
-    if (i !== fromLine && interpolatedRhsRe.test(line)) {
-      // Identifier is bound to a non-literal expression — cannot prove constness.
+    const m = localAssignRe.exec(line);
+    if (m) {
+      // Found assignment in the same block. Ensure ident is not reassigned between line i and fromLine.
+      let clean = true;
+      for (let k = i + 1; k < fromLine; k++) {
+        if (localNonConstRe.test(lines[k])) {
+          clean = false;
+          break;
+        }
+      }
+      if (clean) return m[2];
       return null;
     }
+    // If assigned to non-literal or expression locally, fail closed.
+    if (localNonConstRe.test(line)) {
+      return null;
+    }
+    if (BLOCK_OPENER_RE.test(line)) {
+      // Check if ident is a parameter in the function/method signature.
+      const paramRe = new RegExp(`(?:\\(|,)\\s*${escapedIdent}\\s*(?:[,:=)]|$)`);
+      if (paramRe.test(line)) {
+        return null;
+      }
+      break;
+    }
   }
+
+  // Scan for module-level (top-level) constant binding.
+  // In Python, module-level bindings must start at column 0 (no leading whitespace).
+  // In JS/TS, module-level bindings must be at top level with export / const / let / var.
+  // Indented assignments inside other functions must NEVER be matched as module constants.
+  const topLevelConstRe = new RegExp(
+    `^(?:(?:export\\s+)?(?:const|let|var)\\s+|)${escapedIdent}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
+  );
+  const topLevelNonConstRe = new RegExp(
+    `^(?:(?:export\\s+)?(?:const|let|var)\\s+|)${escapedIdent}\\s*[:=].*[\\$\\{\\+]`,
+  );
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s/.test(line)) continue;
+
+    const m = topLevelConstRe.exec(line);
+    if (m) {
+      for (let j = 0; j < lines.length; j++) {
+        if (j !== i && !/^\s/.test(lines[j]) && topLevelNonConstRe.test(lines[j])) {
+          return null;
+        }
+      }
+      return m[2];
+    }
+  }
+
   return null;
 }
 
@@ -501,8 +570,26 @@ function classifyInterpolation(
   return 'constant';
 }
 
+/**
+ * Decide whether a Python f-string interpolation should be treated as a
+ * compile-time constant for `command_injection` or `sql_injection`.
+ */
+function classifyPythonInterpolation(
+  line: string,
+  lines: string[],
+  fromLine: number,
+): 'constant' | 'non_constant' {
+  const exprs = extractPythonFStringExprs(line);
+  if (exprs.length === 0) return 'non_constant';
+  for (const expr of exprs) {
+    if (!isCompileTimeConstant(expr, lines, fromLine)) return 'non_constant';
+  }
+  return 'constant';
+}
+
 /** Module-location built-ins — fixed at build time, never attacker-controlled. */
-const BUILD_TIME_IDENT_RE = /^(?:__dirname|__filename|import\.meta\.(?:dirname|filename|url))$/;
+const BUILD_TIME_IDENT_RE =
+  /^(?:__dirname|__filename|__file__|import\.meta\.(?:dirname|filename|url))$/;
 
 /**
  * True when `expr` evaluates to a value fixed at build time: a string literal,
@@ -745,34 +832,10 @@ const PATH_ROOT_ANCHORS = new Set<string>([
  * `http://127.0.0.1:N` URL base. SSRF findings whose interpolated base resolves
  * to such a literal are downgraded.
  */
-const SSRF_BASE_IDENT_RE = /^(?:BASE|API|URL|BASE_URL|API_BASE|baseUrl|daemonUrl|url|base|api)$/i;
+const SSRF_BASE_IDENT_RE =
+  /^(?:BASE|API|URL|BASE_URL|API_BASE|baseUrl|apiBase|apiUrl|apiEndpoint|endpoint|daemonUrl|url|base|api)$/i;
 
 const LOCAL_URL_LITERAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?/i;
-
-// ---------------------------------------------------------------------------
-// Backward guard scan — a validator a few lines above the sink
-// ---------------------------------------------------------------------------
-
-/** How far above a sink to look for a guard before giving up. */
-const GUARD_WINDOW = 40;
-
-/**
- * A line that opens a function/method body — the top of the block we scan.
- * Control-flow braces (`if`, `try`, `for`, …) do NOT stop the walk: a guard
- * normally sits above them, at the top of the enclosing function.
- */
-const BLOCK_OPENER_RE =
-  /\bfunction\b|=>\s*\{|^\s*(?:(?:export|public|private|protected|static|async|readonly)\s+)*(?!if\b|for\b|while\b|switch\b|catch\b|do\b|return\b)[A-Za-z_$][\w$]*\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/;
-
-/** `assertFoo(x)` / `invariant(x)` — a validator that throws on bad input. */
-const ASSERT_CALL_RE = /\b(?:assert|invariant|ensure|require|validate|check)[A-Za-z_$]*\s*\(/;
-
-/** A conditional that exits the block — `if (...) return|throw|continue`. */
-const EXIT_RE = /\b(?:return|throw|continue|process\.exit)\b/;
-
-function escapeForRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Extract the full expression of each `${...}` interpolation on `line`.
@@ -799,6 +862,83 @@ function extractInterpolatedExprs(line: string): string[] {
     i = j;
   }
   return exprs;
+}
+
+/**
+ * Extract interpolated expressions inside Python f-strings `{expr}`.
+ * Ignores escaped `{{` and `}}` and splits format specifiers (e.g. `{val:.2f}`).
+ */
+function extractPythonFStringExprs(line: string): string[] {
+  const exprs: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '{' && line[i + 1] === '{') {
+      i += 2;
+      continue;
+    }
+    if (line[i] === '}') {
+      if (line[i + 1] === '}') i++;
+      i++;
+      continue;
+    }
+    if (line[i] === '{') {
+      let depth = 1;
+      let j = i + 1;
+      while (j < line.length && depth > 0) {
+        if (line[j] === '{') depth++;
+        else if (line[j] === '}') depth--;
+        if (depth === 0) break;
+        j++;
+      }
+      if (depth === 0) {
+        let expr = line.slice(i + 1, j).trim();
+        const colonIdx = expr.indexOf(':');
+        if (colonIdx !== -1 && !expr.includes('(') && !expr.includes('{')) {
+          expr = expr.slice(0, colonIdx).trim();
+        }
+        if (expr) exprs.push(expr);
+        i = j + 1;
+        continue;
+      }
+    }
+    i++;
+  }
+  return exprs;
+}
+
+/**
+ * Check if a PHP variable passed to a shell execution function was assigned
+ * using escapeshellarg() or escapeshellcmd() within the enclosing block.
+ */
+function hasPhpEscapedShellAssignment(lines: string[], fromLine: number, varName: string): boolean {
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  const assignRe = new RegExp(`^\\s*${escapeForRegex(varName)}\\s*=`);
+  for (let i = fromLine - 1; i >= stop; i--) {
+    const line = lines[i];
+    if (assignRe.test(line)) {
+      const stmt = lines.slice(i, Math.min(lines.length, i + 10)).join('\n');
+      if (/escapeshellarg|escapeshellcmd/i.test(stmt)) {
+        return true;
+      }
+    }
+    if (BLOCK_OPENER_RE.test(line)) break;
+  }
+  return false;
+}
+
+/**
+ * Check if a table identifier is assigned via a qualified_table(...) helper
+ * within the enclosing function/method.
+ */
+function isQualifiedTableBinding(lines: string[], ident: string, fromLine: number): boolean {
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident)) return false;
+  const re = new RegExp(`^\\s*${escapeForRegex(ident)}\\s*=\\s*qualified_table\\s*\\(`);
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine - 1; i >= stop; i--) {
+    if (re.test(lines[i])) return true;
+    if (BLOCK_OPENER_RE.test(lines[i])) break;
+  }
+  return false;
 }
 
 /**
@@ -1475,14 +1615,24 @@ export function scanSecurity(
                 break;
               }
             }
+            if (!isFalsePositive && rule.key === 'command_injection' && file.language === 'php') {
+              const phpVarMatch =
+                /(?:exec|system|passthru|shell_exec|popen|proc_open)\s*\(\s*(\$[a-zA-Z_]\w*)/.exec(
+                  line,
+                );
+              if (phpVarMatch && hasPhpEscapedShellAssignment(lines, lineIdx, phpVarMatch[1])) {
+                isFalsePositive = true;
+              }
+            }
             if (isFalsePositive) continue;
 
-            // Light reaching-defs: for rules driven by `${var}` interpolation
-            // (command_injection, ssrf, and SQL via template literals), DROP
+            // Light reaching-defs: for rules driven by template interpolation
+            // (command_injection, ssrf, and SQL via template literals / f-strings), DROP
             // the finding when every interpolation resolves to a literal const
             // binding in the same file.
             let interpolationSource: 'non_constant' | undefined;
-            const usesTemplate = /\$\{/.test(line);
+            const isPyFString = file.language === 'python' && /f["']/.test(line);
+            const usesTemplate = /\$\{/.test(line) || isPyFString;
 
             // Backward guard scan: drop when every interpolated value is
             // validated by an assertion or an early-exit check above the sink.
@@ -1493,7 +1643,9 @@ export function scanSecurity(
                 rule.key === 'command_injection' ||
                 rule.key === 'ssrf')
             ) {
-              const exprs = extractInterpolatedExprs(line);
+              const exprs = isPyFString
+                ? extractPythonFStringExprs(line)
+                : extractInterpolatedExprs(line);
               if (exprs.length > 0 && exprs.every((e) => hasGuardAbove(lines, lineIdx, e))) {
                 continue;
               }
@@ -1505,7 +1657,9 @@ export function scanSecurity(
                 rule.key === 'sql_injection' ||
                 rule.key === 'ssrf')
             ) {
-              const cls = classifyInterpolation(line, lines, lineIdx);
+              const cls = isPyFString
+                ? classifyPythonInterpolation(line, lines, lineIdx)
+                : classifyInterpolation(line, lines, lineIdx);
               if (cls === 'constant') continue;
               interpolationSource = 'non_constant';
             }
@@ -1554,13 +1708,27 @@ export function scanSecurity(
               if (cls.safe) continue;
             }
 
-            // SQL: value comes from a loop over a locally derived array — the
-            // origin is our own code, not remote input.
+            // SQL: value comes from a loop over a locally derived array or a qualified_table helper with parameterized query
             if (rule.key === 'sql_injection' && usesTemplate) {
-              const exprs = extractInterpolatedExprs(line);
+              const exprs = isPyFString
+                ? extractPythonFStringExprs(line)
+                : extractInterpolatedExprs(line);
               if (exprs.length > 0 && exprs.every((e) => isLocalLoopVariable(lines, lineIdx, e))) {
                 confidence = 'low';
                 evidence = evidence ?? 'value iterated from a locally derived array';
+              } else if (
+                exprs.length > 0 &&
+                /\$\d+|\?/.test(line) &&
+                exprs.every(
+                  (e) =>
+                    isCompileTimeConstant(e, lines, lineIdx) ||
+                    isQualifiedTableBinding(lines, e, lineIdx),
+                )
+              ) {
+                confidence = 'low';
+                evidence =
+                  evidence ??
+                  'table identifier resolved via qualified_table helper with parameterized query';
               }
             }
 
