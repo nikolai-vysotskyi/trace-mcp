@@ -167,6 +167,7 @@ export const WORKSPACE_SKIP_DIRS = new Set([
   '__pycache__',
   '.next',
   '.nuxt',
+  '.output',
   // Laravel Nova local components carry their own composer.json but are part of
   // the host app, never a separate workspace. (Real apps register them as
   // composer path repositories, which the explicit detector handles first.)
