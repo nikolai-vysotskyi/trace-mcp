@@ -9057,3 +9057,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Outreach pass, 2026-11-04 18:00 pass (TRA-2890): sweep clean, competitor deep-dive on jcodemunch library ranking vs tutorial copies (#1329), codegraph OpenSCAD CAD indexing (#3227), GitNexus batch git metadata (#3819) & AST embeddings chunking (#3817)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+- Superseded PR cleanup: Closed conflicting/superseded PR #1836 on trace-mcp (redundant with merged #1835).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Rank library code over tutorial/example copies (PR #1329 / v1.108.415, open)*: Fixes defect where symbol lookups (e.g. `fastapi` route handlers) returned tutorial snippets in `docs_src/` or `examples/` instead of core library implementations (`fastapi/routing.py::APIRoute.get_route_handler`). Introduced ad-hoc folder-name ranking penalties (`examples`, `docs_src`, `tutorial`, etc.). Contrast: trace-mcp solves this through PageRank graph centrality and caller/callee in-degree calculation in SQLite (`symbol_graph.in_degree`), where genuine implementation modules naturally exhibit orders of magnitude higher structural authority and inbound call density than isolated tutorial files, avoiding brittle folder-name heuristic penalties.
+- **colbymchenry/codegraph**:
+  - *OpenSCAD CAD language support (.scad, PR #3227, open)*: Vendors `@openscad/tree-sitter-openscad` wasm ABI 15 to index 3D CAD scripts. Notes domain-specific boundaries: Large tier (>1500 source files) does not exist because repos are binary assets (.stl/.step); dynamic dispatch `children()` is uncovered; `module` and `function` are collapsed into generic `function` kind to prevent collision with file modules. Contrast: trace-mcp deliberately targets core production engineering stacks (TS/JS, Python, Go, Rust, Java, C#, PHP, C/C++) with high relational graph density where token reduction delivers direct commercial impact for software engineering workflows.
+  - *Pin patched Node.js for release builds (PR #3235, open)*: Stabilizes compiler environment for release builds.
+- **abhigyanpatwari/GitNexus**:
+  - *Batch Git checkout metadata reads (PR #3819, open)*: Combines `git rev-parse HEAD --abbrev-ref HEAD` in `execFileSync` to halve git process spawns (from 4 to 2 per analysis), cutting metadata read latency from 175.7 ms to 93.5 ms in persistent analyzer processes. Contrast: trace-mcp uses fast in-process repository state probing and lightweight SQLite caches.
+  - *AST chunk coverage in embeddings (PR #3817, open)*: Limits embedding chunk sizes, projects classes as compact declarations without method/constructor bodies (which reduced class embedding inference time by 97.6%), and splits compounds at statement boundaries. Contrast: Validates trace-mcp's core thesis — trace-mcp's `get_outline` and declaration-first projection were designed from day 1 to keep structural definitions compact and avoid flooding model context with megabytes of raw function/class bodies.
+  - *Native Anthropic Messages API wiki provider (PR #3816, merged)*: Merged native Anthropic API integration.
+- **DeusData/codebase-memory-mcp**:
+  - *Agentty agent support (PR #2906, open)*: Adds CLI integration support for `agentty`.
+- **oraios/serena**:
+  - *Skip unsupported reference health check (PR #2255, open)*: Skips health checks for unsupported reference features.
+
+**Competitor pulse (as of 2026-11-04 18:00 pass TRA-2890):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, steady at milestone), 24 forks (=)
+- yamadashy/repomix: 29,153★ (=), 1,622 forks (=)
+- oraios/serena: 31,085★ (=), 2,124 forks (=)
+- DeusData/codebase-memory-mcp: 48,100★ (+2 since TRA-2885), 3,963 forks (=)
+- tirth8205/code-review-graph: 32,586★ (=), 2,964 forks (=)
+- colbymchenry/codegraph: 76,504★ (+2 since TRA-2885), 5,086 forks (=)
+- abhigyanpatwari/GitNexus: 48,266★ (=), 5,227 forks (=)
+- jgravelle/jcodemunch-mcp: 2,833★ (=), 371 forks (=)
+- continuedev/continue: 36,400★ (=), 5,547 forks (=)
+- Aider-AI/aider: 49,942★ (=), 5,134 forks (=)
+- Graphify-Labs/graphify: 142,179★ (+6 since TRA-2885), 13,588 forks (=)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
