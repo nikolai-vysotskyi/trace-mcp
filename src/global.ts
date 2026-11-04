@@ -928,9 +928,9 @@ export function getSnapshotPath(projectRoot: string): string {
  * a DB no sweep could ever reach. That is the 818 MB / 250-file orphan pile;
  * routing on the path shape makes the two agree without a registry lookup.
  */
-export function getDbPath(projectRoot: string): string {
+export function getDbPath(projectRoot: string, opts?: { ephemeral?: boolean }): string {
   const absRoot = path.resolve(projectRoot);
-  const dir = isEphemeralProjectRoot(absRoot) ? EPHEMERAL_INDEX_DIR : INDEX_DIR;
+  const dir = opts?.ephemeral || isEphemeralProjectRoot(absRoot) ? EPHEMERAL_INDEX_DIR : INDEX_DIR;
   return path.join(dir, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
 }
 
