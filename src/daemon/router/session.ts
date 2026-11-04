@@ -313,6 +313,24 @@ export class StdioSession {
     this.stdio.onmessage = (msg) => {
       this.handshake?.observe();
       this.resetIdleTimer();
+      // MCP 2026-07-28 clients probe before initialize. This server still
+      // speaks the legacy handshake, so answer the probe at the stdio edge:
+      // the client can then fall back to initialize without a daemon session.
+      // Forwarding it to /mcp gets a misleading 404 "Session expired" and
+      // records a proxy-send-transient even though no session existed yet.
+      const frame = msg as Record<string, unknown>;
+      if (frame.method === 'server/discover' && frame.id !== undefined && frame.id !== null) {
+        void this.stdio
+          .send({
+            jsonrpc: '2.0',
+            id: frame.id,
+            error: { code: -32601, message: 'Method not found' },
+          } as JSONRPCMessage)
+          .catch((err) =>
+            logger.warn({ err: String(err) }, 'StdioSession: discovery reply failed'),
+          );
+        return;
+      }
       // Cache the handshake so a later swapped-in proxy backend can re-establish
       // the daemon session (the client only sends `initialize` once).
       if (isInitializeRequest(msg as JSONRPCMessage)) this.cachedInitialize = msg as JSONRPCMessage;

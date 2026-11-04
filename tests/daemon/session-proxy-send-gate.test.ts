@@ -173,6 +173,51 @@ describe('rescueFailedProxySend slow-vs-dead gate (TRA-1997)', () => {
     cleanup = null;
   });
 
+  it('answers a pre-initialize server/discover probe locally and then accepts initialize', async () => {
+    let mcpPosts = 0;
+    const server = http.createServer((req, res) => {
+      req.resume();
+      if (req.url?.startsWith('/health')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('{"status":"ok"}');
+        return;
+      }
+      if (req.url?.startsWith('/mcp') && req.method === 'POST') mcpPosts++;
+      res.writeHead(404);
+      res.end('Session expired, reinitialize required');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const session = makeSession(port, stdin, stdout);
+    cleanup = async () => {
+      await session.shutdown('test');
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    };
+    const frames: unknown[] = [];
+    stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split('\n')) {
+        if (line.trim()) frames.push(JSON.parse(line));
+      }
+    });
+
+    await session.bootstrap();
+    stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'server/discover' })}\n`);
+    const probe = (await waitFor(frames, isAnswer(1), 2_000)) as {
+      error?: { code: number };
+    };
+    expect(probe.error?.code).toBe(-32601);
+    expect(mcpPosts).toBe(0);
+    expect(recorded).toEqual([]);
+
+    stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'initialize', params: {} })}\n`);
+    const initialized = (await waitFor(frames, isAnswer(2), 4_000)) as Record<string, unknown>;
+    expect(initialized).toHaveProperty('result');
+    expect(mcpPosts).toBeGreaterThan(0);
+  }, 10_000);
+
   it('stays proxy when /health answers: transient is recorded with attribution, one request fails', async () => {
     const daemon = await startStarvedDaemon();
     const stdin = new PassThrough();
