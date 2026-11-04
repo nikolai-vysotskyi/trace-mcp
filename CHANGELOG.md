@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.7...v3.42.8) (2026-11-04)
+
+
+### Bug Fixes
+
+* **ai:** classify reranker empty response and add safe diagnostics (TRA-2803) ([#1824](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1824)) ([b0ca167](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b0ca167926b2ee7e3282b35d05b9a99ce3cf523b))
+* **config:** exclude Nuxt production .output build artifacts from indexing and watcher (TRA-2896) ([#1840](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1840)) ([c364ab9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c364ab920110f116450e6ef10eb5a0765ba271dd))
+* **daemon:** align Windows daemon shim resolution and spawn js entrypoints safely (TRA-2892) ([#1838](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1838)) ([ef050f5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ef050f5c44981363c6d2b8f7123df4ff454396fa))
+* **daemon:** route unpersisted project DBs to ephemeral index dir (TRA-2898) ([#1841](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1841)) ([27d6e7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27d6e7f729efbc4415bd907d73fa340303e9708e))
+* **navigation:** fall back to regex outline for existing unindexed files (TRA-2897) ([#1842](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1842)) ([222e4d1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/222e4d148be3920d7c0c6f423a947d0c297be49d))
+* **smells:** do not flag CSS custom property names as credentials (TRA-2787) ([#1821](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1821)) ([b420c47](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b420c475097599c34fac01c6f7da8d6b56105d02))
+
+
+### Performance
+
+* **db:** index routes(controller_symbol_id) to eliminate table scan on symbol deletion ([#1822](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1822)) ([95fb8a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/95fb8a8e2308c43aa3b0f897145b7cfaa88f5e11))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-11-01 02:00 (TRA-2824) ([#1825](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1825)) ([b092938](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b092938431c022aea2d3bc6a05eeca47a4614615))
+* **ops:** outreach pass 2026-11-04 18:00 (TRA-2885) ([#1835](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1835)) ([3c4bcfe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3c4bcfe0217332b3c4209535bb8f9f5b7e67955e))
+* **ops:** outreach pass 2026-11-04 18:00 (TRA-2890) ([#1837](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1837)) ([69267b0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/69267b07526b73d5ae3fb5082544b3e5a6b7db41))
+* **ops:** outreach pass 2026-11-04 22:00 (TRA-2894) ([#1839](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1839)) ([c146279](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c14627907da5ad7d269e3d84952deaca8ffb5e68))
+
 ## [3.42.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.6...v3.42.7) (2026-10-31)
 
 
