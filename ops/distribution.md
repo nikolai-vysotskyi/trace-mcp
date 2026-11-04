@@ -134,6 +134,7 @@ Rules for keeping it honest:
 | [ravisingh11/agentbay-ultimate-list](https://github.com/ravisingh11/agentbay-ultimate-list) | **Yes — third-party automated catalog dump, we did not submit it** (0★, 0 forks) | Auto-generated skills catalog file `skills/memory-and-context-0eed3a.md` curating `nikolai-vysotskyi/trace-mcp` under agent memory, context, and MCP tool integration | Automated dump. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
 | [dreygur/knot](https://github.com/dreygur/knot) | **Yes — third-party benchmark & evaluation harness, we did not submit it** (0★, 1 fork, MIT, archived Rust MCP experiment) | Benchmark harness and evaluation comparing code intelligence systems. Implements `eval/adapters/tracemcp.sh` and `eval/adapters/tracemcp.setup.sh` targeting `trace-mcp` v3.42.0 (`get_feature_context` FTS/PageRank) on retrieval questions across multi-language corpora alongside CodeGraph, GitNexus, Serena, and Knot | Independent benchmark evaluation and harness adapter. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
 | [ncchen99/pickfit](https://github.com/ncchen99/pickfit) + [pickfit.app](https://pickfit.app) | **Yes — third-party automated software advisor & sandbox evaluation, we did not submit it** (2★, 0 forks, active daily) | Auto-indexed software dossier `data/software/trace-mcp.json` and Traditional Chinese localization `data/i18n/zh-TW/trace-mcp.json`. Evaluates release v3.42.6, 10 tools, OSV.dev clean status (285 packages checked, 0 findings), popularity score 95.3, quality score 69.0, install command `npm install -g trace-mcp` + `trace init` | Automated sandbox testing and recommendation platform for humans and AI agents. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-11-04 | 2026-11-04 |
+| [abordage/awesome-mcp](https://github.com/abordage/awesome-mcp) | **Yes — third-party automated catalog / curated directory, we did not submit it** (29★, 143 forks, MIT, pushed daily) | `README.md` under `### Code Analysis` indexes `nikolai-vysotskyi/trace-mcp` ("Framework-aware code intelligence across many languages ☆`202`") ranked by stars alongside `codebase-memory-mcp`, `jscpd`, `cocoindex-code`, `token-savior`, `octocode`, `gograph`. Accurately mirrors live repo description and exact 202★ milestone count | Automated daily sync of MCP servers from GitHub. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-11-05 | 2026-11-05 |
 
 
 
@@ -9160,3 +9161,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Outreach pass, 2026-11-05 02:00 pass (TRA-2901): mention sweep yields abordage/awesome-mcp, competitor deep-dive on GitNexus resumable indexing (#3829), Graphify Bash file-reader hooks (#5010) & compaction reset (#5008), jcodemunch tool-order guidance (#1333)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 new hit outside `ops/mentions-seen.txt`: `abordage/awesome-mcp`.
+- Evaluated and classified: genuine automated third-party directory / curated list of MCP servers (29★, 143 forks, MIT, daily sync). In its `README.md` under `### Code Analysis`, indexes `nikolai-vysotskyi/trace-mcp` ("Framework-aware code intelligence across many languages ☆`202`") sorted by stars alongside `codebase-memory-mcp`, `jscpd`, `cocoindex-code`, `token-savior`, `octocode`, `gograph`. Accurately mirrors live repo description and exact 202★ milestone. Added as row 137 in Surfaces table and classified in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **abhigyanpatwari/GitNexus**:
+  - *Resource-bounded and resumable indexing (PR #3829, open)*: Decouples graph publication from embedding generation. Publishes verified relational graph and keyword index first, then executes embeddings as a resource-budgeted (`--resource-budget`), resumable phase with durable journaling and process-exit handoff. Prevents provider/network failures during embedding from invalidating already-built graph artifacts. Contrast: trace-mcp requires zero vector embeddings for core AST navigation and symbol lookup — fast SQLite relational graph, PageRank, and FTS indexes are computed deterministically and locally without external provider dependencies, keeping startup instantaneous and memory overhead tightly bounded.
+- **Graphify-Labs/graphify**:
+  - *Bash file-reader hook interception (PR #5010, open)*: Extends PreToolUse guard hooks to intercept common shell file readers in Bash (`cat`, `head`, `tail`, `nl`, `less`, `more`, `bat`, `sed -n`), returning the read nudge and AST node hints. Closes the loophole where agents bypass MCP Read tools by reading files via shell commands.
+  - *Compaction budget reset (PR #5008, open)*: Intercepts `SessionStart` with source `compact` to reset the session nudge budget and re-arm strict redirection mode once, accounting for the model losing navigation instructions upon context compaction. Contrast: trace-mcp's comprehensive hook suite handles lifecycle events natively, while trace-mcp's primary architecture minimizes context footprint (72.7% token reduction on PR reviews) so context compaction triggers far less frequently.
+- **jgravelle/jcodemunch-mcp**:
+  - *Tool-order error guidance and disabled tool prompts (PR #1333, open)*: Directs agents when an invalid call sequence is invoked or a disabled tool is queried, steering agents to valid tools or prompting user confirmation. Contrast: trace-mcp uses clear parameter typing, structured error models, and unified semantic tools (`get_symbol`, `get_outline`, `get_task_context`) that minimize multi-step tool trial-and-error.
+- **colbymchenry/codegraph**:
+  - *Per-platform install docs (PR #3242, open)* and *Node 26 allow / Node 25 block (PR #3236, open)*: Addresses platform-specific instructions and V8 Turboshaft compiler WASM Zone crashes with tree-sitter wasm grammars. Contrast: trace-mcp's native N-API binaries eliminate WASM engine zone crashes entirely.
+- **DeusData/codebase-memory-mcp**:
+  - *Malformed UTF-8 layout JSON handling (PR #2913, open)* and *Cross-file preparation memory bounding (PR #2909, open)*: Addresses memory spikes and UTF-8 encoding crashes during cross-file symbol indexing. Contrast: trace-mcp leverages SQLite transactions and streaming AST parsing to maintain strict memory bounds across large codebases.
+
+**Competitor pulse (as of 2026-11-05 02:00 pass vs 2026-11-04 22:00 pass TRA-2890):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,157★ (+1), 1,624 forks (+2)
+- oraios/serena: 31,098★ (+6), 2,125 forks (=)
+- DeusData/codebase-memory-mcp: 48,114★ (+8), 3,964 forks (=)
+- tirth8205/code-review-graph: 32,591★ (+2), 2,964 forks (=)
+- colbymchenry/codegraph: 76,567★ (+17), 5,090 forks (+4)
+- abhigyanpatwari/GitNexus: 48,273★ (+5), 5,229 forks (=)
+- jgravelle/jcodemunch-mcp: 2,833★ (=), 371 forks (=)
+- continuedev/continue: 36,403★ (+1), 5,551 forks (+1)
+- Aider-AI/aider: 49,946★ (+3), 5,137 forks (+1)
+- Graphify-Labs/graphify: 142,389★ (+87), 13,615 forks (+9)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
