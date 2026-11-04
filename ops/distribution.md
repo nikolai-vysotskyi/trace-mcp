@@ -133,6 +133,7 @@ Rules for keeping it honest:
 | [artubss/SKILLS-CLAUDE-CODE](https://github.com/artubss/SKILLS-CLAUDE-CODE) | **Yes — third-party catalog mirror, we did not submit it** (11★, 3 forks) | Curated Claude Code skills and devtools collection mirroring `bonus/mcps/devtools/trace-mcp.json` with `npx -y trace-mcp@latest` and 81 languages / 60 framework integrations description | Curated community skills mirror. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-27 | 2026-10-27 |
 | [ravisingh11/agentbay-ultimate-list](https://github.com/ravisingh11/agentbay-ultimate-list) | **Yes — third-party automated catalog dump, we did not submit it** (0★, 0 forks) | Auto-generated skills catalog file `skills/memory-and-context-0eed3a.md` curating `nikolai-vysotskyi/trace-mcp` under agent memory, context, and MCP tool integration | Automated dump. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
 | [dreygur/knot](https://github.com/dreygur/knot) | **Yes — third-party benchmark & evaluation harness, we did not submit it** (0★, 1 fork, MIT, archived Rust MCP experiment) | Benchmark harness and evaluation comparing code intelligence systems. Implements `eval/adapters/tracemcp.sh` and `eval/adapters/tracemcp.setup.sh` targeting `trace-mcp` v3.42.0 (`get_feature_context` FTS/PageRank) on retrieval questions across multi-language corpora alongside CodeGraph, GitNexus, Serena, and Knot | Independent benchmark evaluation and harness adapter. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-29 | 2026-10-29 |
+| [ncchen99/pickfit](https://github.com/ncchen99/pickfit) / [pickfit.app](https://pickfit.app) | **Yes — third-party auto-index & evaluation sandbox, we did not submit it** (2★, 0 forks, created 2026-10-27) | Software advisor and evaluation registry for people and AI agents built on Meta's Muse Spark models. Carries indexed record `data/software/trace-mcp.json` and `data/i18n/zh-TW/trace-mcp.json`. Extracted 10 MCP tools, use cases, alternatives (Repomix, Serena, MemPalace, DeepContext), OSV.dev dependency security audit clean (0 findings across 285 packages), popularity score 95.3, quality score 69.0 | Auto-indexed and tested in sandbox via Muse Spark evaluation models. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-11-04 | 2026-11-04 |
 
 
 
@@ -8996,6 +8997,62 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - continuedev/continue: 36,385★ (=), 5,537 forks (+1)
 - Aider-AI/aider: 49,854★ (+3), 5,112 forks (=)
 - Graphify-Labs/graphify: 139,990★ (+69), 13,350 forks (+3)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-04 14:00 pass (TRA-2888): sweep discovered ncchen99/pickfit (software advisor / evaluation sandbox), codegraph TS variance parse (#3226) & Python with inference (#3222), jcodemunch default class outline to cut tokens (#1326), codebase-memory cross-file memory bounding (#2909) & nul skip (#2903), graphify reconcile header re-read fix (#4986)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 new genuine surface outside `ops/mentions-seen.txt`: `ncchen99/pickfit` (software advisor and sandbox evaluation platform at pickfit.app, 2★, created 2026-10-27). Verified in-repo: `data/software/trace-mcp.json` and `data/i18n/zh-TW/trace-mcp.json` index trace-mcp with 10 tools, clean OSV security audit (0 findings across 285 npm packages), quality score 69.0, popularity 95.3. Added to ledger table and seen list.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **colbymchenry/codegraph**:
+  - *TS variance annotations parse fix (PR #3226, open)*: Patches upstream tree-sitter-typescript grammar rule to parse TS 4.7+ type parameter variance annotations (`<in T>`, `<out T>`, `<in out T>`), regenerating C parser to eliminate full-file `ERROR` nodes on Effect-TS and Zod. Contrast: trace-mcp leverages fault-tolerant AST parsing and project-aware SQLite symbol modeling, preventing syntax edge-cases from invalidating whole-file indexing.
+  - *Python `with` and module constructor class inference (PR #3222, open)*: Fixes type resolution for local variables bound via `with ... as f:` or instantiated through module qualifiers. Contrast: trace-mcp tracks AST context blocks and constructor assignments directly in its symbol graph.
+  - *Language additions (PR #3225, PR #3224, open)*: Adds GDScript/Godot and Open Policy Agent Rego extractors.
+- **jgravelle/jcodemunch-mcp**:
+  - *Default symbol source to outline for classes (PR #1326, merged in v1.108.414)*: Breaking change to `get_symbol_source`: returns class signatures and collapsed method outlines by default (`source_outline: true`), requiring `class_body="full"` for full body. Explicitly aimed at curbing token usage (e.g. dropping FastAPI `_IncludedRouter` from 2,603 to 619 tokens). Contrast: validates trace-mcp's token-first philosophy; trace-mcp provides distinct, clean tools (`get_file_outline`, `get_symbol`, `get_task_context`) designed from the start to provide exact token-budgeted subgraph context without forcing monolithic class dumps.
+  - *Extensionless import language priority (PR #1327, merged)*: Resolves extensionless imports to the importer's own language first.
+- **DeusData/codebase-memory-mcp**:
+  - *Bound cross-file preparation memory (PR #2909, open)*: Fixes severe memory spike (19.1 GiB on 7 GiB budget) by sizing C# and JVM partition scratch arrays strictly to matching definitions rather than entire project definition counts, adding cooperative memory checks. Contrast: trace-mcp streams definitions incrementally into SQLite with bounded cursor memory, preventing heap blowup regardless of repository size.
+  - *Skip Windows `nul` reserved device name in control-file walk (PR #2903, open)*: Prevents filesystem walk abort when encountering `nul`. Contrast: trace-mcp normalizes platform-specific reserved names and handles cross-platform path traversal cleanly.
+  - *Follow re-export chains through index.ts barrels (PR #2900, open)*: Resolves chained barrel exports (`export *`).
+- **Graphify-Labs/graphify**:
+  - *Stop re-reading headers once per node during reconcile (PR #4986, open)*: Resolves severe I/O bottleneck (0.95 GB read from disk for 3,000 nodes) where `.h` header files were re-read and probed twice per node during graph reconciliation. Replaces quadratic per-node sniffing with identity-keyed memoization. Contrast: trace-mcp caches file language and content hashes in SQLite at the file level; symbol reconciliation never re-reads files per-symbol.
+  - *Builtin method collision in markdown mentions (PR #4990, open)*: Prevents dropping dotted mentions whose method names collide with language builtins.
+- **abhigyanpatwari/GitNexus**:
+  - *Batch Git checkout metadata reads (PR #3819, open)*: Batches git metadata reads during repository analysis to reduce process spawning overhead. Contrast: trace-mcp uses fast in-process git and filesystem metadata checks with SQLite caching.
+  - *Native Anthropic provider for Messages API in wiki generator (PR #3816, merged)*: Adds Anthropic client alongside existing providers.
+- **oraios/serena**:
+  - *Status*: PR #2254 (wait for cross-file readiness before sending rename requests) and PR #2249 (restart language server when launcher dies instead of hanging) open in review.
+
+**Competitor pulse (as of 2026-11-04 14:00 pass vs 2026-11-01 02:00 pass):**
+- nikolai-vysotskyi/trace-mcp: 202★ (+2), 24 forks (=)
+- yamadashy/repomix: 29,153★ (+53), 1,622 forks (+8)
+- oraios/serena: 31,085★ (+132), 2,124 forks (+9)
+- DeusData/codebase-memory-mcp: 48,098★ (+194), 3,963 forks (+23)
+- tirth8205/code-review-graph: 32,586★ (+64), 2,964 forks (+4)
+- colbymchenry/codegraph: 76,502★ (+417), 5,086 forks (+44)
+- abhigyanpatwari/GitNexus: 48,266★ (+114), 5,227 forks (+7)
+- jgravelle/jcodemunch-mcp: 2,833★ (+6), 371 forks (=)
+- continuedev/continue: 36,400★ (+15), 5,547 forks (+10)
+- Aider-AI/aider: 49,942★ (+88), 5,134 forks (+22)
+- Graphify-Labs/graphify: 142,175★ (+2,185), 13,588 forks (+238)
 - alperhankendi/Ctxo: 74★ (=), 10 forks (=)
 
 **Catalogs:** Moratorium holds.
