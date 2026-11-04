@@ -9109,3 +9109,54 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Outreach pass, 2026-11-04 22:00 pass (TRA-2894): sweep clean, competitor deep-dive on jcodemunch token savings indexing fix (#1330), codegraph Node.js 26 runtime unblocking (#3236), GitNexus cache interning performance & memory scaling (#3820), and Graphify identifier & YAML merge-key precedence fixes (#4997, #4995)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting Round 4 review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / dirty (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (automated final claim reminder step 4 received; standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Credit token savings on fresh index (PR #1330, merged)*: Fixes an accounting defect where six read tools (`search_symbols`, `search_text`, `get_file_content`, `get_ranked_context`, `get_repo_map`, `get_symbol_importance`) credited 0 token savings on newly indexed repositories. Full `index_folder` runs wrote file contents directly to disk without storing sizes in the index map (1,471 of 1,510 files in maintainer's own repo had no recorded size). Added a read-time fallback to disk content copies. Contrast: trace-mcp calculates token estimates and byte sizes directly during AST traversal and records them in SQLite `files` rows (`size_bytes`, `token_estimate`), so token accounting is consistent on fresh indexes and incremental updates without requiring disk fallback reads.
+  - *Rank library code over tutorial copies (PR #1329 / v1.108.415, merged)*: Merged folder-name penalty filter.
+- **colbymchenry/codegraph**:
+  - *Allow Node.js 26 while blocking Node 25 (PR #3236, open)*: Updates engine checks to allow Node 26+ while keeping Node 25 blocked. Node 25 crashes in the V8 Turboshaft compiler WASM Zone when running tree-sitter WASM grammars, which `--liftoff-only` does not contain. Contrast: trace-mcp builds on native N-API packages (`@ast-grep/napi`, `better-sqlite3`, `@parcel/watcher`) compiled to machine code, avoiding V8 Turboshaft WASM compiler zone crashes and eliminating the need for CLI process self-relaunch trampolines across Node versions.
+- **abhigyanpatwari/GitNexus**:
+  - *Skip redundant cache interning work (PR #3820, open)*: Optimizes V8 graph deserialization by iterating own keys by index and interning strings directly, skipping primitive recursion. Targeted interning is 5.9% faster, but five-pair fresh-process runs showed a +7.7% wall time and +6.4% CPU time regression (28.6s -> 30.8s wall) across 1.76M plain objects and 8.45M properties, with peak analysis RSS reaching 1.69 GiB (fresh) and 2.8 GiB (persistent). Contrast: trace-mcp uses disk-backed SQLite with indexed B-trees instead of giant in-memory V8 object graphs, maintaining bounded memory overhead, immediate startup, and zero GC-induced heap regressions.
+  - *Batch Git checkout metadata reads (PR #3819, merged)*: Merged git process spawn consolidation.
+- **Graphify-Labs/graphify**:
+  - *Call attribution under underscore collision (PR #4997, open)*: Fixes #4994 where modules defining both `main()` and `_main()` duplicated calls inside `_main()` onto `main()` because identifier generator `ids.py:make_id` stripped leading underscores. Contrast: trace-mcp preserves exact symbol paths and scope chains in SQLite relational entities.
+  - *YAML merge-key precedence (PR #4995, open)*: Fixes structural YAML extractor where sequence merge `<<: [*a, *b]` used last-write-wins dict insertion instead of YAML 1.1 precedence (earlier map takes precedence). Contrast: trace-mcp maintains strict symbol identity paths and relies on standard compliant AST extractors.
+- **DeusData/codebase-memory-mcp**:
+  - *Informational FreeBSD build workflow (PR #2911, open)*: Adds dispatch-only FreeBSD CI workflow.
+
+**Competitor pulse (as of 2026-11-04 22:00 pass vs 2026-11-04 18:00 pass TRA-2890):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, steady at milestone), 24 forks (=)
+- yamadashy/repomix: 29,156★ (+3), 1,622 forks (=)
+- oraios/serena: 31,092★ (+7), 2,125 forks (+1)
+- DeusData/codebase-memory-mcp: 48,106★ (+6), 3,964 forks (+1)
+- tirth8205/code-review-graph: 32,589★ (+3), 2,964 forks (=)
+- colbymchenry/codegraph: 76,550★ (+46), 5,086 forks (=)
+- abhigyanpatwari/GitNexus: 48,268★ (+2), 5,229 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,833★ (=), 371 forks (=)
+- continuedev/continue: 36,402★ (+2), 5,550 forks (+3)
+- Aider-AI/aider: 49,943★ (+1), 5,136 forks (+2)
+- Graphify-Labs/graphify: 142,302★ (+123), 13,606 forks (+18)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
