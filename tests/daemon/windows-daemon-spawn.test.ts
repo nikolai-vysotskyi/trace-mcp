@@ -301,16 +301,30 @@ server.listen(port, '127.0.0.1');
 `,
     );
 
-    // Create a mock POSIX shim that mimics hooks/trace-mcp-launcher.sh
-    const shimPath = path.join(binDir, 'trace');
-    fs.writeFileSync(shimPath, `#!/bin/sh\nexec "${process.execPath}" "${mockCli}" "$@"\n`, {
-      mode: 0o755,
-    });
+    const isWindows = process.platform === 'win32';
+    const shimName = isWindows ? 'trace.cmd' : 'trace';
+    const shimPath = path.join(binDir, shimName);
 
-    const inv = resolveDaemonSpawnInvocation(shimPath, port, { isWin: false });
-    expect(inv.command).toBe(shimPath);
-    expect(inv.args).toEqual(['serve-http', '--port', String(port)]);
-    expect(inv.shell).toBe(false);
+    if (isWindows) {
+      // Mock Windows CMD shim
+      fs.writeFileSync(shimPath, `@echo off\r\n"${process.execPath}" "${mockCli}" %*\r\n`);
+    } else {
+      // Mock POSIX shim
+      fs.writeFileSync(shimPath, `#!/bin/sh\nexec "${process.execPath}" "${mockCli}" "$@"\n`, {
+        mode: 0o755,
+      });
+    }
+
+    const inv = resolveDaemonSpawnInvocation(shimPath, port, { isWin: isWindows });
+    if (isWindows) {
+      expect(inv.shell).toBe(true);
+      expect(inv.args).toEqual([]);
+      expect(inv.command).toContain(shimPath);
+    } else {
+      expect(inv.command).toBe(shimPath);
+      expect(inv.args).toEqual(['serve-http', '--port', String(port)]);
+      expect(inv.shell).toBe(false);
+    }
 
     serverProc = spawn(inv.command, inv.args, {
       detached: true,
