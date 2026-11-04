@@ -410,3 +410,9 @@ dreygur/knot
 # External audit campaign report by Roy Tong (campaigns/audit-report-2026-09.md tracking verified audits including trace-mcp #1175):
 roy-tong/verovo
 roy-tong/Verovo
+
+# ── Swept 2026-11-04 afternoon pass (TRA-2885) ──
+# Genuine third-party software evaluation & recommendation platform / advisor (pickfit.app, 2★, 0 forks):
+# data/software/trace-mcp.json and data/i18n/zh-TW/trace-mcp.json index trace-mcp with full metadata, OSV.dev clean status, and Traditional Chinese i18n:
+ncchen99/pickfit
+
