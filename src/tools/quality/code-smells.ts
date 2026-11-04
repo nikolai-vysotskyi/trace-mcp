@@ -502,20 +502,11 @@ function isLikelyCredentialValue(
   if (ORM_TYPE_TOKENS.has(value.toLowerCase())) return false;
 
   // CSS custom property / design token name (e.g. `--on-accent`, `var(--accent-fill)`).
-  // Gated to design-token / theme / CSS contexts (path or surrounding properties)
+  // Gated to design-token / theme / CSS contexts (file path or matched line)
   // to avoid suppressing CLI-style flags or secrets prefixed with `--` (TRA-2787).
   if (CSS_PROPERTY_RE.test(value)) {
     if (CSS_CONTEXT_PATH_RE.test(filePath) || CSS_CONTEXT_LINE_RE.test(line)) {
       return false;
-    }
-    const scanStart = Math.max(0, lineIdx - 3);
-    const scanEnd = Math.min(surroundingLines.length - 1, lineIdx + 3);
-    for (let k = scanStart; k <= scanEnd; k++) {
-      if (k === lineIdx) continue;
-      const neighbor = surroundingLines[k];
-      if (neighbor && CSS_CONTEXT_LINE_RE.test(neighbor)) {
-        return false;
-      }
     }
   }
 

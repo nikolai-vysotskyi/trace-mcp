@@ -873,6 +873,28 @@ export const appConfig = {
       expect(credFindings[0].file).toBe('src/app-config.ts');
     });
 
+    test('still flags --prefixed credentials when surface or other terms are in nearby config (TRA-2787)', () => {
+      writeFile(
+        store,
+        'src/security-config.ts',
+        `
+export const securityConfig = {
+  surface: 'public-api',
+  apiKey: '--sk-live-9f3a2b1c7d4e8f01-prod-secret',
+};
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(1);
+      expect(credFindings[0].file).toBe('src/security-config.ts');
+    });
+
     test('still flags a real-looking API key (true positive)', () => {
       writeFile(
         store,
