@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-03T06:28:09.961Z"
+updated: "2026-11-04T06:28:47.030Z"
 active_users:
-  day: 61
-  week: 189
-  month: 393
+  day: 64
+  week: 136
+  month: 395
   first_ping_date: "2026-08-29"
-  days_observed: 67
+  days_observed: 68
   month_window_full: true
-events_28d: 2673
+events_28d: 2692
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2673
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 185301731
-  tokens_saved_raw: 215930155
-  usd_saved: 185.3
+  tokens_saved: 187134801
+  tokens_saved_raw: 217968524
+  usd_saved: 187.13
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 59
+  days: 60
   capped_days: 2
-  raw_ratio: 1.17
+  raw_ratio: 1.16
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -163,25 +163,25 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1512
-  "upgrade": 772
+  "active": 1519
+  "upgrade": 784
   "new": 292
-  "downgrade": 55
-  "(not set)": 42
+  "downgrade": 56
+  "(not set)": 38
 by_version:
   "3.38.0": 168
-  "3.34.6": 72
+  "3.34.6": 66
   "3.37.10": 57
+  "3.42.7": 56
   "3.34.8": 47
   "3.36.7": 47
   "3.34.7": 43
   "3.37.0": 43
-  "3.42.7": 43
   "3.41.0": 42
-  "3.42.1": 36
+  "3.42.1": 38
   "3.42.4": 35
   "3.37.6": 34
-  "3.40.0": 32
+  "3.40.0": 33
   "3.37.7": 31
   "3.37.4": 28
   "3.42.0": 28
@@ -211,7 +211,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 978
+  at_or_above: 988
   below: 0
   unknown: 0
   pct: 100
@@ -257,12 +257,12 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 132
+  "(not set)": 134
   "United Arab Emirates": 90
-  "United States": 26
-  "Russia": 20
+  "United States": 27
+  "Russia": 21
   "China": 13
-  "Thailand": 9
+  "Thailand": 10
   "Brazil": 7
   "France": 6
   "Germany": 6
@@ -283,10 +283,10 @@ by_country:
   "Iran": 2
 by_client:
   "unknown": 266
-  "claude-code": 91
+  "claude-code": 92
   "codex-mcp-client": 42
-  "antigravity-client": 21
-  "opencode": 17
+  "antigravity-client": 20
+  "opencode": 19
   "mcp": 9
   "cursor-vscode": 5
   "claude-ai": 4
@@ -297,13 +297,13 @@ by_client:
   "Visual Studio Code": 3
   "grok-shell-trace": 3
   "grok-shell-trace-mcp": 3
+  "Cline": 2
   "bb-plugin-trace-mcp": 2
   "kilo": 2
   "kimi-code": 2
   "local-agent-mode-trace": 2
   "mcpenv": 2
   "pi-mcp-trace-mcp": 2
-  "Cline": 1
   "bench": 1
   "cli": 1
   "count-advertised-tools": 1
