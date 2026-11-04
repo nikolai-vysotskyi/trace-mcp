@@ -416,3 +416,9 @@ roy-tong/Verovo
 # data/software/trace-mcp.json and data/i18n/zh-TW/trace-mcp.json index trace-mcp with full metadata, OSV.dev clean status, and Traditional Chinese i18n:
 ncchen99/pickfit
 
+# ── Swept 2026-11-05 night pass (TRA-2901) ──
+# Genuine automated third-party catalog / curated directory (29★, 143 forks, MIT, daily updates):
+# README.md under ### Code Analysis indexes nikolai-vysotskyi/trace-mcp at ☆202 ranked by stars alongside codebase-memory-mcp:
+abordage/awesome-mcp
+
+
