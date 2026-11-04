@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resolveDaemonSpawnInvocation, resolveTraceMcpBinary } from '../../src/daemon/lifecycle.js';
 
@@ -146,13 +146,29 @@ describe('resolveDaemonSpawnInvocation contract (TRA-2892)', () => {
 describe('Executable daemon auto-spawn harness (TRA-2892)', () => {
   let tmpDir: string;
   let serverProc: ReturnType<typeof spawn> | null = null;
+  let serverPort: number | null = null;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tra-2892-spawn- spaces '));
+    serverPort = null;
   });
 
   afterEach(async () => {
+    if (serverPort) {
+      try {
+        await fetch(`http://127.0.0.1:${serverPort}/shutdown`).catch(() => {});
+      } catch {
+        // Best-effort shutdown signal
+      }
+    }
     if (serverProc && !serverProc.killed) {
+      if (process.platform === 'win32' && serverProc.pid) {
+        try {
+          spawnSync('taskkill', ['/pid', String(serverProc.pid), '/t', '/f'], { stdio: 'ignore' });
+        } catch {
+          // ignore
+        }
+      }
       serverProc.kill('SIGTERM');
       await new Promise((r) => setTimeout(r, 100));
       if (!serverProc.killed) {
@@ -160,7 +176,18 @@ describe('Executable daemon auto-spawn harness (TRA-2892)', () => {
       }
     }
     serverProc = null;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    serverPort = null;
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      await fs.promises.rm(tmpDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 200,
+      });
+    } catch {
+      // Best-effort temp dir cleanup on Windows
+    }
   });
 
   function getFreePort(): Promise<number> {
@@ -197,6 +224,7 @@ describe('Executable daemon auto-spawn harness (TRA-2892)', () => {
 
   it('starts daemon from JS fallback via process.execPath, reaches /health, and preserves arguments in paths with spaces', async () => {
     const port = await getFreePort();
+    serverPort = port;
 
     // Create a mock CLI JS entrypoint inside a path with spaces
     const mockCli = path.join(tmpDir, 'mock cli.js');
@@ -215,6 +243,12 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', transport: 'http', args }));
+    return;
+  }
+  if (req.url === '/shutdown') {
+    res.writeHead(200);
+    res.end();
+    server.close(() => process.exit(0));
     return;
   }
   res.writeHead(404);
@@ -275,6 +309,7 @@ server.listen(port, '127.0.0.1', () => {
 
   it('starts daemon from managed shim, reaches /health, and preserves arguments in paths with spaces', async () => {
     const port = await getFreePort();
+    serverPort = port;
 
     const binDir = path.join(tmpDir, 'bin');
     fs.mkdirSync(binDir, { recursive: true });
@@ -292,6 +327,12 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', transport: 'http', args }));
+    return;
+  }
+  if (req.url === '/shutdown') {
+    res.writeHead(200);
+    res.end();
+    server.close(() => process.exit(0));
     return;
   }
   res.writeHead(404);
