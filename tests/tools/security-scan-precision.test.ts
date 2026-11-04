@@ -1357,6 +1357,134 @@ function mixed($col, $dir) {
     expect(result.findings[0].rule_id).toBe('CWE-78');
     expect(result.findings[0].severity).toBe('critical');
   });
+
+  // -------------------------------------------------------------------
+  // TRA-2900 precision hardenings: PHP escapeshellarg, Python constants, qualified_table, apiBase SSRF
+  // -------------------------------------------------------------------
+
+  test('drops PHP command injection when command variable is escaped with escapeshellarg (TRA-2900)', () => {
+    writeFile(
+      store,
+      'app/Console/Commands/WorkerRunner.php',
+      `<?php
+class WorkerRunner {
+  public function handle() {
+    $script = '/tmp/worker.php';
+    $cmd = sprintf('php %s %d 2>&1', escapeshellarg($script), 10);
+    $descriptorspec = [
+      0 => ['pipe', 'r'],
+      1 => ['pipe', 'w'],
+      2 => ['pipe', 'w'],
+    ];
+    $process = proc_open($cmd, $descriptorspec, $pipes);
+    return $process;
+  }
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(0);
+  });
+
+  test('still detects PHP command injection when command variable is unescaped (TRA-2900 recall)', () => {
+    writeFile(
+      store,
+      'app/Console/Commands/UnsafeRunner.php',
+      `<?php
+class UnsafeRunner {
+  public function handle($userInput) {
+    $cmd = "php worker.php " . $userInput;
+    $descriptorspec = [0 => ['pipe', 'r']];
+    $process = proc_open($cmd, $descriptorspec, $pipes);
+    return $process;
+  }
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-78');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('drops Python SQL injection when table name is a file-level string constant (TRA-2900)', () => {
+    writeFile(
+      store,
+      'scripts/recompute.py',
+      `
+BACKUP = 'duplicate_backup_table'
+
+async def run(conn):
+    await conn.execute(f"CREATE TABLE {BACKUP} AS SELECT id FROM items")
+    await conn.execute(f"CREATE INDEX ON {BACKUP} (id)")
+`,
+      'python',
+    );
+
+    const result = scan(['sql_injection']);
+    expect(result.findings).toHaveLength(0);
+  });
+
+  test('demotes Python SQL injection to low confidence when table is resolved via qualified_table with parameterized query (TRA-2900)', () => {
+    writeFile(
+      store,
+      'src/repo.py',
+      `
+async def update_job(conn, job_id: int):
+    table = qualified_table('stats_jobs')
+    await conn.execute(f"UPDATE {table} SET status = $1 WHERE id = $2", "done", job_id)
+`,
+      'python',
+    );
+
+    const defaultScan = scan(['sql_injection']);
+    expect(defaultScan.findings).toHaveLength(0);
+    const lowScan = scan(['sql_injection'], { includeLow: true });
+    expect(lowScan.findings).toHaveLength(1);
+    expect(lowScan.findings[0].confidence).toBe('low');
+  });
+
+  test('still detects Python SQL injection when untrusted expression is interpolated (TRA-2900 recall)', () => {
+    writeFile(
+      store,
+      'src/unsafe_repo.py',
+      `
+async def unsafe_query(conn, user_filter: str):
+    await conn.execute(f"SELECT * FROM users WHERE name = '{user_filter}'")
+`,
+      'python',
+    );
+
+    const result = scan(['sql_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-89');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('demotes fetch using apiBase template literal to low confidence (TRA-2900)', () => {
+    writeFile(
+      store,
+      'frontend/composables/useApi.ts',
+      `
+export async function streamData() {
+  const apiBase = config.public.apiBase as string;
+  const res = await fetch(\`\${apiBase}/api/v1/stream\`);
+  return res;
+}
+`,
+      'typescript',
+    );
+
+    const defaultScan = scan(['ssrf']);
+    expect(defaultScan.findings).toHaveLength(0);
+    const lowScan = scan(['ssrf'], { includeLow: true });
+    expect(lowScan.findings).toHaveLength(1);
+    expect(lowScan.findings[0].confidence).toBe('low');
+  });
 });
 
 // ---------------------------------------------------------------------------
