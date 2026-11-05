@@ -422,3 +422,7 @@ ncchen99/pickfit
 abordage/awesome-mcp
 
 
+
+# ── Swept 2026-11-05 night pass (TRA-2918) ──
+# Bare-name slug collision (docs/decisions/ADR-0010-ask-layer-graphql-with-an-explain-trace-mcp-tools.md: 'explain trace, MCP tools'):
+Zugzwang-world/graphpay
