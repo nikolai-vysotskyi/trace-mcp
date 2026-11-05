@@ -9259,3 +9259,50 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Outreach pass, 2026-11-05 18:00 pass (TRA-2916): mention sweep clean, competitor deep-dive on GitNexus overload & Class/Impl isolation (#3832/#3833), Graphify Windows long-path cache identity (#5026) & resolver change refresh (#5022), Serena language server launcher recovery (#2249)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **abhigyanpatwari/GitNexus**:
+  - *Mixed overload parameter types (PR #3832, open)* & *Same-name Class and Impl isolation (PR #3833, open)*: Adds targeted test coverage for mixed raw vs normalized parameter types in precomputed collision groups (handling explicit `null` and absent `rawType` per parameter with generic arguments distinguishing overload IDs), and verifies isolation between Class and Impl entries sharing identical simple names in the same registry. Meanwhile, *Reduce import emission memory (PR #3831)* merged into main (lowering peak heap by ~25% under a 288 MiB ceiling). Contrast: trace-mcp models symbols, overload signatures, and implementations with fully qualified scopes and AST identifiers in SQLite relational tables (`symbols`), querying exact paths and relationships deterministically without generic collision heuristics or in-memory deduplication tables.
+- **Graphify-Labs/graphify**:
+  - *Windows `\\?\` long-path cache identity leak (PR #5026, open)*: Fixes an issue on Windows where `os_long_path()` leaked the `\\?\` prefix into cache keys and stat index identity, causing cache misses across runs, dual-root warnings, and absolute keys in `stat-index.json`. Contrast: trace-mcp implements unified cross-platform path normalization in `src/utils/paths.ts` (canonical POSIX slashes, safe junction/symlink resolution, consistent drive letter casing) prior to hashing or database persistence, guaranteeing cache and index portability across environments.
+  - *JS/TS import re-resolution after resolver input changes (PR #5022, open)*: Fixes stale `imports_from` edges when `tsconfig.json` (`compilerOptions.paths` / `baseUrl`) or `pnpm-lock.yaml` change, forcing a full rebuild for untouched importers. Contrast: trace-mcp tracks configuration dependencies in SQLite, incrementally updating resolution edges without invalidating the whole repository index.
+- **oraios/serena**:
+  - *Language server launcher crash detection (PR #2249, open)*: Fixes a 4-minute hang on tool calls when language server launcher processes (such as `uvx` running pyright or `typescript-language-server` wrapping `tsserver`) die while child server processes hold open connections, by actively polling OS process status via `poll()`. Contrast: trace-mcp executes embedded native AST parsers via Tree-sitter inside the Node.js daemon worker process, avoiding external language server subprocesses, IPC pipe deadlocks, launcher crashes, and 28-second cold restart overheads.
+- **jgravelle/jcodemunch-mcp**:
+  - *v1.108.418 released (PR #1337 / #1336)*: Released to npm/GitHub, surfacing `partial: true` warnings when queries hit capped index limits.
+  - *Meter accounting parity (PR #1335, open)*: Normalizing file refusal accounting across CLI diagnostics and live meter.
+
+**Competitor pulse (as of 2026-11-05 18:00 pass vs 2026-11-05 14:00 pass TRA-2914):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,163★ (-1), 1,623 forks (-1)
+- oraios/serena: 31,118★ (+5), 2,126 forks (=)
+- DeusData/codebase-memory-mcp: 48,155★ (+7), 3,966 forks (+2)
+- tirth8205/code-review-graph: 32,603★ (+2), 2,965 forks (=)
+- colbymchenry/codegraph: 76,731★ (+41), 5,099 forks (+3)
+- abhigyanpatwari/GitNexus: 48,284★ (+3), 5,231 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,835★ (+1), 371 forks (=)
+- continuedev/continue: 36,409★ (+1), 5,550 forks (=)
+- Aider-AI/aider: 49,960★ (-1), 5,138 forks (=)
+- Graphify-Labs/graphify: 142,751★ (+93), 13,650 forks (+12)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
