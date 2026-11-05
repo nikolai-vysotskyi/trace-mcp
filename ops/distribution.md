@@ -9353,3 +9353,49 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-06 02:00 pass (TRA-2922): clean mention sweep (0 new hits), competitor deep-dive on jcodemunch opt-in Grep size gate & count condensation (#1339), Graphify per-term seed preservation (#5032) & alias normalization (#5030), GitNexus import emission memory reduction (#3831)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Opt-in Grep size gate and match count condensation (PR #1339, merged; release v1.108.419 PR #1340, open)*: Previously `JCODEMUNCH_HOOK_GREP_ANSWER=1` attempted to answer `Grep` directly from the index, but declined if the result exceeded a single `search_text` page, meaning it only answered small queries where running grep directly was already cheap, and failed on large queries where indexing saves the most tokens. PR #1339 introduces a size gate (`JCODEMUNCH_HOOK_GREP_ANSWER_MIN_LINES = 66`): queries under the gate run as native Grep; queries at or above the gate condense matches into counts by file and enclosing scope (function/class) without raw lines, dramatically reducing context payload. Contrast: trace-mcp never intercepts or hacks agent-level `grep` calls with lossy counting heuristics. Instead, trace-mcp provides purpose-built structural tools (`get_outline`, `get_symbol`, `search_symbols`, `get_task_context`) that deliver exact AST hierarchy, symbol definitions, references, and callers/callees directly into context with token-efficient outlines. If an agent needs symbol locations, it receives structured symbol cards rather than having to parse grepped lines or synthesized line count digests.
+- **Graphify-Labs/graphify**:
+  - *Per-term BFS seed preservation with shared labels (PR #5032, open; issue #5027)*: Fixes query graph traversal where `_pick_seeds()` deduplicated seed candidates by label to prevent flooding (e.g. dozens of generic `GET()` handlers). However, this unconditionally dropped unique nodes that share a common label (such as `PreToolUse` hooks across different plugins) even when that node was the *only* match for a specific query search term. PR #5032 ensures distinct nodes matching specific query terms are retained as traversal seeds unless the term matches through the shared label itself.
+  - *Node alias normalization for tree visualization (PR #5030, open)*: Normalizes node source file aliases (`src`, `file`, `path`, `filepath`) onto `source_file` during graph build and tree rendering. Previously, graphs with `src` instead of `source_file` discarded all nodes and rendered an empty graph `(empty graph)`. Contrast: trace-mcp uses strict schema definitions in SQLite and Tree-sitter AST extraction. Symbol entries and relational graphs are keyed by stable symbol IDs (`filepath#symbol_name`) rather than un-normalized JSON dictionaries with arbitrary property aliases, eliminating alias mismatch bugs and query seed dropouts entirely.
+- **abhigyanpatwari/GitNexus**:
+  - *Reduced import emission memory in ingestion pipeline (PR #3831, merged)*: Refactored `emitImportEdges` in `gitnexus/src/core/ingestion/scope-resolution/graph-bridge/imports-to-edges.ts` to reduce heap memory usage by ~25% during large import relationship graph extraction (547k synthetic import pairs), avoiding V8 heap exhaustion on memory-constrained workers. Contrast: trace-mcp streams AST parsing directly through native C++ Tree-sitter bindings and writes edges directly to SQLite database tables within transactions, without accumulating intermediate JS/V8 object heap representations for all import edges in memory.
+- **oraios/serena**:
+  - *Skip unsupported reference health checks (PR #2255, open)* & *LSP launcher crash recovery (PR #2249, open)*: Serena continues managing LSP lifecycle issues and out-of-process IPC synchronization hurdles. Contrast: trace-mcp executes embedded native AST parsers via Tree-sitter inside Node.js daemon workers, avoiding external language server subprocesses, IPC pipe deadlocks, and multi-process lifecycle failures.
+
+**Competitor pulse (as of 2026-11-06 02:00 pass vs 2026-11-05 22:00 pass TRA-2918):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,160★ (-1), 1,623 forks (=)
+- oraios/serena: 31,127★ (+5), 2,126 forks (=)
+- DeusData/codebase-memory-mcp: 48,170★ (+6), 3,970 forks (+3)
+- tirth8205/code-review-graph: 32,608★ (+1), 2,965 forks (=)
+- colbymchenry/codegraph: 76,777★ (+10), 5,100 forks (+1)
+- abhigyanpatwari/GitNexus: 48,291★ (+5), 5,231 forks (=)
+- jgravelle/jcodemunch-mcp: 2,834★ (=), 371 forks (=)
+- continuedev/continue: 36,412★ (+3), 5,552 forks (+1)
+- Aider-AI/aider: 49,972★ (+5), 5,139 forks (=)
+- Graphify-Labs/graphify: 142,930★ (+82), 13,669 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
