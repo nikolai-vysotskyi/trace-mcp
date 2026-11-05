@@ -141,6 +141,19 @@ export function checkCliDaemonVersionDrift(
     };
   }
 
+  if (launcherVersion && compareVersions(cliVersion, launcherVersion) > 0) {
+    return {
+      drift: true,
+      cliVersion,
+      daemonVersion,
+      launcherVersion,
+      daemonRunning: true,
+      status: 'cli_newer',
+      warning: `Control plane launcher (${launcherVersion}) is older than CLI and daemon (${cliVersion}).`,
+      remedy: "Re-run 'trace-mcp init' to synchronize the launcher configuration.",
+    };
+  }
+
   return {
     drift: false,
     cliVersion,

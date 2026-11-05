@@ -106,6 +106,7 @@ const CACHE_PATH = path.join('/tmp/test-trace-mcp', 'update-check.json');
 
 // Helper to write a fake cache that readCache will return
 function setupCache(cache: Record<string, unknown> | null) {
+  mockFs.readdirSync.mockReturnValue([]);
   if (cache === null) {
     mockFs.existsSync.mockReturnValue(false);
   } else {
@@ -481,5 +482,81 @@ describe('checkAndInstallUpdate', () => {
     const written = getWrittenCache();
     expect(written).not.toBeNull();
     expect(written!.installedVersion).toBe('2.0.0');
+  });
+
+  it('skips install and syncs cache when launcher.env has a version >= latestVersion (TRA-2903)', async () => {
+    // Cache has latestVersion 3.42.7, but launcher.env has 3.42.8
+    setupCache({ lastChecked: Date.now(), latestVersion: '3.42.7' });
+
+    const launcherEnvPath = path.join('/tmp/test-trace-mcp', 'launcher.env');
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const sp = String(p);
+      return sp === CACHE_PATH || sp === launcherEnvPath;
+    });
+    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+      const sp = String(p);
+      if (sp === CACHE_PATH) {
+        return JSON.stringify({ lastChecked: Date.now(), latestVersion: '3.42.7' });
+      }
+      if (sp === launcherEnvPath) {
+        return 'TRACE_MCP_VERSION="3.42.8"\nTRACE_MCP_NODE="/bin/node"\nTRACE_MCP_CLI="/lib/cli.js"\n';
+      }
+      return '{}';
+    });
+
+    const { execFile } = await import('node:child_process');
+    stubExecFile(execFile, () => ({ status: 0 }));
+
+    const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
+    expect(result).toBe(false);
+
+    // Must NOT execute npm install
+    const installCalls = vi
+      .mocked(execFile)
+      .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
+    expect(installCalls).toHaveLength(0);
+
+    // Cache should be updated with the higher launcher version
+    const written = getWrittenCache();
+    expect(written).not.toBeNull();
+    expect(written!.installedVersion).toBe('3.42.8');
+  });
+
+  it('skips install when global package on disk is already >= latestVersion (TRA-2903)', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '3.42.7' });
+
+    const npmRoot = '/fake/npm/root';
+    const globalPkgJson = path.join(npmRoot, 'trace-mcp', 'package.json');
+
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const sp = String(p);
+      return sp === CACHE_PATH || sp === globalPkgJson;
+    });
+    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+      const sp = String(p);
+      if (sp === CACHE_PATH) {
+        return JSON.stringify({ lastChecked: Date.now(), latestVersion: '3.42.7' });
+      }
+      if (sp === globalPkgJson) {
+        return JSON.stringify({ version: '3.42.8' });
+      }
+      return '{}';
+    });
+
+    const { execFile } = await import('node:child_process');
+    stubExecFile(execFile, (cmd, args) => {
+      if (args.includes('root') || args.some((a) => a.includes('npm root -g'))) {
+        return { status: 0, stdout: `${npmRoot}\n` };
+      }
+      return { status: 0 };
+    });
+
+    const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
+    expect(result).toBe(false);
+
+    const installCalls = vi
+      .mocked(execFile)
+      .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
+    expect(installCalls).toHaveLength(0);
   });
 });

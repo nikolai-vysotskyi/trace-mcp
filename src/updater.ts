@@ -145,7 +145,9 @@ async function resolveNpmRoot(): Promise<string | null> {
  */
 function cleanStaleScratchDirs(npmRoot: string): void {
   try {
-    for (const entry of fs.readdirSync(npmRoot)) {
+    const list = fs.readdirSync(npmRoot);
+    if (!Array.isArray(list)) return;
+    for (const entry of list) {
       if (entry.startsWith('.trace-mcp-')) {
         try {
           fs.rmSync(path.join(npmRoot, entry), { recursive: true, force: true });
@@ -192,6 +194,7 @@ function reconcileStaleBackups(npmRoot: string): void {
   let entries: string[];
   try {
     entries = fs.readdirSync(npmRoot);
+    if (!Array.isArray(entries)) return;
   } catch {
     return;
   }
@@ -260,7 +263,7 @@ function writeCache(cache: UpdateCache): void {
   } catch {}
 }
 
-function semverGt(a: string, b: string): boolean {
+export function semverGt(a: string, b: string): boolean {
   const parse = (v: string) =>
     v
       .replace(/[^\d.]/g, '')
@@ -273,13 +276,75 @@ function semverGt(a: string, b: string): boolean {
   return aPat > bPat;
 }
 
+/**
+ * Read the version of the trace-mcp package installed on disk.
+ *
+ * Checks:
+ *   1. The given npmRoot (e.g. `<npmRoot>/trace-mcp/package.json`)
+ *   2. The package recorded in launcher.env (TRACE_MCP_CLI parent package.json)
+ *   3. Sibling package.json of this module (fallback)
+ */
+export function readInstalledPackageVersion(npmRoot?: string | null): string | null {
+  try {
+    if (npmRoot) {
+      const globalPkgPath = path.join(npmRoot, 'trace-mcp', 'package.json');
+      if (fs.existsSync(globalPkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(globalPkgPath, 'utf-8')) as { version?: string };
+        if (pkg.version) return pkg.version;
+      }
+    }
+  } catch {
+    /* ignore read/parse errors */
+  }
+
+  try {
+    const launcherEnv = path.join(TRACE_MCP_HOME, 'launcher.env');
+    if (fs.existsSync(launcherEnv)) {
+      const content = fs.readFileSync(launcherEnv, 'utf-8');
+      const m = content.match(/^TRACE_MCP_CLI="?([^"\r\n]+)"?/m);
+      if (m && m[1].trim()) {
+        const pkgPath = path.resolve(path.dirname(m[1].trim()), '..', 'package.json');
+        if (fs.existsSync(pkgPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
+          if (pkg.version) return pkg.version;
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return null;
+}
+
+/**
+ * Read the version recorded in ~/.trace/launcher.env.
+ */
+export function readLauncherEnvVersion(): string | null {
+  try {
+    const launcherEnv = path.join(TRACE_MCP_HOME, 'launcher.env');
+    if (fs.existsSync(launcherEnv)) {
+      const content = fs.readFileSync(launcherEnv, 'utf-8');
+      const m = content.match(/^TRACE_MCP_VERSION="?([^"\r\n]+)"?/m);
+      if (m && m[1].trim()) return m[1].trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function fetchLatestVersion(timeoutMs = 5000): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = https.get(
       'https://registry.npmjs.org/trace-mcp/latest',
       {
         timeout: timeoutMs,
-        headers: { 'User-Agent': `trace-mcp/${CURRENT_VERSION}` },
+        headers: {
+          'User-Agent': `trace-mcp/${CURRENT_VERSION}`,
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
       },
       (res) => {
         let body = '';
@@ -369,8 +434,35 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     }
   }
 
-  if (!semverGt(latestVersion, CURRENT_VERSION)) {
-    logger.debug({ version: CURRENT_VERSION }, 'Auto-update: already up to date');
+  // Downgrade protection & redundant install prevention (TRA-2903):
+  // Check what is currently installed globally or recorded in launcher.env before
+  // deciding to invoke `npm install -g`. An MCP client running an older binary
+  // (e.g. bundled or older session) must not downgrade a newer global install.
+  const initialDiskVer = readInstalledPackageVersion();
+  const initialLauncherVer = readLauncherEnvVersion();
+  const effectiveCurrent = [
+    CURRENT_VERSION,
+    initialDiskVer,
+    initialLauncherVer,
+    cache?.installedVersion,
+  ]
+    .filter((v): v is string => Boolean(v && v !== '0.0.0-dev'))
+    .reduce((highest, v) => (semverGt(v, highest) ? v : highest), CURRENT_VERSION);
+
+  if (!semverGt(latestVersion, effectiveCurrent)) {
+    logger.debug(
+      {
+        current: CURRENT_VERSION,
+        latest: latestVersion,
+        diskVersion: initialDiskVer,
+        launcherVersion: initialLauncherVer,
+        effective: effectiveCurrent,
+      },
+      'Auto-update: installed version or launcher is already at or newer than target version',
+    );
+    if (cache && (!cache.installedVersion || semverGt(effectiveCurrent, cache.installedVersion))) {
+      writeCache({ ...cache, installedVersion: effectiveCurrent });
+    }
     return false;
   }
 
@@ -444,6 +536,38 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     if (npmRoot) {
       cleanStaleScratchDirs(npmRoot);
       reconcileStaleBackups(npmRoot);
+    }
+
+    // TRA-2903: Re-verify under lock after resolving npmRoot that the installed
+    // package has not already been upgraded by a concurrent process, and refuse
+    // any install that would downgrade what is already on disk.
+    const lockedDiskVer = readInstalledPackageVersion(npmRoot);
+    const lockedLauncherVer = readLauncherEnvVersion();
+    const lockedEffective = [
+      CURRENT_VERSION,
+      lockedDiskVer,
+      lockedLauncherVer,
+      recheckCache?.installedVersion,
+    ]
+      .filter((v): v is string => Boolean(v && v !== '0.0.0-dev'))
+      .reduce((highest, v) => (semverGt(v, highest) ? v : highest), CURRENT_VERSION);
+
+    if (!semverGt(latestVersion, lockedEffective)) {
+      logger.info(
+        {
+          latest: latestVersion,
+          diskVersion: lockedDiskVer,
+          launcherVersion: lockedLauncherVer,
+          effective: lockedEffective,
+        },
+        'Auto-update: package on disk is already at or newer than target release, refusing downgrade/reinstall',
+      );
+      writeCache({
+        lastChecked: now,
+        latestVersion,
+        installedVersion: lockedEffective,
+      });
+      return false;
     }
 
     const runInstall = () =>
