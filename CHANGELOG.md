@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.9...v3.42.10) (2026-11-05)
+
+
+### Documentation
+
+* **ops:** record distribution outreach pass 2026-11-05 14:00 (TRA-2914) ([#1850](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1850)) ([e03791b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e03791b57d230c8264dd754d7732e6f5ca9fa70b))
+* **ops:** record distribution outreach pass 2026-11-05 18:00 (TRA-2916) ([#1851](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1851)) ([ab37316](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ab373162945875eab7da8bbaab6893efd00b1127))
+* **ops:** record distribution outreach pass 2026-11-05 22:00 (TRA-2918) ([#1852](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1852)) ([d5d04cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5d04cfa8eb62434fc2b9eb0ebcdf11bb539b4fc))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group across 1 directory with 3 updates ([#1849](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1849)) ([66cbffd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/66cbffd8fbb42671d2db88b6869c9e03a7031ae3))
+* **app-deps:** bump i18next ([#1827](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1827)) ([0c7db1f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c7db1ffb7d04badcb3b0bc7590363a2c9c90d7f))
+* **ci:** bump the github-actions-minor-patch group with 3 updates ([#1830](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1830)) ([932a67d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/932a67d6a06a1e80e350f65be5de2dc071952875))
+* **vscode-deps-dev:** bump the development-minor-patch group ([#1831](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1831)) ([61311d0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61311d042f4f751ca3489b46044afb58328d4409))
+
 ## [3.42.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.8...v3.42.9) (2026-11-05)
 
 
