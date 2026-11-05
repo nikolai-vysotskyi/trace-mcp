@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.8...v3.42.9) (2026-11-05)
+
+
+### Bug Fixes
+
+* **daemon:** answer pre-initialize discovery probes locally (TRA-2904) ([#1846](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1846)) ([d7a2ae6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d7a2ae630c141d521555509d03059adc6017a293))
+* **security:** improve precision for PHP escaped commands, Python constants/qualified tables, and apiBase SSRF (TRA-2900) ([#1843](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1843)) ([b82db1c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b82db1c2631bce26fe80e9f5d60de5230948c065))
+* **updater:** prevent auto-update downgrade and daemon staleness restart loops (TRA-2903) ([#1847](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1847)) ([8b8d508](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b8d508b4adbe4f93d8426aebf1b16d7b15917f1))
+
+
+### Documentation
+
+* **ops:** outreach pass 2026-11-05 02:00 (TRA-2901) ([#1844](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1844)) ([b8b8c2c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b8b8c2ccec7a9efc7b0223d76bf35cb360eee5a3))
+
 ## [3.42.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.7...v3.42.8) (2026-11-04)
 
 
