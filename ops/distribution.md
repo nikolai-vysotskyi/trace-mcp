@@ -9306,3 +9306,50 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-05 22:00 pass (TRA-2918): sweep identifies Zugzwang-world/graphpay ADR collision, competitor deep-dive on GitNexus bounded resumable indexing (#3829), Graphify subfolder build path resolution (#5028) & manifest recovery (#5025), jcodemunch parse cap decoupling (#1338)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 hit returned outside `ops/mentions-seen.txt`: `Zugzwang-world/graphpay`.
+- Investigated `Zugzwang-world/graphpay`: matched `docs/decisions/ADR-0010-ask-layer-graphql-with-an-explain-trace-mcp-tools.md` — bare-name slug collision generated from ADR title ("Ask layer: GraphQL with an explain trace, MCP tools"). Documented and added to `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **abhigyanpatwari/GitNexus**:
+  - *Resource-bounded and resumable indexing (PR #3829, open)*: Decouples graph/keyword AST indexing from downstream embedding generation. Publishes the verified graph and keyword index immediately before attempting embeddings, and budgets parser workers, native pools, embedding runtime, and queue memory. Provider API limits/failures leave the relational graph usable, with resumable retries reusing completed units. Contrast: trace-mcp relies 100% on local, deterministic AST symbol indexing and call/import graph computation without requiring any external LLM/embedding API provider. There is zero risk of indexing failure due to API token exhaustion, provider outages, or network timeouts, and index generation is intrinsically offline, instant, and zero-cost.
+- **Graphify-Labs/graphify**:
+  - *Subfolder build legacy-ID warning false alarm (PR #5028, open)*: Fixes an issue where `graphify update sub` run from a parent directory stored `source_file` relative to the build cwd while node IDs were minted relative to the scan root, mistakenly triggering legacy ID migration warnings (`pre-#1504`) and prompting unnecessary full rebuilds (`--force`). Contrast: trace-mcp anchors all symbols and paths relative to the canonical workspace root, resolving path canonicalization deterministically across all tools and query endpoints without multi-root or subfolder cwd desynchronization.
+  - *Manifest object corruption recovery (PR #5025, open)*: Recovers from malformed manifest JSON objects in corrupted cache directories by ignoring broken entries instead of crashing the query server. Contrast: trace-mcp stores metadata, schema versions, and symbol maps in ACID-compliant SQLite databases (`.trace/trace.db`), leveraging WAL mode and transactional integrity to prevent corrupted partial writes.
+- **jgravelle/jcodemunch-mcp**:
+  - *Decouple per-call parse batch cap from index retention (PR #1338, open)*: Previously `max_folder_files` (default 2,000) applied both to interactive `index_folder` parse limits and the overall index retention. Because re-indexing compared scanned files against the previous index, any files skipped by the cap were marked deleted, shrinking large repos down to 2,000 files during agent re-indexing. PR #1338 separates per-call parse batching from global retention. Contrast: trace-mcp indexes the entire workspace via SQLite transactions with daemon background workers, without arbitrary 2,000 file caps or risk of truncating indexed symbols during incremental passes.
+- **oraios/serena**:
+  - *Language server launcher crash detection (PR #2249, open)* & *Cross-file readiness rename delay (PR #2254, open)*: Serena continues managing LSP lifecycle issues and out-of-process IPC synchronization hurdles. Contrast: trace-mcp executes embedded native AST parsers via Tree-sitter inside Node.js daemon workers, avoiding external language server subprocesses, IPC pipe deadlocks, and multi-process lifecycle failures.
+
+**Competitor pulse (as of 2026-11-05 22:00 pass vs 2026-11-05 18:00 pass TRA-2916):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,161★ (-2), 1,623 forks (=)
+- oraios/serena: 31,122★ (+4), 2,126 forks (=)
+- DeusData/codebase-memory-mcp: 48,164★ (+9), 3,967 forks (+1)
+- tirth8205/code-review-graph: 32,607★ (+4), 2,965 forks (=)
+- colbymchenry/codegraph: 76,767★ (+36), 5,099 forks (=)
+- abhigyanpatwari/GitNexus: 48,286★ (+2), 5,231 forks (=)
+- jgravelle/jcodemunch-mcp: 2,834★ (-1), 371 forks (=)
+- continuedev/continue: 36,409★ (=), 5,551 forks (+1)
+- Aider-AI/aider: 49,967★ (+7), 5,138 forks (=)
+- Graphify-Labs/graphify: 142,848★ (+97), 13,659 forks (+9)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
