@@ -114,6 +114,21 @@ describe('checkCliDaemonVersionDrift', () => {
     expect(report.status).toBe('cli_older');
     expect(report.warning).toContain('older than the control plane launcher');
   });
+
+  it('flags cli_newer if launcherVersion is older than CLI and daemon (TRA-2903)', () => {
+    const report = checkCliDaemonVersionDrift({
+      cliVersion: '3.42.8',
+      daemonVersion: '3.42.8',
+      launcherVersion: '3.42.7',
+      daemonRunning: true,
+    });
+    expect(report.drift).toBe(true);
+    expect(report.status).toBe('cli_newer');
+    expect(report.warning).toContain(
+      'Control plane launcher (3.42.7) is older than CLI and daemon (3.42.8)',
+    );
+    expect(report.remedy).toContain('trace-mcp init');
+  });
 });
 
 describe('diagnoseVersionDrift integration', () => {

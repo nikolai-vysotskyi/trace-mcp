@@ -178,6 +178,7 @@ esac
 # --- 1. Parse config safely (no `source` — RCE-safe, whitelist keys) ---
 NODE_PATH=""
 CLI_PATH=""
+CONFIG_VERSION=""
 
 # `-f` as well as `-r`: `-r` is true for a directory too, and reading one is
 # an error, not an empty config (TRA-797).
@@ -205,8 +206,8 @@ if [ -f "$CONFIG" ] && [ -r "$CONFIG" ]; then
     case "$key" in
       TRACE_MCP_NODE) NODE_PATH="$value" ;;
       TRACE_MCP_CLI)  CLI_PATH="$value" ;;
-      # TRACE_MCP_NODE_MAJOR and TRACE_MCP_VERSION may appear in configs
-      # written by older versions; both are informational only.
+      TRACE_MCP_VERSION) CONFIG_VERSION="$value" ;;
+      # TRACE_MCP_NODE_MAJOR may appear in configs written by older versions.
     esac
   done < "$CONFIG"
 fi
@@ -859,6 +860,20 @@ heal_config() {
   tmp="$CONFIG.tmp.$$.$(printf '%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM")"
   # launcher.env is a 0600 file by contract (src/init/launcher.ts). The
   # process umask must not be allowed to widen it during a heal.
+  probed_ver=""
+  if [ -f "$(dirname "$cli")/../package.json" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        *\"version\"*\"*\"*)
+          tmp_ver="${line#*\"version\"}"
+          tmp_ver="${tmp_ver#*:}"
+          tmp_ver="${tmp_ver#*\"}"
+          probed_ver="${tmp_ver%%\"*}"
+          break
+          ;;
+      esac
+    done < "$(dirname "$cli")/../package.json" 2>/dev/null || true
+  fi
   old_umask=$(umask)
   umask 077
   {
@@ -866,9 +881,9 @@ heal_config() {
     printf '# Rewritten by the launcher after a successful probe.\n'
     printf 'TRACE_MCP_NODE="%s"\n' "$node"
     printf 'TRACE_MCP_CLI="%s"\n' "$cli"
-    # TRACE_MCP_VERSION is deliberately dropped: the probed cli.js may be a
-    # different build than the one the stale config described, and a wrong
-    # version is worse than none. `trace-mcp init` restores it.
+    if [ -n "$probed_ver" ]; then
+      printf 'TRACE_MCP_VERSION="%s"\n' "$probed_ver"
+    fi
   # `2>/dev/null` comes BEFORE `> "$tmp"` on purpose: redirections are applied
   # left to right, so stderr is already discarded by the time the shell tries
   # to open the tmp. The other order lets a read-only or root-owned state home
@@ -1008,6 +1023,25 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
 fi
 
 if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && is_usable_script "$CLI_PATH"; then
+  # Pure-bash version divergence check between launcher.env and actual CLI package (TRA-2903)
+  if [ -n "${CONFIG_VERSION:-}" ] && [ -f "$(dirname "$CLI_PATH")/../package.json" ]; then
+    pkg_ver=""
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        *\"version\"*\"*\"*)
+          tmp_ver="${line#*\"version\"}"
+          tmp_ver="${tmp_ver#*:}"
+          tmp_ver="${tmp_ver#*\"}"
+          pkg_ver="${tmp_ver%%\"*}"
+          break
+          ;;
+      esac
+    done < "$(dirname "$CLI_PATH")/../package.json" 2>/dev/null || true
+    if [ -n "$pkg_ver" ] && [ "$pkg_ver" != "$CONFIG_VERSION" ]; then
+      log "WARN: version divergence: config TRACE_MCP_VERSION=$CONFIG_VERSION but $CLI_PATH has version $pkg_ver"
+    fi
+  fi
+
   EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
   log "exec(config) node=$NODE_PATH cli=$CLI_PATH target=$EXEC_TARGET argc=$#"
   PATH="$CLIENT_PATH"

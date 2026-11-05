@@ -212,7 +212,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { scanSecurity } from './tools/quality/security-scan.js';
 import { TopologyStore } from './topology/topology-db.js';
-import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
+import { checkAndInstallUpdate, scheduleBackgroundUpdate, semverGt } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sweepOrphanDbSidecars } from './utils/db-family.js';
 import { EventLoopLagMonitor, yieldToEventLoopFair } from './utils/event-loop.js';
@@ -4355,11 +4355,18 @@ program
             try {
               const pkg = JSON.parse(fs.readFileSync(pkgPath!, 'utf-8')) as { version?: string };
               if (pkg.version && pkg.version !== PKG_VERSION) {
-                logger.info(
-                  { running: PKG_VERSION, installed: pkg.version },
-                  'Installed version changed — shutting down so supervisor respawns with fresh binary',
-                );
-                void shutdown('version-staleness');
+                if (semverGt(pkg.version, PKG_VERSION)) {
+                  logger.info(
+                    { running: PKG_VERSION, installed: pkg.version },
+                    'Installed version upgraded on disk — shutting down so supervisor respawns with fresh binary',
+                  );
+                  void shutdown('version-staleness');
+                } else {
+                  logger.warn(
+                    { running: PKG_VERSION, installed: pkg.version },
+                    'Installed version on disk is older than running daemon — refusing automatic downgrade restart',
+                  );
+                }
               }
             } catch {
               /* transient read error — try again next tick */
