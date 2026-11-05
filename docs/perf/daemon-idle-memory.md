@@ -636,3 +636,25 @@ events in the preceding three hours, 8,470 with `indexed: 0`; these came from
 several projects. This is background activity, so do not label the plateau an
 isolated idle benchmark or infer that the watcher caused the retained memory.
 TRA-2061 remains the owner of memory attribution and the long-term slope.
+
+---
+
+## 2026-11-06 — RSS and private footprint on v3.42.10
+
+Read-only field sample of the installed daemon (PID 11872, uptime 52 minutes)
+after three projects reported `ready` from `/debug/memory`. The endpoint reported
+820 MiB `process.rss`, 153 MiB `heapUsed`, four session-journal entries and zero
+compact journal bytes. `ps` independently reported 840,160 KiB RSS. This is
+345 MiB above the three-project idle ceiling (`250 + 75 × 3 = 475 MiB`), but
+the projects had just been indexed and the sample was not taken under the
+isolated, sustained 0% CPU conditions used to establish that ceiling.
+
+At the same time, `vmmap -summary` reported a 402 MiB physical footprint.
+Its region table separately showed 279 MiB resident `Malloc Small`, 160 MiB
+resident `Malloc Small (empty)`, and 111 MiB resident mapped files. Its region-total resident
+figure is not interchangeable with `process.rss`; the two tools account for
+shared mappings differently. The gap between RSS and footprint means the
+345 MiB ceiling gap cannot be read as 345 MiB of private memory pressure.
+No leak rate follows from this single snapshot. TRA-2061 continues to own
+the retained-memory investigation; future comparisons need the same loaded
+projects and a sustained quiet window.
