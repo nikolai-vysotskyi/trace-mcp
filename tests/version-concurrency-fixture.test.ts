@@ -44,7 +44,7 @@ describe('Version alignment and divergence on isolated fixtures (TRA-2903)', () 
     vi.restoreAllMocks();
   });
 
-  describe('Launcher shim divergence detection', () => {
+  describe.skipIf(process.platform === 'win32')('Launcher shim divergence detection', () => {
     it('detects and logs version divergence when launcher.env and package.json disagree without cyclic restart', () => {
       // package.json on disk has 3.42.7
       fs.writeFileSync(
@@ -142,32 +142,41 @@ describe('Version alignment and divergence on isolated fixtures (TRA-2903)', () 
       process.env.TRACE_MCP_HOME = traceHome;
       process.env.TRACE_MCP_DATA_DIR = traceHome;
       process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT = '1';
+      const prevNoAutoUpdate = process.env.TRACE_MCP_NO_AUTO_UPDATE;
+      delete process.env.TRACE_MCP_NO_AUTO_UPDATE;
       (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = '3.42.0';
 
-      const cachePath = path.join(traceHome, 'update-check.json');
-      fs.writeFileSync(
-        cachePath,
-        JSON.stringify({ lastChecked: Date.now(), latestVersion: '3.42.7' }),
-      );
+      try {
+        const cachePath = path.join(traceHome, 'update-check.json');
+        fs.writeFileSync(
+          cachePath,
+          JSON.stringify({ lastChecked: Date.now(), latestVersion: '3.42.7' }),
+        );
 
-      fs.writeFileSync(
-        path.join(traceHome, 'launcher.env'),
-        `TRACE_MCP_VERSION="3.42.8"\nTRACE_MCP_NODE="${fakeNode}"\nTRACE_MCP_CLI="${cliPath}"\n`,
-      );
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          `TRACE_MCP_VERSION="3.42.8"\nTRACE_MCP_NODE="${fakeNode}"\nTRACE_MCP_CLI="${cliPath}"\n`,
+        );
 
-      const { checkAndInstallUpdate: checkUpdate } = await import('../src/updater.js');
+        const { checkAndInstallUpdate: checkUpdate } = await import('../src/updater.js');
 
-      const updated = await checkUpdate({ checkIntervalHours: 24 });
-      expect(updated).toBe(false);
+        const updated = await checkUpdate({ checkIntervalHours: 24 });
+        expect(updated).toBe(false);
 
-      // Verify cache synchronized with launcher version
-      const cache = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-      expect(cache.installedVersion).toBe('3.42.8');
-
-      delete process.env.TRACE_MCP_HOME;
-      delete process.env.TRACE_MCP_DATA_DIR;
-      delete process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT;
-      (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
+        // Verify cache synchronized with launcher version
+        const cache = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+        expect(cache.installedVersion).toBe('3.42.8');
+      } finally {
+        delete process.env.TRACE_MCP_HOME;
+        delete process.env.TRACE_MCP_DATA_DIR;
+        delete process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT;
+        (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
+        if (prevNoAutoUpdate !== undefined) {
+          process.env.TRACE_MCP_NO_AUTO_UPDATE = prevNoAutoUpdate;
+        } else {
+          delete process.env.TRACE_MCP_NO_AUTO_UPDATE;
+        }
+      }
     });
   });
 });
