@@ -9212,3 +9212,50 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Outreach pass, 2026-11-05 14:00 pass (TRA-2914): mention sweep clean, competitor deep-dive on GitNexus import emission memory reduction (#3831), jcodemunch partial-index search warnings (#1336 / v1.108.418) & meter accounting (#1335), Codebase Memory docs-to-code referencing (#2915), and Graphify extractor import cycles (#5014)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`; sweep clean.
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **abhigyanpatwari/GitNexus**:
+  - *Reduce import emission memory (PR #3831, open)*: Mitigates large heap allocations during import graph emission (#3695) where deduplication retained global entries for every distinct file pair. Collects and emits consecutive source files individually, dropping first emitted edge heap from 137.96 MiB to 51.01 MiB and last edge heap from 345.84 MiB to 258.19 MiB (~25% lower), completing under a 288 MiB heap ceiling where baseline OOMed. Contrast: trace-mcp streams AST-parsed dependencies and relationships directly into SQLite indexes using transactions (`db.transaction()`), avoiding global deduplication maps in V8 heap memory. SQLite handles B-tree page caching and eviction out-of-process, keeping Node/V8 RSS bounded across tens of thousands of files.
+- **jgravelle/jcodemunch-mcp**:
+  - *Partial index warning on capped searches (PR #1336 / v1.108.418, merged)*: Adds explicit `partial: true` and explanatory warning to search results when querying a repository with a capped index ceiling, preventing agents from falsely concluding unreturned symbols do not exist. Contrast: trace-mcp indexes repositories deterministically without arbitrary file-count ceilings; when queries are subject to token budget limits, `get_task_context` and `get_outline` return structured metadata (`indexed_symbols`, `budget_exceeded`, `token_estimate`) so agents distinguish between absent definitions and budget-constrained omissions.
+  - *Meter accounting parity for receipt and diagnose (PR #1335, open)*: Ensures `receipt` and `diagnose` CLI commands read lifetime savings consistently with the live meter, treating zero-byte files as refused rather than absent. Contrast: trace-mcp evaluates token savings through reproducible benchmark harnesses on real PR diffs (`docs/perf/pr-review-benchmark.md`), with live statistics logged in structured SQLite tables rather than ad-hoc disk-serialized meter files.
+- **DeusData/codebase-memory-mcp**:
+  - *Reverse referencing from docs to code (PR #2915, open)*: Adds reverse cross-referencing from Markdown documentation files to source code symbols, surfacing code referenced by documentation changes. Contrast: trace-mcp provides unified multi-language indexing across 81 languages and 88 frameworks, indexing both source files and markdown documentation through uniform AST extraction and symbol relationships.
+- **Graphify-Labs/graphify**:
+  - *Clarify extractor import direction (PR #5014, open)*: Removes dynamic function-local imports in `extractors/markdown.py`, enforcing static import hierarchy per migration invariants. Contrast: trace-mcp uses static, tree-shakable TypeScript ES modules under `src/tools/`, eliminating runtime cyclic dependencies and avoiding deferred function-scoped module loading.
+
+**Competitor pulse (as of 2026-11-05 14:00 pass vs 2026-11-05 02:00 pass TRA-2901):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,164★ (+7), 1,624 forks (=)
+- oraios/serena: 31,113★ (+15), 2,126 forks (+1)
+- DeusData/codebase-memory-mcp: 48,148★ (+34), 3,964 forks (=)
+- tirth8205/code-review-graph: 32,601★ (+10), 2,965 forks (+1)
+- colbymchenry/codegraph: 76,690★ (+123), 5,096 forks (+6)
+- abhigyanpatwari/GitNexus: 48,281★ (+8), 5,230 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,834★ (+1), 371 forks (=)
+- continuedev/continue: 36,408★ (+5), 5,550 forks (-1)
+- Aider-AI/aider: 49,961★ (+15), 5,138 forks (+1)
+- Graphify-Labs/graphify: 142,658★ (+269), 13,638 forks (+23)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
