@@ -9527,3 +9527,45 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-06 22:00 pass (TRA-2938): clean mention sweep (0 new hits), competitor deep-dive on jcodemunch parse cache generation key invalidation (#1347), Graphify AST intermediate RAM release (#5063), Graphify Solidity using-for binding (#5062)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Shared parse cache generation key invalidation (PR #1347, open; LEDGER L-315)*: In jcodemunch, the optional cross-process parse cache (`JCODEMUNCH_PARSE_CACHE`) cached parsed symbols per file using a key containing only `INDEX_VERSION` and language reader generation, omitting `PARSER_GENERATION` and tree-sitter grammar binary version. When an upstream release updated AST extractors or bumped grammar packages, forced re-indexing on hosts with the cache enabled silently retrieved stale symbols from the cache and stamped the newly generated index version over outdated AST structures, preventing re-extraction permanently. PR #1347 incorporates `PARSER_GENERATION` and grammar versions directly into the cache key and introduces an invariant test mutating generation constants to enforce CI failure on missing key components. Contrast: trace-mcp tightly binds index snapshot metadata, AST cache keys, and disk caches to the cryptographic hash of the parser engine schema and grammar definitions. Any parser or schema change automatically invalidates outdated cache slices at load time without manual generation ratchets or risk of stale symbol persistence.
+- **Graphify-Labs/graphify**:
+  - *Peak RAM bloat from retained AST intermediates during graph extraction (PR #5063, open)*: During `graphify extract`, intermediate data structures—including an AST parse memo holding up to 2,048 full Tree-sitter ASTs with Python wrapper nodes, previous `graph.json` context objects, and unneeded edge lists—were retained in memory through downstream clustering, analysis, and serialization steps. On a ~3.1k file repository (Django), peak memory climbed to ~1,645 MB (~1 GB attributable to the AST memo alone). PR #5063 adds opt-in cleanup (`release_parse_memo=True` for CLI one-shot execution), rebinds intermediate AST dictionaries, and performs in-place JSON canonicalization to reduce peak RSS to ~1,509 MB (saving ~136 MB). Contrast: trace-mcp is engineered from the ground up for lightweight continuous daemon operation (sub-30MB idle RAM target). Rather than accumulating bulk AST objects and JSON graph models in Python memory, trace-mcp processes syntax trees via a streaming single-pass extractor that projects definitions and references immediately into compact index buffers and persistent SQLite stores, freeing Tree-sitter parse trees file-by-file.
+  - *Solidity library member resolution for `using A for T` (PR #5062, open; issue #5061)*: In Graphify's Solidity extractor, member calls on types extended via `using A for T` directives (pervasive in smart contract codebases such as OpenZeppelin) failed to bind to target library functions, emitting 0 `calls` edges for 180+ call sites in OpenZeppelin v5.4.0. PR #5062 maps `using` directives at contract, file, and global scopes, binding receiver calls to `A.f` with arity matching receiver + arguments when exact type signatures match. Contrast: trace-mcp supports comprehensive multi-language symbol resolution with full syntactic scope modeling, and tracks external receiver/trait/extension bindings across language boundaries without brittle ad-hoc arity heuristics.
+
+**Competitor pulse (as of 2026-11-06 22:00 pass vs 2026-11-06 18:00 pass TRA-2936):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,171★ (+1), 1,627 forks (+2)
+- oraios/serena: 31,148★ (+2), 2,129 forks (+1)
+- DeusData/codebase-memory-mcp: 48,222★ (+17), 3,977 forks (+1)
+- tirth8205/code-review-graph: 32,624★ (+1), 2,967 forks (+2)
+- colbymchenry/codegraph: 76,917★ (+25), 5,109 forks (+1)
+- abhigyanpatwari/GitNexus: 48,307★ (+4), 5,232 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (+1)
+- continuedev/continue: 36,422★ (+4), 5,555 forks (+1)
+- Aider-AI/aider: 49,982★ (+2), 5,142 forks (+1)
+- Graphify-Labs/graphify: 143,409★ (+102), 13,715 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
