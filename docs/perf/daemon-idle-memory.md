@@ -658,3 +658,25 @@ shared mappings differently. The gap between RSS and footprint means the
 No leak rate follows from this single snapshot. TRA-2061 continues to own
 the retained-memory investigation; future comparisons need the same loaded
 projects and a sustained quiet window.
+
+---
+
+## 2026-11-07 — recovery after repeated FSEvents drops
+
+Read-only review of the installed v3.42.10 daemon's JSON log (PID 11872).
+Between 2026-11-06 20:11:12 and 22:06:20 UTC, one registered project produced
+30 `File system events were dropped` warnings. The storm guard deferred full
+walks seven times and started five trailing walks after cooldown. After the
+last two drops at 22:06:19–22:06:20 UTC, the log recorded a 3,048-item index
+completion at 22:06:35 and another 3,048-item completion at 22:06:36. Those
+completions show the daemon made progress, but do not prove that every dropped
+event was reconciled or explain the two close completions.
+
+No stall-watchdog alert was recorded after 20:00 UTC in that interval. At
+approximately 22:09 UTC, `/health` returned `status: ok` from the same PID;
+ten sequential probes took 0.3–10.9 ms (median 0.5 ms). These probes were
+after the storm and therefore do not establish `/health` availability *during*
+the full walks. TRA-2603 owns the unresolved stall/reconcile attribution;
+TRA-1765 owns the main-thread health latency under a storm. The observed
+`Cannot read file` burst (42 `ENOENT` warnings in one second) belongs to the
+already tracked transient-tree case, TRA-2581.
