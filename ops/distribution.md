@@ -9442,3 +9442,46 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-06 14:00 pass (TRA-2934): clean mention sweep (0 new hits), competitor deep-dive on repomix regex comment stripper & TSX AST (#2005), serena Nix binding trailing semicolon (#2257), Graphify Windows pending queue path comparison (#5042)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **yamadashy/repomix**:
+  - *Regex comment stripper clobbering valid code and TSX grammar mismatch (PR #2005, open)*: Repomix's `--remove-comments` option previously relied on regex matching in `@repomix/strip-comments`. Any comment syntax inside regex literals, template literals, empty string literals (`''` regex requiring >=1 char), or JSX text threw off the scanner, resulting in valid code being cut as comments (e.g. `const a = ''; const b = 'https://example.com'` sliced to `const b = 'https:`). Furthermore, deleting comments between tokens joined them (`return/* x */a` -> `returna`), and passing `.tsx` to `tree-sitter-typescript` (which lacks JSX syntax) produced ERROR nodes leaking into compressed output. PR #2005 migrates JS/TS comment extraction to Tree-sitter AST nodes, routes `.tsx` to `tree-sitter-tsx.wasm`, and retains comments following parse errors. Contrast: trace-mcp never performs regex-based source manipulation or ad-hoc stripping hacks. Structural indexing runs through native C++ Tree-sitter bindings in isolated daemon workers with dedicated grammars per language and file extension, producing deterministic AST symbol graphs and exact byte ranges without corrupting valid source.
+- **oraios/serena**:
+  - *Binding semicolon deletion in Nix symbol body replacement (PR #2257, open)*: In Serena, `replace_symbol_body` for Nix stripped the trailing semicolon of bindings while returning `OK`. The symbol range was extended to include the semicolon, but `find_symbol` returned body text computed from the unextended range, causing 133 of 234 symbols in `default.nix` to drop trailing semicolons upon write-back. PR #2257 restricts semicolon ownership to explicit bindings identified by nixd selection ranges and rebuilds the body from the extended range. Contrast: trace-mcp's AST node spans are exact and immutable directly from Tree-sitter node bounds. In trace-mcp, refactoring tools (`apply_rename`, `apply_codemod`) compute exact byte-level AST edits with dry-run diff previews and syntactic verification, preventing silent truncation or syntax corruption in replaced language constructs.
+- **Graphify-Labs/graphify**:
+  - *Cross-platform path separator failure in queue assertions (PR #5042, open; issue #5039)*: Graphify's update lock contention tests (`test_i4_pending_full_and_pending_changes_keep_their_semantics`) asserted queue ordering by casting drained file paths to `str(p)` against POSIX string literals. On Windows, where `os.fspath` writes backslashes, the tests failed despite proper queue deduplication. PR #5042 converts comparisons to separator-agnostic `Path` objects. Contrast: trace-mcp normalizes all repository file paths to forward-slash canonical relative paths across macOS, Linux, and Windows at the daemon boundary, ensuring cross-platform cache consistency and eliminating OS-specific path comparison anomalies.
+
+**Competitor pulse (as of 2026-11-06 14:00 pass vs 2026-11-06 08:00 pass TRA-2931):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,168★ (+7), 1,625 forks (+1)
+- oraios/serena: 31,143★ (+6), 2,128 forks (=)
+- DeusData/codebase-memory-mcp: 48,198★ (+14), 3,974 forks (+3)
+- tirth8205/code-review-graph: 32,618★ (+6), 2,965 forks (=)
+- colbymchenry/codegraph: 76,872★ (+47), 5,104 forks (+1)
+- abhigyanpatwari/GitNexus: 48,296★ (+4), 5,231 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,835★ (=), 372 forks (=)
+- continuedev/continue: 36,416★ (+3), 5,554 forks (+1)
+- Aider-AI/aider: 49,979★ (+1), 5,140 forks (=)
+- Graphify-Labs/graphify: 143,206★ (+147), 13,692 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
