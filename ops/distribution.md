@@ -9399,3 +9399,46 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-06 08:00 pass (TRA-2931): clean mention sweep (0 new hits), competitor deep-dive on jcodemunch index cap clobber on single-file reindex (#1341), Graphify prompt contract mismatch in chunk extraction (#5040), codegraph impact traversal query regression (#3249)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Index cap status clobber on incremental single-file reindex (PR #1341, open)*: In v1.108.419, jcodemunch added reporting for truncated index states to signal when searches run over partial repositories. However, PR #1341 uncovered that executing `index_folder(paths=[...])` on an edited file overwrote the global index state with the call's local un-capped status, falsely marking the partial index as complete and hiding missing symbols from subsequent queries. The fix introduces `_cap_status_to_save` so that partial flags persist until a full, unconstrained tree walk completes. Contrast: trace-mcp does not truncate repository indexing under arbitrary file count caps. Codebases are indexed deterministically into SQLite with file content hash tracking, and incremental file reindexing updates symbol records atomically without corrupting repository-wide indexing state.
+- **Graphify-Labs/graphify**:
+  - *Prompt contract mismatch in semantic chunk extraction (PR #5040, open)*: Extraction subagents (`claw`, `kiro`, `pi`) were configured with a compact prompt that omitted the `CHUNK_PATH` destination contract. Because the subagents followed instructions literally, they emitted extracted JSON directly inline into LLM context instead of saving `.graphify_chunk_NN.json` to disk, triggering file-not-found errors during collation and burning context tokens. PR #5040 introduces `extraction-spec-compact-disk.md` with explicit file write instructions. Contrast: trace-mcp runs native C++ Tree-sitter parsers directly in local daemon workers rather than delegating basic AST extraction to prompted LLM subagent loops that can drop files or bloat context with JSON dumps.
+- **colbymchenry/codegraph**:
+  - *SQLite query plan regression on impact traversal (PR #3249, open; issue #3248)*: In PR #3125, codegraph altered its recursive impact traversal query to `kind IN (...) LIMIT ?`. This degraded SQLite index utilization, slowing down traversal 2-3x as the query ran per visited node across deep dependency subgraphs. PR #3249 reverts to a single index lookup `SELECT * FROM edges WHERE target = ? AND kind != 'contains'` without `LIMIT`, applying edge truncation limits in memory after fetching. Contrast: trace-mcp indexes symbol caller/callee relations on `(target_id, kind)` with verified query plans, preserving predictable latency on deep relational lookups.
+
+**Competitor pulse (as of 2026-11-06 08:00 pass vs 2026-11-06 02:00 pass TRA-2922):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,161★ (+1), 1,624 forks (+1)
+- oraios/serena: 31,137★ (+10), 2,128 forks (+2)
+- DeusData/codebase-memory-mcp: 48,184★ (+14), 3,971 forks (+1)
+- tirth8205/code-review-graph: 32,612★ (+4), 2,965 forks (=)
+- colbymchenry/codegraph: 76,825★ (+48), 5,103 forks (+3)
+- abhigyanpatwari/GitNexus: 48,292★ (+1), 5,232 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,835★ (+1), 372 forks (+1)
+- continuedev/continue: 36,413★ (+1), 5,553 forks (+1)
+- Aider-AI/aider: 49,978★ (+6), 5,140 forks (+1)
+- Graphify-Labs/graphify: 143,059★ (+129), 13,682 forks (+13)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
