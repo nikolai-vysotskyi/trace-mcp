@@ -240,6 +240,70 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
       }
     });
 
+    it('fails closed when DELETE /api/projects reports watcherUnsubscribed is false', async () => {
+      const server = http.createServer((req, res) => {
+        if (req.method === 'DELETE') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'removed', watcherUnsubscribed: false }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      try {
+        await expect(
+          teardownTestProject(mockUrl, '/tmp/sample-project', { timeoutMs: 500 }),
+        ).rejects.toThrow(
+          /Watcher teardown barrier failed: watcher unsubscribe did not settle cleanly/,
+        );
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    });
+
+    it('fails closed when dataDir is provided but registry.json does not exist', async () => {
+      const server = http.createServer((req, res) => {
+        if (req.method === 'DELETE') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'removed', watcherUnsubscribed: true }));
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/api/projects') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ projects: [] }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'missing-reg-'));
+
+      try {
+        await expect(
+          teardownTestProject(mockUrl, '/tmp/sample-project', {
+            dataDir: tmpDir,
+            expectRegistryFile: true,
+            timeoutMs: 500,
+          }),
+        ).rejects.toThrow(
+          /Expected registry\.json at .* does not exist or was unexpectedly removed/,
+        );
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
     it('fails closed when registry.json projects field is not an object', async () => {
       const server = http.createServer((req, res) => {
         if (req.method === 'DELETE') {
@@ -341,6 +405,38 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
         const regRaw = fs.readFileSync(regPath, 'utf-8');
         expect(regRaw).not.toContain(fixtureDir);
         expect(regRaw).not.toContain(canonical);
+      }
+    });
+
+    it('enforces child daemon process exit barrier during teardown before fixture removal', async () => {
+      const port = await getFreePort();
+      const localDaemon = await spawnTestDaemon({ port });
+      const localFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-barrier-fixture-'));
+      fs.mkdirSync(path.join(localFixture, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(localFixture, 'src', 'index.ts'), 'export const barrier = 1;\n');
+
+      try {
+        await localDaemon.registerProject(localFixture);
+
+        // Teardown with stopDaemon: true awaits child process exit before resolving
+        await localDaemon.teardownProject(localFixture, { stopDaemon: true });
+
+        // Verify the child process is genuinely terminated
+        expect(localDaemon.child.exitCode !== null || localDaemon.child.signalCode !== null).toBe(
+          true,
+        );
+
+        // Now safe to delete fixture files without risking watcher ENOENT storms
+        expect(() => {
+          fs.rmSync(localFixture, { recursive: true, force: true });
+        }).not.toThrow();
+      } finally {
+        await localDaemon.stop();
+        try {
+          fs.rmSync(localFixture, { recursive: true, force: true });
+        } catch {
+          /* best effort */
+        }
       }
     });
   });

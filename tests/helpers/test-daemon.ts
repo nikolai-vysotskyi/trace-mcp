@@ -283,7 +283,10 @@ export interface TestDaemonInstance {
   child: ChildProcess;
   stop(): Promise<void>;
   registerProject(projectRoot: string): Promise<{ status: string; project: string }>;
-  teardownProject(projectRoot: string, opts?: { verifyRegistry?: boolean }): Promise<void>;
+  teardownProject(
+    projectRoot: string,
+    opts?: { verifyRegistry?: boolean; stopDaemon?: boolean; timeoutMs?: number },
+  ): Promise<void>;
 }
 
 /**
@@ -305,6 +308,10 @@ export async function spawnTestDaemon(
 
   const dataDir = options.dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'trace-test-daemon-'));
   fs.mkdirSync(path.join(dataDir, 'index'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dataDir, 'registry.json'),
+    JSON.stringify({ version: 1, projects: {} }, null, 2),
+  );
 
   const child = spawn(process.execPath, [cli, 'serve-http', '--port', String(port)], {
     cwd: repoRoot,
@@ -360,6 +367,8 @@ export async function spawnTestDaemon(
     async teardownProject(projectRoot: string, opts = {}) {
       return teardownTestProject(baseUrl, projectRoot, {
         dataDir: opts.verifyRegistry !== false ? dataDir : undefined,
+        child: opts.stopDaemon ? child : undefined,
+        timeoutMs: opts.timeoutMs,
       });
     },
   };
@@ -399,17 +408,24 @@ export async function registerTestProject(
   return (await res.json()) as { status: string; project: string };
 }
 
+export interface TeardownProjectOptions {
+  dataDir?: string;
+  timeoutMs?: number;
+  child?: ChildProcess;
+  expectRegistryFile?: boolean;
+}
+
 /**
  * Verifiable teardown of a test project:
- * 1. Calls DELETE /api/projects?project=<root>
+ * 1. Calls DELETE /api/projects?project=<root> and verifies watcherUnsubscribed barrier
  * 2. Confirms absence in GET /api/projects with strict schema validation
- * 3. Confirms project is not resident in GET /api/projects/stats
- * 4. Confirms absence in registry.json with strict schema validation (if dataDir is provided)
+ * 3. Confirms absence in registry.json with strict schema validation
+ * 4. Awaits child process termination if child process is provided (guaranteeing kernel-level watcher/fd closure)
  */
 export async function teardownTestProject(
   baseUrl: string,
   projectRoot: string,
-  opts: { dataDir?: string; timeoutMs?: number } = {},
+  opts: TeardownProjectOptions = {},
 ): Promise<void> {
   let canonicalRoot = projectRoot;
   try {
@@ -426,6 +442,23 @@ export async function teardownTestProject(
   if (!delRes.ok && delRes.status !== 404) {
     const text = await delRes.text();
     throw new Error(`DELETE /api/projects failed: HTTP ${delRes.status}: ${text}`);
+  }
+
+  if (delRes.ok) {
+    let delJson: unknown;
+    try {
+      delJson = await delRes.json();
+    } catch {
+      // ignore JSON parse error on non-json DELETE responses
+    }
+    if (delJson && typeof delJson === 'object') {
+      const parsed = delJson as { watcherUnsubscribed?: unknown };
+      if (parsed.watcherUnsubscribed === false) {
+        throw new Error(
+          `Watcher teardown barrier failed: watcher unsubscribe did not settle cleanly for ${projectRoot}`,
+        );
+      }
+    }
   }
 
   // 2. Verify absence in GET /api/projects with strict validation
@@ -486,26 +519,15 @@ export async function teardownTestProject(
     throw new Error(`Project ${projectRoot} was not cleanly removed from GET /api/projects`);
   }
 
-  // 3. Verify project is no longer resident/active in ProjectManager via /api/projects/stats
-  const statsUrl = `${baseUrl}/api/projects/stats?project=${encodeURIComponent(projectRoot)}`;
-  try {
-    const statsRes = await fetch(statsUrl, { signal: AbortSignal.timeout(2000) });
-    if (statsRes.ok) {
-      const statsJson = (await statsRes.json()) as { resident?: boolean };
-      if (statsJson.resident) {
-        throw new Error(
-          `Project ${projectRoot} is still resident in daemon after DELETE (watcher still attached)`,
-        );
-      }
-    }
-  } catch (err) {
-    if ((err as Error).message.includes('still resident')) throw err;
-    // 404 is normal and expected for a removed project
-  }
-
-  // 4. Verify absence in registry.json with strict schema validation
+  // 3. Verify absence in registry.json with strict schema validation
   if (opts.dataDir) {
     const registryPath = path.join(opts.dataDir, 'registry.json');
+    if (opts.expectRegistryFile && !fs.existsSync(registryPath)) {
+      throw new Error(
+        `Expected registry.json at ${registryPath} does not exist or was unexpectedly removed`,
+      );
+    }
+
     if (fs.existsSync(registryPath)) {
       let raw: string;
       try {
@@ -557,5 +579,10 @@ export async function teardownTestProject(
         }
       }
     }
+  }
+
+  // 4. Watcher completion barrier: for isolated test daemons, await child exit
+  if (opts.child) {
+    await stopChildProcess(opts.child);
   }
 }

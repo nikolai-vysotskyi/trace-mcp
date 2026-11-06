@@ -60,6 +60,8 @@ export interface RemoveArtifactsResult {
    * for the same tier means "the driver wouldn't load", not "nothing here".
    */
   failures: ArtifactFailure[];
+  /** Whether the file watcher unsubscribe completed cleanly within budget (TRA-2946). */
+  watcherUnsubscribed?: boolean;
 }
 
 /** Options for {@link removeProjectArtifacts}. */

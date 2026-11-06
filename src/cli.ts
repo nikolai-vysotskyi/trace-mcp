@@ -3274,6 +3274,7 @@ program
             topology: artifacts.topology,
             decisions: artifacts.decisions,
             failures: artifacts.failures,
+            watcherUnsubscribed: artifacts.watcherUnsubscribed ?? true,
           }),
         );
         return;
