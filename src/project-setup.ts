@@ -17,10 +17,10 @@ import { detectProject } from './init/detector.js';
 import { logger } from './logger.js';
 import type { NewRootOverlap, RegistryEntry } from './registry.js';
 import { findOverlapForNewRoot, getProject, registerProject } from './registry.js';
-import { isDangerousProjectRoot } from './dangerous-root.js';
+import { isDangerousProjectRoot, isTestContext, isTestFixturePath } from './dangerous-root.js';
 
 // Re-exported so the many existing `from './project-setup.js'` importers keep working.
-export { isDangerousProjectRoot };
+export { isDangerousProjectRoot, isTestContext, isTestFixturePath };
 
 export interface ProjectSetupResult {
   entry: RegistryEntry;

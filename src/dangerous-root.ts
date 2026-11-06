@@ -70,6 +70,16 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
   // Indexing internal state creates recursive watcher churn and corruption risk.
   if (isTraceStateDirectory(absRoot)) return 'trace state directory';
 
+  // Reject test fixture paths on a live daemon (TRA-2946).
+  // Ad-hoc QA and test scripts targeting temporary fixture paths like /tmp/trace-mcp-tra2941-isolated
+  // must never be indexed by a live daemon. Doing so starts file watchers on temporary trees,
+  // causing event-loop stalls, memory pressure, and thousands of ENOENT errors when the temporary
+  // fixture is unlinked. Test fixtures are only permitted when running in an isolated test daemon
+  // (TRACE_MCP_MANAGED_BY === 'test') or under an active test runner.
+  if (!isTestContext() && isTestFixturePath(absRoot)) {
+    return 'test fixture path on live daemon';
+  }
+
   // Windows system directories. Matched on the path *below* the drive root so
   // the rule is drive-letter-agnostic (a user may be on D:), case-insensitive,
   // and separator-agnostic. Keyed off the shape of the string rather than
@@ -214,3 +224,45 @@ const WINDOWS_SYSTEM_DIRS = new Set([
   'program files (x86)',
   'programdata',
 ]);
+
+/**
+ * Detect test fixture paths commonly generated during automated and manual QA.
+ * These directories must never be indexed by a live daemon (TRA-2946).
+ */
+export function isTestFixturePath(absRoot: string): boolean {
+  const norm = path.resolve(absRoot);
+  const base = path.basename(norm);
+
+  // Match fixture naming conventions commonly used in trace-mcp tests & QA
+  if (/^trace-mcp-tra\d+/i.test(base)) return true;
+  if (/^trace-(?:mcp-)?test-/i.test(base)) return true;
+  if (/^trace-(?:packaged|restart)-/i.test(base)) return true;
+  if (/^tmcp-packaged-/i.test(base)) return true;
+  if (/^truncation-boundary-/i.test(base)) return true;
+  if (base.endsWith('-isolated') && base.includes('trace')) return true;
+
+  // Paths within OS temp directories containing trace test/fixture patterns
+  const tmp = os.tmpdir();
+  const isUnderTmp =
+    norm.startsWith('/tmp/') ||
+    norm.startsWith('/private/tmp/') ||
+    (tmp && norm.startsWith(path.resolve(tmp)));
+
+  if (isUnderTmp) {
+    if (/(?:^|[\\/])trace-mcp-[a-z0-9_-]+(?:isolated|fixture|test)/i.test(norm)) return true;
+  }
+  return false;
+}
+
+/**
+ * Returns true if the current process is running in a designated test/QA context
+ * where indexing local test fixtures is expected and isolated.
+ */
+export function isTestContext(): boolean {
+  return (
+    process.env.TRACE_MCP_MANAGED_BY === 'test' ||
+    Boolean(process.env.VITEST) ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.TRACE_MCP_ALLOW_TEST_ROOTS === '1'
+  );
+}
