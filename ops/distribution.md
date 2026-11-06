@@ -9569,3 +9569,45 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-07 02:00 pass (TRA-2943): clean mention sweep (0 new hits), competitor deep-dive on jcodemunch ratio-based CI cold index floor (#1349), Graphify protobuf SCIP index ingest (#5070), Graphify git co-change mining (#5068)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **jgravelle/jcodemunch-mcp**:
+  - *Ratio-based CI cold index floor (PR #1349, open; LEDGER L-314)*: In jcodemunch, the cold-index CI timing gate `index.cold_self_seconds` fluctuated from 2.9s to 5.3s across 22 runs on GitHub Actions runners, failing the 5.2s ceiling on commits with no regressions and blocking release pre-flights. PR #1349 replaces the absolute wall-clock gate with a dimensionless ratio `index.cold_over_one_file_ratio` (<= 59), dividing cold index time by single-file reindexing time from the same job (`cold_ms / one_file_reindex_ms`), while keeping a loosened 10.4s backstop. Contrast: trace-mcp isolates hardware variance from regression suites by measuring deterministic counter invariants (AST visitor node traversals, SQLite page reads, memory allocations) alongside latency percentiles, preventing runner throttle jitter from gating releases.
+- **Graphify-Labs/graphify**:
+  - *Protobuf SCIP index ingestion (PR #5070, open)*: Graphify previously only parsed simplified JSON models of SCIP. Real indexers (scip-python, scip-typescript, rust-analyzer) produce binary protobuf `.scip` files containing packed/typed ranges, document-anchored occurrences, and proto3 zero-omitted fields. PR #5070 implements a zero-dependency wire-format protobuf decoder (`graphify/scip_index.py`) that reads raw `.scip` files into their graph representation without requiring protoc or grpc. Contrast: trace-mcp extracts native AST symbol tables and dependency graphs directly on-the-fly with incremental caching, avoiding dependencies on multi-gigabyte external LSIF/SCIP dump workflows.
+  - *Git co-change mining in affected analysis (PR #5068, open; closes #5066)*: Graphify adds `graphify/git_cochange.py` to `graphify affected`, mining the last 3 years or 10,000 commits via `git log --name-status` to identify non-code files (docs, configs, tests) that change together with a queried file above support/confidence thresholds. Contrast: trace-mcp maintains a strict sub-30MB idle daemon memory target by relying on precise syntactic reference maps, leaving version control mining to specialized git tools rather than bloating the continuous language server process.
+
+**Competitor pulse (as of 2026-11-07 02:00 pass vs 2026-11-06 22:00 pass TRA-2938):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,173★ (+2), 1,626 forks (-1)
+- oraios/serena: 31,160★ (+12), 2,129 forks (=)
+- DeusData/codebase-memory-mcp: 48,234★ (+12), 3,977 forks (=)
+- tirth8205/code-review-graph: 32,627★ (+3), 2,967 forks (=)
+- colbymchenry/codegraph: 76,928★ (+11), 5,109 forks (=)
+- abhigyanpatwari/GitNexus: 48,307★ (=), 5,230 forks (-2)
+- jgravelle/jcodemunch-mcp: 2,835★ (-1), 373 forks (=)
+- continuedev/continue: 36,424★ (+2), 5,555 forks (=)
+- Aider-AI/aider: 49,987★ (+5), 5,141 forks (-1)
+- Graphify-Labs/graphify: 143,518★ (+109), 13,726 forks (+11)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
