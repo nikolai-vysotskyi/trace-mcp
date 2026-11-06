@@ -86,8 +86,10 @@ export class ActivityStore {
   private buffer: ActivityEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private lastPruneAt = 0;
-  /** Last time a batch actually landed on disk. Enables the stall watchdog. */
+  /** Last time a batch actually landed on disk. */
   private lastWriteAt = Date.now();
+  /** Timestamp when the current unwritten batch started accumulating in buffer. */
+  private firstBufferedAt: number | null = null;
   /** One log line per failure kind — a full disk would otherwise write a line per batch. */
   private warned = { flush: false, prune: false, stall: false };
   private readonly insertStmt: Database.Statement;
@@ -129,6 +131,9 @@ export class ActivityStore {
    * this runs on the same thread that answers /health.
    */
   record(entry: ActivityEntry): void {
+    if (this.buffer.length === 0) {
+      this.firstBufferedAt = Date.now();
+    }
     this.buffer.push(entry);
     if (this.buffer.length >= FLUSH_AT) {
       this.flush();
@@ -146,6 +151,7 @@ export class ActivityStore {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
+    this.firstBufferedAt = null;
     if (this.buffer.length === 0) return;
     const batch = this.buffer;
     this.buffer = [];
@@ -196,14 +202,15 @@ export class ActivityStore {
     const intervalMs = opts?.intervalMs ?? 60_000;
     const maxStuckMs = opts?.maxStuckMs ?? 5 * 60_000;
     const timer = setInterval(() => {
-      if (this.buffer.length === 0) {
+      if (this.buffer.length === 0 || this.firstBufferedAt === null) {
         this.warned.stall = false;
         return;
       }
-      if (Date.now() - this.lastWriteAt > maxStuckMs && !this.warned.stall) {
+      const stuckMs = Date.now() - this.firstBufferedAt;
+      if (stuckMs > maxStuckMs && !this.warned.stall) {
         this.warned.stall = true;
         logger.warn(
-          { buffered: this.buffer.length, stuckMs: Date.now() - this.lastWriteAt },
+          { buffered: this.buffer.length, stuckMs },
           'activity journal entries buffered but not reaching disk — Activity history is stalling',
         );
       }

@@ -123,6 +123,27 @@ describe('ActivityStore', () => {
       store.close();
     }
   });
+
+  it('does not warn on first entry after prolonged idle (TRA-2618)', async () => {
+    vi.useFakeTimers();
+    const store = new ActivityStore(tmpDb());
+    try {
+      const stop = store.startWatchdog({ intervalMs: 20, maxStuckMs: 50 });
+      try {
+        // Idle for 200ms (> 50ms maxStuckMs)
+        await vi.advanceTimersByTimeAsync(200);
+        // Record an entry
+        store.record(entry());
+        // Advance 25ms: watchdog ticks at 20ms, but entry has only been in buffer for 25ms < 50ms
+        await vi.advanceTimersByTimeAsync(25);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        stop();
+      }
+    } finally {
+      store.close();
+    }
+  });
 });
 
 describe('summarizeToolParams', () => {
