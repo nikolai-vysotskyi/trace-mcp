@@ -226,11 +226,65 @@ const WINDOWS_SYSTEM_DIRS = new Set([
 ]);
 
 /**
+ * Check if a path is located inside an OS or environment temporary directory.
+ * Boundary-checked so that permanent repositories outside temporary storage
+ * are never classified as temporary fixtures (TRA-2946).
+ */
+export function isUnderTempDirectory(absPath: string): boolean {
+  const norm = path.resolve(absPath);
+  const tempCandidates = new Set<string>();
+
+  tempCandidates.add('/tmp');
+  tempCandidates.add('/private/tmp');
+  tempCandidates.add('/var/tmp');
+  tempCandidates.add('/private/var/tmp');
+
+  const osTmp = os.tmpdir();
+  if (osTmp) {
+    tempCandidates.add(path.resolve(osTmp));
+  }
+
+  for (const envVar of [process.env.TMPDIR, process.env.TEMP, process.env.TMP]) {
+    if (envVar && envVar.length > 0) {
+      tempCandidates.add(path.resolve(envVar));
+    }
+  }
+
+  for (const candidate of tempCandidates) {
+    if (isInsideOrEqual(norm, candidate)) {
+      return true;
+    }
+  }
+
+  // macOS /var/folders per-user temp directories check
+  if (/^(\/private)?\/var\/folders\//.test(norm)) {
+    return true;
+  }
+
+  // Windows temp directories check (e.g. C:\Windows\Temp or \AppData\Local\Temp)
+  if (process.platform === 'win32' || /^[a-zA-Z]:[\\/]/.test(norm)) {
+    if (/[\\/]temp(\\|$)/i.test(norm) || /[\\/]AppData[\\/]Local[\\/]Temp(\\|$)/i.test(norm)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Detect test fixture paths commonly generated during automated and manual QA.
  * These directories must never be indexed by a live daemon (TRA-2946).
+ * Restricted to paths physically located in temporary storage.
  */
 export function isTestFixturePath(absRoot: string): boolean {
   const norm = path.resolve(absRoot);
+
+  // Must be located in a genuine temporary directory.
+  // Permanent user workspaces (e.g. /Users/alice/trace-test-app) are NEVER rejected.
+  if (!isUnderTempDirectory(norm)) {
+    return false;
+  }
+
   const base = path.basename(norm);
 
   // Match fixture naming conventions commonly used in trace-mcp tests & QA
@@ -241,16 +295,8 @@ export function isTestFixturePath(absRoot: string): boolean {
   if (/^truncation-boundary-/i.test(base)) return true;
   if (base.endsWith('-isolated') && base.includes('trace')) return true;
 
-  // Paths within OS temp directories containing trace test/fixture patterns
-  const tmp = os.tmpdir();
-  const isUnderTmp =
-    norm.startsWith('/tmp/') ||
-    norm.startsWith('/private/tmp/') ||
-    (tmp && norm.startsWith(path.resolve(tmp)));
+  if (/(?:^|[\\/])trace-mcp-[a-z0-9_-]+(?:isolated|fixture|test)/i.test(norm)) return true;
 
-  if (isUnderTmp) {
-    if (/(?:^|[\\/])trace-mcp-[a-z0-9_-]+(?:isolated|fixture|test)/i.test(norm)) return true;
-  }
   return false;
 }
 

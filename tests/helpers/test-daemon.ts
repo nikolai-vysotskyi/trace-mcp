@@ -55,19 +55,19 @@ export function getLiveDaemonPid(): number | null {
 }
 
 /**
- * Assert that the target daemon is NOT the live developer daemon.
- * Rejects port 3741 or any daemon reporting a PID matching the live daemon PID.
+ * Query /health from target daemon and strictly validate PID against both live PID and expected PID.
+ * Fails closed on connection error, timeout, malformed response, or PID mismatch.
  */
-export async function assertNotLiveDaemon(target: {
-  port?: number;
-  baseUrl?: string;
-  pid?: number;
+export async function verifyDaemonTarget(target: {
+  baseUrl: string;
+  expectedPid?: number;
   livePid?: number | null;
-}): Promise<void> {
-  const urlStr = target.baseUrl ?? (target.port ? `http://127.0.0.1:${target.port}` : null);
-  const parsedPort = urlStr ? parseInt(new URL(urlStr).port || '80', 10) : target.port;
+  timeoutMs?: number;
+}): Promise<number> {
+  const url = new URL(target.baseUrl);
+  const port = parseInt(url.port || '80', 10);
 
-  if (parsedPort === 3741) {
+  if (port === 3741) {
     throw new Error(
       `[TEST ISOLATION GUARD] Target port 3741 is the live daemon port. ` +
         `Test fixtures must run against an isolated test daemon on a dedicated port (TRA-2946).`,
@@ -76,26 +76,113 @@ export async function assertNotLiveDaemon(target: {
 
   const livePid = target.livePid !== undefined ? target.livePid : getLiveDaemonPid();
 
-  let reportedPid = target.pid;
-  if (!reportedPid && urlStr) {
-    try {
-      const res = await fetch(`${urlStr}/health`, {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { pid?: number };
-        reportedPid = data.pid;
-      }
-    } catch {
-      /* connection or health check failed */
-    }
+  let res: Response;
+  try {
+    res = await fetch(`${target.baseUrl}/health`, {
+      signal: AbortSignal.timeout(target.timeoutMs ?? 2000),
+    });
+  } catch (err) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Failed to probe ${target.baseUrl}/health: ${String(err)}. ` +
+        `Target daemon must be running and responsive before registration.`,
+    );
   }
 
-  if (livePid && reportedPid && livePid === reportedPid) {
+  if (!res.ok) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Target daemon at ${target.baseUrl}/health returned HTTP ${res.status}. Expected HTTP 200.`,
+    );
+  }
+
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Malformed JSON response from ${target.baseUrl}/health. Fail closed.`,
+    );
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Non-object response from ${target.baseUrl}/health. Fail closed.`,
+    );
+  }
+
+  const reportedPid = (data as { pid?: unknown }).pid;
+  if (typeof reportedPid !== 'number' || !Number.isInteger(reportedPid) || reportedPid <= 0) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Target daemon at ${target.baseUrl}/health reported invalid or missing PID: ${String(reportedPid)}. Fail closed.`,
+    );
+  }
+
+  // Check collision with live daemon PID
+  if (livePid && reportedPid === livePid) {
     throw new Error(
       `[TEST ISOLATION GUARD] Target daemon PID ${reportedPid} matches the live daemon PID (${livePid}). ` +
         `Registration rejected: test fixtures must NEVER be registered in the live daemon (TRA-2946).`,
     );
+  }
+
+  // Check expected child PID match
+  if (target.expectedPid && reportedPid !== target.expectedPid) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Target daemon at ${target.baseUrl} reported PID ${reportedPid}, ` +
+        `which does not match expected child PID ${target.expectedPid}. Aborting registration to prevent targeting the wrong process (TRA-2946).`,
+    );
+  }
+
+  return reportedPid;
+}
+
+/**
+ * Assert that the target daemon is NOT the live developer daemon.
+ * Rejects port 3741 or any daemon reporting a PID matching the live daemon PID.
+ */
+export async function assertNotLiveDaemon(target: {
+  port?: number;
+  baseUrl?: string;
+  pid?: number;
+  expectedPid?: number;
+  livePid?: number | null;
+  timeoutMs?: number;
+}): Promise<void> {
+  const urlStr = target.baseUrl ?? null;
+  const port = target.port ?? (urlStr ? parseInt(new URL(urlStr).port || '80', 10) : undefined);
+
+  if (port === 3741) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Target port 3741 is the live daemon port. ` +
+        `Test fixtures must run against an isolated test daemon on a dedicated port (TRA-2946).`,
+    );
+  }
+
+  const livePid = target.livePid !== undefined ? target.livePid : getLiveDaemonPid();
+
+  // If testing offline PID matching directly
+  if (target.pid) {
+    if (livePid && target.pid === livePid) {
+      throw new Error(
+        `[TEST ISOLATION GUARD] Target daemon PID ${target.pid} matches the live daemon PID (${livePid}). ` +
+          `Registration rejected: test fixtures must NEVER be registered in the live daemon (TRA-2946).`,
+      );
+    }
+    if (target.expectedPid && target.pid !== target.expectedPid) {
+      throw new Error(
+        `[TEST ISOLATION GUARD] Target daemon reported PID ${target.pid}, ` +
+          `which does not match expected child PID ${target.expectedPid}. Aborting registration (TRA-2946).`,
+      );
+    }
+  }
+
+  // If a live URL is provided, probe and verify it directly
+  if (urlStr) {
+    await verifyDaemonTarget({
+      baseUrl: urlStr,
+      expectedPid: target.expectedPid,
+      livePid,
+      timeoutMs: target.timeoutMs,
+    });
   }
 }
 
@@ -126,12 +213,13 @@ export function getFreePort(): Promise<number> {
 }
 
 /**
- * Wait for a daemon's /health endpoint to respond HTTP 200.
+ * Wait for a daemon's /health endpoint to respond HTTP 200 with matching expected PID.
  */
 export async function waitForDaemonHealth(
   baseUrl: string,
-  timeoutMs = 15_000,
+  options: { expectedPid?: number; timeoutMs?: number } = {},
 ): Promise<{ pid?: number; status?: string }> {
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -139,14 +227,22 @@ export async function waitForDaemonHealth(
         signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {
-        return (await res.json()) as { pid?: number; status?: string };
+        const data = (await res.json()) as { pid?: number; status?: string };
+        if (
+          typeof data.pid === 'number' &&
+          (!options.expectedPid || data.pid === options.expectedPid)
+        ) {
+          return data;
+        }
       }
     } catch {
       /* retry */
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw new Error(`Daemon at ${baseUrl} did not become ready within ${timeoutMs}ms`);
+  throw new Error(
+    `Daemon at ${baseUrl} did not become ready with expected PID within ${timeoutMs}ms`,
+  );
 }
 
 /**
@@ -235,7 +331,10 @@ export async function spawnTestDaemon(
   }
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForDaemonHealth(baseUrl, options.timeoutMs ?? 15_000);
+  await waitForDaemonHealth(baseUrl, {
+    expectedPid: childPid,
+    timeoutMs: options.timeoutMs ?? 15_000,
+  });
 
   const instance: TestDaemonInstance = {
     port,
@@ -270,16 +369,17 @@ export async function spawnTestDaemon(
 
 /**
  * Register a test project against a test daemon, enforcing PID and port isolation guards.
+ * Always probes /health immediately prior to registration and compares PID.
  */
 export async function registerTestProject(
   baseUrl: string,
   projectRoot: string,
   opts?: { port?: number; expectedPid?: number; livePid?: number | null },
 ): Promise<{ status: string; project: string }> {
-  await assertNotLiveDaemon({
+  // Always probe /health immediately before POST; verifies PID against livePid and expectedPid
+  await verifyDaemonTarget({
     baseUrl,
-    port: opts?.port,
-    pid: opts?.expectedPid,
+    expectedPid: opts?.expectedPid,
     livePid: opts?.livePid,
   });
 
@@ -302,9 +402,9 @@ export async function registerTestProject(
 /**
  * Verifiable teardown of a test project:
  * 1. Calls DELETE /api/projects?project=<root>
- * 2. Confirms absence in GET /api/projects
- * 3. Confirms absence in registry.json (if dataDir is provided)
- * 4. Ensures watcher teardown has completed before the caller removes files from disk.
+ * 2. Confirms absence in GET /api/projects with strict schema validation
+ * 3. Confirms project is not resident in GET /api/projects/stats
+ * 4. Confirms absence in registry.json with strict schema validation (if dataDir is provided)
  */
 export async function teardownTestProject(
   baseUrl: string,
@@ -328,53 +428,134 @@ export async function teardownTestProject(
     throw new Error(`DELETE /api/projects failed: HTTP ${delRes.status}: ${text}`);
   }
 
-  // 2. Verify absence in GET /api/projects
+  // 2. Verify absence in GET /api/projects with strict validation
   const timeoutMs = opts.timeoutMs ?? 5000;
   const deadline = Date.now() + timeoutMs;
   let absentInApi = false;
+  let lastError: Error | null = null;
+
   while (Date.now() < deadline) {
     try {
-      const getRes = await fetch(`${baseUrl}/api/projects`);
-      if (getRes.ok) {
-        const json = (await getRes.json()) as { projects?: Array<{ root: string }> };
-        const found = json.projects?.some(
-          (p) => p.root === projectRoot || p.root === canonicalRoot,
-        );
-        if (!found) {
-          absentInApi = true;
-          break;
-        }
+      const getRes = await fetch(`${baseUrl}/api/projects`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!getRes.ok) {
+        throw new Error(`GET /api/projects failed with HTTP ${getRes.status}`);
       }
-    } catch {
-      /* ignore */
+      let rawJson: unknown;
+      try {
+        rawJson = await getRes.json();
+      } catch (err) {
+        throw new Error(`GET /api/projects returned invalid JSON: ${String(err)}`);
+      }
+
+      if (!rawJson || typeof rawJson !== 'object') {
+        throw new Error(`GET /api/projects response is not an object`);
+      }
+
+      const projects = (rawJson as { projects?: unknown }).projects;
+      if (!Array.isArray(projects)) {
+        throw new Error(`Malformed /api/projects response: 'projects' field is not an array`);
+      }
+
+      const found = projects.some((p: unknown) => {
+        if (!p || typeof p !== 'object') return false;
+        const r = (p as { root?: unknown }).root;
+        return r === projectRoot || r === canonicalRoot;
+      });
+
+      if (!found) {
+        absentInApi = true;
+        break;
+      }
+    } catch (err) {
+      lastError = err as Error;
+      if (
+        lastError.message.includes('not an array') ||
+        lastError.message.includes('invalid JSON') ||
+        lastError.message.includes('not an object')
+      ) {
+        throw lastError;
+      }
     }
     await new Promise((r) => setTimeout(r, 100));
   }
 
   if (!absentInApi) {
+    if (lastError) throw lastError;
     throw new Error(`Project ${projectRoot} was not cleanly removed from GET /api/projects`);
   }
 
-  // 3. Verify absence in registry.json
+  // 3. Verify project is no longer resident/active in ProjectManager via /api/projects/stats
+  const statsUrl = `${baseUrl}/api/projects/stats?project=${encodeURIComponent(projectRoot)}`;
+  try {
+    const statsRes = await fetch(statsUrl, { signal: AbortSignal.timeout(2000) });
+    if (statsRes.ok) {
+      const statsJson = (await statsRes.json()) as { resident?: boolean };
+      if (statsJson.resident) {
+        throw new Error(
+          `Project ${projectRoot} is still resident in daemon after DELETE (watcher still attached)`,
+        );
+      }
+    }
+  } catch (err) {
+    if ((err as Error).message.includes('still resident')) throw err;
+    // 404 is normal and expected for a removed project
+  }
+
+  // 4. Verify absence in registry.json with strict schema validation
   if (opts.dataDir) {
     const registryPath = path.join(opts.dataDir, 'registry.json');
     if (fs.existsSync(registryPath)) {
+      let raw: string;
       try {
-        const raw = fs.readFileSync(registryPath, 'utf-8');
-        const reg = JSON.parse(raw) as { projects?: Record<string, unknown> };
-        if (reg.projects && (reg.projects[projectRoot] || reg.projects[canonicalRoot])) {
+        raw = fs.readFileSync(registryPath, 'utf-8');
+      } catch (err) {
+        throw new Error(`Failed to read registry.json at ${registryPath}: ${String(err)}`);
+      }
+
+      let reg: unknown;
+      try {
+        reg = JSON.parse(raw);
+      } catch (err) {
+        throw new Error(`Malformed registry.json at ${registryPath}: ${String(err)}`);
+      }
+
+      if (!reg || typeof reg !== 'object') {
+        throw new Error(`Malformed registry.json at ${registryPath}: content is not an object`);
+      }
+
+      const projectsObj = (reg as { projects?: unknown }).projects;
+      if (projectsObj !== undefined) {
+        if (!projectsObj || typeof projectsObj !== 'object' || Array.isArray(projectsObj)) {
+          throw new Error(
+            `Malformed registry.json at ${registryPath}: 'projects' field is not an object`,
+          );
+        }
+
+        const projectMap = projectsObj as Record<string, unknown>;
+        if (projectMap[projectRoot] !== undefined || projectMap[canonicalRoot] !== undefined) {
           throw new Error(
             `Project ${projectRoot} still recorded in registry.json at ${registryPath}`,
           );
         }
-      } catch (err) {
-        if ((err as Error).message.includes('still recorded in registry.json')) {
-          throw err;
+
+        for (const [key, entry] of Object.entries(projectMap)) {
+          if (key === projectRoot || key === canonicalRoot) {
+            throw new Error(
+              `Project ${projectRoot} still recorded as key ${key} in registry.json at ${registryPath}`,
+            );
+          }
+          if (entry && typeof entry === 'object') {
+            const rootInEntry = (entry as { root?: unknown }).root;
+            if (rootInEntry === projectRoot || rootInEntry === canonicalRoot) {
+              throw new Error(
+                `Project ${projectRoot} still referenced in entry '${key}' in registry.json at ${registryPath}`,
+              );
+            }
+          }
         }
       }
     }
   }
-
-  // 4. Teardown watcher settling delay to guarantee FSEvents unsubscribe has drained
-  await new Promise((r) => setTimeout(r, 150));
 }

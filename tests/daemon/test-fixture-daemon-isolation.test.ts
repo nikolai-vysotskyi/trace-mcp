@@ -3,26 +3,35 @@
  *
  * Verifies that:
  * 1. Client-side isolation guards reject port 3741 and any PID matching the live daemon.
- * 2. Server-side dangerous root check rejects temporary test fixtures on a live daemon.
- * 3. An isolated test daemon with dedicated port & data dir registers, queries, and cleanly
+ * 2. Pre-POST health probes verify target daemon PID and abort with zero POSTs on PID mismatch.
+ * 3. Server-side dangerous root check rejects temporary test fixtures on a live daemon,
+ *    while never rejecting permanent repositories with fixture-like names.
+ * 4. Teardown validates API schema and registry integrity, failing closed on malformed data.
+ * 5. An isolated test daemon with dedicated port & data dir registers, queries, and cleanly
  *    tears down a test project without touching the live daemon or registry.
  */
+import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isDangerousProjectRoot, isTestFixturePath } from '../../src/dangerous-root.js';
+import {
+  isDangerousProjectRoot,
+  isTestFixturePath,
+  isUnderTempDirectory,
+} from '../../src/dangerous-root.js';
 import {
   assertNotLiveDaemon,
   getFreePort,
   getLiveDaemonPid,
   registerTestProject,
   spawnTestDaemon,
+  teardownTestProject,
   type TestDaemonInstance,
 } from '../helpers/test-daemon.js';
 
 describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
-  describe('Client isolation guards (assertNotLiveDaemon & registerTestProject)', () => {
+  describe('Client isolation guards and pre-POST health validation', () => {
     it('refuses port 3741 explicitly', async () => {
       await expect(assertNotLiveDaemon({ port: 3741 })).rejects.toThrow(
         /Target port 3741 is the live daemon port/,
@@ -50,19 +59,59 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
       ).rejects.toThrow(/Target port 3741 is the live daemon port/);
     });
 
-    it('permits non-3741 port with non-colliding PID', async () => {
+    it('permits non-3741 port with non-colliding PID in offline checks', async () => {
       await expect(
         assertNotLiveDaemon({
           port: 3888,
           pid: 12345,
+          expectedPid: 12345,
           livePid: 54321,
         }),
       ).resolves.toBeUndefined();
     });
+
+    it('pre-POST probe detects PID mismatch against mock server and sends zero POST requests', async () => {
+      let postCount = 0;
+      let healthCount = 0;
+
+      const server = http.createServer((req, res) => {
+        if (req.method === 'GET' && req.url === '/health') {
+          healthCount++;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', pid: 9999 })); // Reports PID 9999
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/projects') {
+          postCount++;
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'added' }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      try {
+        await expect(
+          registerTestProject(mockUrl, '/tmp/trace-mcp-tra2941-isolated', {
+            expectedPid: 1111, // Expects PID 1111, server reports 9999
+          }),
+        ).rejects.toThrow(/does not match expected child PID 1111/);
+
+        expect(healthCount).toBe(1);
+        expect(postCount).toBe(0); // Strictly ZERO POSTs sent
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    });
   });
 
   describe('Server-side fixture detection and dangerous root guard (isDangerousProjectRoot)', () => {
-    it('detects test fixture naming patterns correctly via isTestFixturePath', () => {
+    it('detects test fixture naming patterns inside temporary storage', () => {
       expect(isTestFixturePath('/tmp/trace-mcp-tra2941-isolated')).toBe(true);
       expect(isTestFixturePath('/private/tmp/trace-mcp-tra2941-isolated')).toBe(true);
       expect(isTestFixturePath('/tmp/trace-mcp-test-home-12345')).toBe(true);
@@ -70,10 +119,21 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
       expect(isTestFixturePath('/tmp/tmcp-packaged-lab-xyz')).toBe(true);
       expect(isTestFixturePath('/tmp/truncation-boundary-2941-test')).toBe(true);
       expect(isTestFixturePath('/var/folders/xx/yy/T/trace-mcp-tra2941-isolated')).toBe(true);
+    });
 
-      // Real user repositories must NOT be classified as test fixtures
-      expect(isTestFixturePath('/Users/nikolai/PhpstormProjects/general')).toBe(false);
-      expect(isTestFixturePath('/Users/nikolai/trace-mcp')).toBe(false);
+    it('never rejects permanent directories outside temporary storage even with fixture-like names', () => {
+      // User project with "test" or "fixture" in the name in permanent workspace
+      const permanentWorkspaces = [
+        '/Users/nikolai/Projects/trace-test-app',
+        '/Users/nikolai/PhpstormProjects/trace-mcp-tra2941-isolated',
+        '/home/alice/trace-test-fixture',
+        '/Users/bob/dev/tmcp-packaged-suite',
+      ];
+
+      for (const permPath of permanentWorkspaces) {
+        expect(isUnderTempDirectory(permPath)).toBe(false);
+        expect(isTestFixturePath(permPath)).toBe(false);
+      }
     });
 
     it('rejects test fixture root on live daemon when test context is disabled', () => {
@@ -90,6 +150,10 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
 
         const reason = isDangerousProjectRoot('/tmp/trace-mcp-tra2941-isolated');
         expect(reason).toBe('test fixture path on live daemon');
+
+        // But permanent path with similar name is NOT rejected
+        const permReason = isDangerousProjectRoot('/Users/nikolai/Projects/trace-test-app');
+        expect(permReason).toBeNull();
       } finally {
         if (origManagedBy !== undefined) process.env.TRACE_MCP_MANAGED_BY = origManagedBy;
         if (origVitest !== undefined) process.env.VITEST = origVitest;
@@ -110,12 +174,114 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
     });
   });
 
+  describe('Teardown protocol validation and error handling', () => {
+    it('fails closed when GET /api/projects returns a malformed response missing projects array', async () => {
+      const server = http.createServer((req, res) => {
+        if (req.method === 'DELETE') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'removed' }));
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/api/projects') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok' })); // Missing 'projects' array
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      try {
+        await expect(
+          teardownTestProject(mockUrl, '/tmp/sample-project', { timeoutMs: 500 }),
+        ).rejects.toThrow(/'projects' field is not an array/);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    });
+
+    it('fails closed when registry.json contains corrupt syntax', async () => {
+      const server = http.createServer((req, res) => {
+        if (req.method === 'DELETE') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'removed' }));
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/api/projects') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ projects: [] }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'corrupt-reg-'));
+      fs.writeFileSync(path.join(tmpDir, 'registry.json'), '{ corrupt json syntax ...');
+
+      try {
+        await expect(
+          teardownTestProject(mockUrl, '/tmp/sample-project', {
+            dataDir: tmpDir,
+            timeoutMs: 500,
+          }),
+        ).rejects.toThrow(/Malformed registry\.json/);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('fails closed when registry.json projects field is not an object', async () => {
+      const server = http.createServer((req, res) => {
+        if (req.method === 'DELETE') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'removed' }));
+          return;
+        }
+        if (req.method === 'GET' && req.url === '/api/projects') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ projects: [] }));
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+      const addr = server.address() as { port: number };
+      const mockUrl = `http://127.0.0.1:${addr.port}`;
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bad-reg-'));
+      fs.writeFileSync(path.join(tmpDir, 'registry.json'), '{"version": 1, "projects": "invalid"}');
+
+      try {
+        await expect(
+          teardownTestProject(mockUrl, '/tmp/sample-project', {
+            dataDir: tmpDir,
+            timeoutMs: 500,
+          }),
+        ).rejects.toThrow(/'projects' field is not an object/);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('Isolated test daemon lifecycle and verifiable teardown', () => {
     let daemon: TestDaemonInstance | null = null;
     let fixtureDir: string;
 
     beforeAll(async () => {
-      // Allocate free port and spawn dedicated test daemon
       const port = await getFreePort();
       daemon = await spawnTestDaemon({ port });
       fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-test-fixture-2946-'));
