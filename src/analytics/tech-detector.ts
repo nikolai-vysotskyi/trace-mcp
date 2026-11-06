@@ -377,10 +377,14 @@ export interface MultiProjectCoverageReport {
  */
 export function detectCoverageRecursive(
   projectRoot: string,
-  opts: { includeDev?: boolean } = {},
+  opts: { includeDev?: boolean; maxProjects?: number; maxDepth?: number } = {},
 ): MultiProjectCoverageReport {
   const rootReport = detectCoverage(projectRoot, opts);
-  const childRoots = discoverChildProjectsRecursive(projectRoot);
+  const childRoots = discoverChildProjectsRecursive(
+    projectRoot,
+    opts.maxDepth ?? 10,
+    opts.maxProjects !== undefined ? { limit: opts.maxProjects } : undefined,
+  );
   const childReports = childRoots.map((child) => detectCoverage(child, opts));
 
   // Include root only if it has manifests (skip bare monorepo containers)
