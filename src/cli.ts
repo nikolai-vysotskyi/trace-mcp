@@ -202,6 +202,12 @@ import { handleProjectStatsRequest } from './api/project-stats-routes.js';
 import { buildProjectFilesQuery } from './api/project-files-query.js';
 import { parseProjectSecurityQuery } from './api/project-security-query.js';
 import { parseProjectSmellsQuery } from './api/project-smells-query.js';
+import { parseProjectCoverageQuery } from './api/project-coverage-query.js';
+import {
+  getCachedCoverage,
+  setCachedCoverage,
+  invalidateCoverageCache,
+} from './api/coverage-cache.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
 import { getTreeCacheStats } from './parser/tree-cache.js';
@@ -2448,59 +2454,100 @@ program
       // REST API: technology coverage analysis for a project
       // Recursively walks sub-projects so monorepo / multi-service containers
       // (whose root has no manifest) aggregate coverage from all children.
+      // Caches results to guard against event-loop latency spikes (TRA-2928).
       if (req.method === 'GET' && url.pathname === '/api/projects/coverage') {
-        const projectRoot = url.searchParams.get('project');
-        if (!projectRoot) {
+        const parsed = parseProjectCoverageQuery(url);
+        if (!parsed.ok) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          res.end(JSON.stringify({ error: parsed.error }));
           return;
         }
+        const { projectRoot, limit } = parsed.value;
         try {
-          const multi = detectCoverageRecursive(projectRoot);
+          const cached = getCachedCoverage(projectRoot);
+          let coverageData: { total_significant: number; covered: number; coverage_pct: number };
+          let gaps: Array<{
+            name: string;
+            version: string;
+            category: string;
+            priority: 'high' | 'medium' | 'low';
+          }>;
+          let unknown: Array<{
+            name: string;
+            version: string;
+            ecosystem: string;
+            language_fallback: boolean;
+            needs_plugin: 'likely' | 'maybe' | 'no';
+            reason: string;
+          }>;
 
-          // Deduplicate gaps across sub-projects by package name, keeping highest priority.
-          const gapPrio = { high: 0, medium: 1, low: 2 } as const;
-          const gapMap = new Map<string, (typeof multi.projects)[number]['gaps'][number]>();
-          for (const p of multi.projects) {
-            for (const g of p.gaps) {
-              const existing = gapMap.get(g.name);
-              if (!existing || (gapPrio[g.priority] ?? 3) < (gapPrio[existing.priority] ?? 3)) {
-                gapMap.set(g.name, g);
+          if (cached) {
+            coverageData = cached.coverage;
+            gaps = cached.gaps;
+            unknown = cached.unknown;
+          } else {
+            const multi = detectCoverageRecursive(projectRoot);
+
+            // Deduplicate gaps across sub-projects by package name, keeping highest priority.
+            const gapPrio = { high: 0, medium: 1, low: 2 } as const;
+            const gapMap = new Map<string, (typeof multi.projects)[number]['gaps'][number]>();
+            for (const p of multi.projects) {
+              for (const g of p.gaps) {
+                const existing = gapMap.get(g.name);
+                if (!existing || (gapPrio[g.priority] ?? 3) < (gapPrio[existing.priority] ?? 3)) {
+                  gapMap.set(g.name, g);
+                }
               }
             }
-          }
-          const gaps = [...gapMap.values()].sort(
-            (a, b) => (gapPrio[a.priority] ?? 3) - (gapPrio[b.priority] ?? 3),
-          );
+            const allGaps = [...gapMap.values()].sort(
+              (a, b) => (gapPrio[a.priority] ?? 3) - (gapPrio[b.priority] ?? 3),
+            );
 
-          // Deduplicate unknown packages by name, keeping strongest signal (likely > maybe > no).
-          const needPrio = { likely: 0, maybe: 1, no: 2 } as const;
-          const unknownMap = new Map<string, (typeof multi.projects)[number]['unknown'][number]>();
-          for (const p of multi.projects) {
-            for (const u of p.unknown) {
-              const existing = unknownMap.get(u.name);
-              if (
-                !existing ||
-                (needPrio[u.needs_plugin] ?? 3) < (needPrio[existing.needs_plugin] ?? 3)
-              ) {
-                unknownMap.set(u.name, u);
+            // Deduplicate unknown packages by name, keeping strongest signal (likely > maybe > no).
+            const needPrio = { likely: 0, maybe: 1, no: 2 } as const;
+            const unknownMap = new Map<
+              string,
+              (typeof multi.projects)[number]['unknown'][number]
+            >();
+            for (const p of multi.projects) {
+              for (const u of p.unknown) {
+                const existing = unknownMap.get(u.name);
+                if (
+                  !existing ||
+                  (needPrio[u.needs_plugin] ?? 3) < (needPrio[existing.needs_plugin] ?? 3)
+                ) {
+                  unknownMap.set(u.name, u);
+                }
               }
             }
+            const allUnknown = [...unknownMap.values()].sort(
+              (a, b) => (needPrio[a.needs_plugin] ?? 3) - (needPrio[b.needs_plugin] ?? 3),
+            );
+
+            coverageData = {
+              total_significant: multi.aggregate.total_significant,
+              covered: multi.aggregate.covered,
+              coverage_pct: multi.aggregate.coverage_pct,
+            };
+            gaps = allGaps;
+            unknown = allUnknown;
+
+            setCachedCoverage(projectRoot, {
+              coverage: coverageData,
+              gaps: allGaps,
+              unknown: allUnknown,
+            });
           }
-          const unknown = [...unknownMap.values()].sort(
-            (a, b) => (needPrio[a.needs_plugin] ?? 3) - (needPrio[b.needs_plugin] ?? 3),
-          );
+
+          const responseGaps = limit !== undefined ? gaps.slice(0, limit) : gaps;
+          const responseUnknown = limit !== undefined ? unknown.slice(0, limit) : unknown;
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
             JSON.stringify({
-              coverage: {
-                total_significant: multi.aggregate.total_significant,
-                covered: multi.aggregate.covered,
-                coverage_pct: multi.aggregate.coverage_pct,
-              },
-              gaps,
-              unknown,
+              coverage: coverageData,
+              gaps: responseGaps,
+              unknown: responseUnknown,
             }),
           );
         } catch (e) {
@@ -2798,6 +2845,7 @@ program
           res.end(JSON.stringify({ error: 'project is stopping', retryAfterSec: 5 }));
           return;
         }
+        invalidateCoverageCache(projectRoot);
         // R09 v2: lifecycle events around the reindex call.
         // started is fire-and-forget; completed/errored fire on the
         // async settlement of the pipeline promise.
@@ -3248,6 +3296,7 @@ program
         // SSE bus see a clean state.
         teardownProjectBookkeeping(projectRoot);
         projectRelay.invalidateProject(projectRoot);
+        invalidateCoverageCache(projectRoot);
         broadcastEvent({ type: 'project_status', project: projectRoot, status: 'removed' });
         // Clean up any remaining client entries for this project (transport
         // onclose handlers typically already removed these via the teardown

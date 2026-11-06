@@ -7,7 +7,49 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
+const SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'vendor',
+  '.svn',
+  '__pycache__',
+  '.tox',
+  'dist',
+  'build',
+  'out',
+  'target',
+  'coverage',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+  'tmp',
+  'temp',
+  'venv',
+  '.venv',
+  'Pods',
+  'DerivedData',
+]);
+
+const NON_PROJECT_DIRS = new Set([
+  'src',
+  'source',
+  'lib',
+  'test',
+  'tests',
+  'spec',
+  'specs',
+  'docs',
+  'doc',
+  'documentation',
+  'public',
+  'static',
+  'assets',
+  'fixtures',
+  '__tests__',
+  '__mocks__',
+  'site',
+]);
 
 export const ROOT_MARKERS = [
   // VCS
@@ -67,6 +109,8 @@ export const ROOT_MARKERS = [
   'project.godot',
 ];
 
+export const ROOT_MARKERS_SET: ReadonlySet<string> = new Set(ROOT_MARKERS);
+
 /**
  * Scan immediate subdirectories of `parentDir` for project root markers.
  * Returns sorted absolute paths of discovered child project roots.
@@ -88,13 +132,19 @@ export function discoverChildProjects(parentDir: string): string[] {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith('.')) continue;
     if (SKIP_DIRS.has(entry.name)) continue;
+    if (NON_PROJECT_DIRS.has(entry.name)) continue;
 
     const childDir = path.join(absParent, entry.name);
-    for (const marker of ROOT_MARKERS) {
-      if (fs.existsSync(path.join(childDir, marker))) {
-        children.push(childDir);
-        break;
+    try {
+      const childEntries = fs.readdirSync(childDir);
+      for (const name of childEntries) {
+        if (ROOT_MARKERS_SET.has(name)) {
+          children.push(childDir);
+          break;
+        }
       }
+    } catch {
+      // unreadable
     }
   }
 
@@ -103,18 +153,25 @@ export function discoverChildProjects(parentDir: string): string[] {
 
 /**
  * Recursively discover child projects under `parentDir`.
- * Unlike `discoverChildProjects`, this traverses all nested directories
+ * Unlike `discoverChildProjects`, this traverses nested directories
  * (e.g. the/fair/fair-front) — not just depth-1.
- * Stops descending into a directory once it's identified as a project root.
+ * Skips standard artifact/source directories (node_modules, dist, src, tests, etc.)
+ * to avoid expensive full-tree walks (TRA-2928).
  */
-export function discoverChildProjectsRecursive(parentDir: string, maxDepth = 10): string[] {
+export function discoverChildProjectsRecursive(
+  parentDir: string,
+  maxDepth = 10,
+  opts?: { limit?: number },
+): string[] {
   const absParent = path.resolve(parentDir);
   if (!fs.existsSync(absParent)) return [];
 
   const results: string[] = [];
+  const limit = opts?.limit;
 
   function walk(dir: string, depth: number): void {
     if (depth > maxDepth) return;
+    if (limit !== undefined && results.length >= limit) return;
 
     let entries: fs.Dirent[];
     try {
@@ -123,25 +180,25 @@ export function discoverChildProjectsRecursive(parentDir: string, maxDepth = 10)
       return;
     }
 
+    if (dir !== absParent) {
+      for (const entry of entries) {
+        if (ROOT_MARKERS_SET.has(entry.name)) {
+          results.push(dir);
+          break;
+        }
+      }
+      if (limit !== undefined && results.length >= limit) return;
+      if (depth >= maxDepth) return;
+    }
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       if (entry.name.startsWith('.')) continue;
       if (SKIP_DIRS.has(entry.name)) continue;
+      if (NON_PROJECT_DIRS.has(entry.name)) continue;
 
-      const childDir = path.join(dir, entry.name);
-      let isProject = false;
-      for (const marker of ROOT_MARKERS) {
-        if (fs.existsSync(path.join(childDir, marker))) {
-          results.push(childDir);
-          isProject = true;
-          break;
-        }
-      }
-
-      // Keep descending even into project dirs — monorepos have nested projects
-      if (!isProject || depth < maxDepth) {
-        walk(childDir, depth + 1);
-      }
+      walk(path.join(dir, entry.name), depth + 1);
+      if (limit !== undefined && results.length >= limit) return;
     }
   }
 
