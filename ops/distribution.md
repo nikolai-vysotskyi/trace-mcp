@@ -9485,3 +9485,45 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-06 18:00 pass (TRA-2936): clean mention sweep (0 new hits), competitor deep-dive on Graphify bare callback caller extraction (#5050), Graphify checkout-path placeholder non-determinism (#5045), Continue fail-closed permissions parser (#13467)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Missing caller nodes for bare callback arguments in TS/JS (PR #5050, open; issue #5048)*: In Graphify, calls executed inside function expressions passed directly as arguments to functions or methods (`router.get('/endpoint', (req, res) => { ... })`, `app.use(...)`, `addEventListener(...)`) were silently dropped from the call graph. The AST walker only collected caller nodes if anchored to `function_declaration`, `method_definition`, or `lexical_declaration`. Because unanchored callbacks lacked a named entity anchor, their bodies were never added to `function_bodies`, resulting in 0 `calls` edges emitted for route handler bodies or event callbacks. PR #5050 broadens `walk()` to register unanchored arrow/function expressions under synthetic caller IDs `anonymous()` (`stem_anonymous_<line>`). Contrast: trace-mcp models scopes and closure hierarchies directly from Tree-sitter concrete syntax trees. Function expressions, closures, and arrow functions are first-class scope nodes linked to their enclosing expressions, ensuring that API routes, event listeners, and handler call trees are fully indexed and retrievable via `find_callers` and `trace_references` without ad-hoc anchor heuristics.
+  - *Checkout-path dependency in ambiguous Python import placeholder IDs (PR #5045, open; issue #5044)*: In Graphify, `_suppress_ambiguous_python_imports` creates placeholder targets `ambiguous_python_import_<sha1[:12]>`. The input hashed into the placeholder ID included the raw absolute checkout path of `source_file` (e.g. `/home/user/checkout-a/...`) and an absolute-derived `source` ID before root relativization occurred. Consequently, identical commits checked out in different directories or CI runners produced differing graph JSON outputs and divergent community detection counts. PR #5045 restricts the placeholder hash strictly to module name, scan-root-relative POSIX path, and source location. Contrast: trace-mcp guarantees bit-for-bit index determinism across environments. All path manipulation occurs at ingress through `normalizePosixPath`, and symbol IDs, edge keys, and index hashes depend exclusively on repository-relative paths and syntax-level AST coordinates.
+- **continuedev/continue**:
+  - *Fail-closed permission policy parsing in headless/CI agent runs (PR #13467, open; issue #13461)*: In Continue's CLI (`cn -p`), if `~/.continue/permissions.yaml` existed but contained invalid syntax or an unknown key, the parser returned `null`—identical to when no permissions file exists. The CLI then defaulted to allowing all commands including `Bash` without confirmation, inadvertently bypassing gating intended to protect headless environments. PR #13467 introduces tri-state configuration loading (`absent`, `valid`, `unreadable`) and injects a fail-closed `{ tool: "*", permission: "ask" }` rule when the config is unreadable. Contrast: trace-mcp enforces strict configuration schema validation with fail-closed semantics across all tool boundaries. Any configuration parse failure halts execution immediately rather than silently dropping security boundaries, and trace-mcp's daemon runs deterministic read-only static analysis without executing arbitrary unverified shell scripts.
+
+**Competitor pulse (as of 2026-11-06 18:00 pass vs 2026-11-06 14:00 pass TRA-2934):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,170★ (+2), 1,625 forks (=)
+- oraios/serena: 31,146★ (+3), 2,128 forks (=)
+- DeusData/codebase-memory-mcp: 48,205★ (+7), 3,976 forks (+2)
+- tirth8205/code-review-graph: 32,623★ (+5), 2,965 forks (=)
+- colbymchenry/codegraph: 76,892★ (+20), 5,108 forks (+4)
+- abhigyanpatwari/GitNexus: 48,303★ (+7), 5,231 forks (=)
+- jgravelle/jcodemunch-mcp: 2,836★ (+1), 372 forks (=)
+- continuedev/continue: 36,418★ (+2), 5,554 forks (=)
+- Aider-AI/aider: 49,980★ (+1), 5,141 forks (+1)
+- Graphify-Labs/graphify: 143,307★ (+101), 13,705 forks (+13)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
