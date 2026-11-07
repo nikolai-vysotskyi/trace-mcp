@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodexSessionProvider } from '../../../src/session/providers/codex.js';
 
 function writeJsonl(file: string, lines: object[]): void {
@@ -13,11 +13,13 @@ describe('CodexSessionProvider', () => {
   let provider: CodexSessionProvider;
 
   beforeEach(() => {
+    vi.stubEnv('CODEX_HOME', undefined);
     tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-test-'));
     provider = new CodexSessionProvider();
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(tmpHome, { recursive: true, force: true });
   });
 
