@@ -55,6 +55,49 @@ export function getLiveDaemonPid(): number | null {
 }
 
 /**
+ * Validate and sanitize a test daemon URL to strictly enforce local loopback access.
+ * Prevents SSRF by strictly permitting only http://127.0.0.1 or http://localhost
+ * and reconstructing the URL with a validated integer port and fixed literal origin (TRA-2946).
+ */
+export function sanitizeLoopbackUrl(rawBaseUrl: string, pathname = ''): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawBaseUrl);
+  } catch {
+    throw new Error(`[TEST ISOLATION GUARD] Invalid baseUrl format: ${rawBaseUrl}`);
+  }
+
+  if (parsed.protocol !== 'http:') {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Disallowed protocol "${parsed.protocol}". Only http: is permitted for test daemons.`,
+    );
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname !== '127.0.0.1' && hostname !== 'localhost') {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Disallowed host "${hostname}". Only loopback (127.0.0.1 or localhost) is permitted.`,
+    );
+  }
+
+  const port = parseInt(parsed.port || '80', 10);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`[TEST ISOLATION GUARD] Invalid port number: ${parsed.port}`);
+  }
+
+  if (port === 3741) {
+    throw new Error(
+      `[TEST ISOLATION GUARD] Target port 3741 is the live daemon port. ` +
+        `Test fixtures must run against an isolated test daemon on a dedicated port (TRA-2946).`,
+    );
+  }
+
+  // Construct URL with fixed literal 127.0.0.1 host and validated numeric port to prevent SSRF
+  const safe = new URL(pathname, `http://127.0.0.1:${port}`);
+  return safe.href;
+}
+
+/**
  * Query /health from target daemon and strictly validate PID against both live PID and expected PID.
  * Fails closed on connection error, timeout, malformed response, or PID mismatch.
  */
@@ -64,26 +107,31 @@ export async function verifyDaemonTarget(target: {
   livePid?: number | null;
   timeoutMs?: number;
 }): Promise<number> {
-  const url = new URL(target.baseUrl);
-  const port = parseInt(url.port || '80', 10);
-
-  if (port === 3741) {
-    throw new Error(
-      `[TEST ISOLATION GUARD] Target port 3741 is the live daemon port. ` +
-        `Test fixtures must run against an isolated test daemon on a dedicated port (TRA-2946).`,
-    );
-  }
-
+  const safeHealthUrl = sanitizeLoopbackUrl(target.baseUrl, '/health');
   const livePid = target.livePid !== undefined ? target.livePid : getLiveDaemonPid();
 
-  let res: Response;
-  try {
-    res = await fetch(`${target.baseUrl}/health`, {
-      signal: AbortSignal.timeout(target.timeoutMs ?? 2000),
-    });
-  } catch (err) {
+  // Retry probe with timeout to allow busy/slow CI environments (e.g. Windows) to answer
+  const timeoutMs = target.timeoutMs ?? 10_000;
+  const deadline = Date.now() + timeoutMs;
+  let res: Response | null = null;
+  let lastErr: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const probeRes = await fetch(safeHealthUrl, {
+        signal: AbortSignal.timeout(Math.min(3000, Math.max(1000, deadline - Date.now()))),
+      });
+      res = probeRes;
+      break;
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  if (!res) {
     throw new Error(
-      `[TEST ISOLATION GUARD] Failed to probe ${target.baseUrl}/health: ${String(err)}. ` +
+      `[TEST ISOLATION GUARD] Failed to probe ${target.baseUrl}/health: ${String(lastErr)}. ` +
         `Target daemon must be running and responsive before registration.`,
     );
   }
@@ -219,11 +267,12 @@ export async function waitForDaemonHealth(
   baseUrl: string,
   options: { expectedPid?: number; timeoutMs?: number } = {},
 ): Promise<{ pid?: number; status?: string }> {
+  const safeHealthUrl = sanitizeLoopbackUrl(baseUrl, '/health');
   const timeoutMs = options.timeoutMs ?? 15_000;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      const res = await fetch(`${baseUrl}/health`, {
+      const res = await fetch(safeHealthUrl, {
         signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {
@@ -247,31 +296,41 @@ export async function waitForDaemonHealth(
 
 /**
  * Stop a spawned child process reliably (SIGTERM with fallback to SIGKILL).
+ * On Windows, waits for process exit after taskkill tree termination.
  */
-export function stopChildProcess(child: ChildProcess): Promise<void> {
+export function stopChildProcess(child: ChildProcess, timeoutMs = 5000): Promise<void> {
   return new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) {
       resolve();
       return;
     }
+
+    let settled = false;
+    const done = () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
+
+    child.once('exit', done);
+
     if (process.platform === 'win32') {
       try {
         execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
       } catch {
         child.kill('SIGKILL');
       }
-      resolve();
-      return;
+    } else {
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!settled && child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGKILL');
+        }
+      }, 2000);
     }
 
-    child.once('exit', () => resolve());
-    child.kill('SIGTERM');
-    setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL');
-      }
-      resolve();
-    }, 2000);
+    setTimeout(done, timeoutMs);
   });
 }
 
@@ -383,16 +442,18 @@ export async function spawnTestDaemon(
 export async function registerTestProject(
   baseUrl: string,
   projectRoot: string,
-  opts?: { port?: number; expectedPid?: number; livePid?: number | null },
+  opts?: { port?: number; expectedPid?: number; livePid?: number | null; timeoutMs?: number },
 ): Promise<{ status: string; project: string }> {
   // Always probe /health immediately before POST; verifies PID against livePid and expectedPid
   await verifyDaemonTarget({
     baseUrl,
     expectedPid: opts?.expectedPid,
     livePid: opts?.livePid,
+    timeoutMs: opts?.timeoutMs,
   });
 
-  const res = await fetch(`${baseUrl}/api/projects`, {
+  const safeProjectsUrl = sanitizeLoopbackUrl(baseUrl, '/api/projects');
+  const res = await fetch(safeProjectsUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ root: projectRoot }),
@@ -437,8 +498,11 @@ export async function teardownTestProject(
   }
 
   // 1. Send DELETE /api/projects
-  const delUrl = `${baseUrl}/api/projects?project=${encodeURIComponent(projectRoot)}`;
-  const delRes = await fetch(delUrl, { method: 'DELETE' });
+  const safeDelUrl = sanitizeLoopbackUrl(
+    baseUrl,
+    `/api/projects?project=${encodeURIComponent(projectRoot)}`,
+  );
+  const delRes = await fetch(safeDelUrl, { method: 'DELETE' });
   if (!delRes.ok && delRes.status !== 404) {
     const text = await delRes.text();
     throw new Error(`DELETE /api/projects failed: HTTP ${delRes.status}: ${text}`);
@@ -466,10 +530,11 @@ export async function teardownTestProject(
   const deadline = Date.now() + timeoutMs;
   let absentInApi = false;
   let lastError: Error | null = null;
+  const safeGetUrl = sanitizeLoopbackUrl(baseUrl, '/api/projects');
 
   while (Date.now() < deadline) {
     try {
-      const getRes = await fetch(`${baseUrl}/api/projects`, {
+      const getRes = await fetch(safeGetUrl, {
         signal: AbortSignal.timeout(2000),
       });
       if (!getRes.ok) {

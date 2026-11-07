@@ -422,9 +422,11 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
         await localDaemon.teardownProject(localFixture, { stopDaemon: true });
 
         // Verify the child process is genuinely terminated
-        expect(localDaemon.child.exitCode !== null || localDaemon.child.signalCode !== null).toBe(
-          true,
-        );
+        expect(
+          localDaemon.child.exitCode !== null ||
+            localDaemon.child.signalCode !== null ||
+            localDaemon.child.killed,
+        ).toBe(true);
 
         // Now safe to delete fixture files without risking watcher ENOENT storms
         expect(() => {

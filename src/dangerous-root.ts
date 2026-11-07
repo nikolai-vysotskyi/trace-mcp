@@ -256,8 +256,8 @@ export function isUnderTempDirectory(absPath: string): boolean {
     }
   }
 
-  // macOS /var/folders per-user temp directories check
-  if (/^(\/private)?\/var\/folders\//.test(norm)) {
+  // macOS /var/folders per-user temp directories check (cross-platform compatible)
+  if (/^(?:[a-zA-Z]:)?[\\/](?:private[\\/])?var[\\/]folders[\\/]/i.test(norm)) {
     return true;
   }
 
