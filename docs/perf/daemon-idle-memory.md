@@ -680,3 +680,23 @@ the full walks. TRA-2603 owns the unresolved stall/reconcile attribution;
 TRA-1765 owns the main-thread health latency under a storm. The observed
 `Cannot read file` burst (42 `ENOENT` warnings in one second) belongs to the
 already tracked transient-tree case, TRA-2581.
+
+---
+
+## 2026-11-08 — short event-loop stalls on v3.42.11 without sleep or reindex
+
+Read-only review of the installed daemon's JSON log (PID 38905) after the
+v3.42.11 release. It recorded two event-loop warnings at 2026-11-07 21:37:58
+and 21:43:28 UTC, with `lagMs` of 2,024 and 2,862 respectively. Both records
+had `reindexInFlight: 0`. Nearby one-minute vitals showed zero projects
+indexing, RSS of 658 and 442 MB, and heap used of 115 and 126 MB. The first
+FSEvents-drop warning from this PID came later, at 21:47:37 UTC, so these
+two delays cannot be assigned to that later reconcile.
+
+`pmset -g log` has no Sleep, Wake, or DarkWake transition during the local
+01:30–01:49 (+0400) window around both warnings. The same PID subsequently
+answered `/health` with `status: ok`. This rules out a sleep gap for these
+two samples and establishes recovery, but does not identify the blocking
+operation or measure `/health` latency during either delay. TRA-2603 owns
+attribution of real event-loop stalls; the much longer October incident in
+that issue remains a separate observation.
