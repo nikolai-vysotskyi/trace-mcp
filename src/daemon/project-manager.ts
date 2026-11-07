@@ -1753,8 +1753,10 @@ export class ProjectManager {
    * Tear down in-memory state for a project (watcher, server, DB) without
    * touching the on-disk registry. Used by both `shutdown()` (graceful
    * daemon restart) and `removeProject()` (explicit user removal).
+   *
+   * Returns whether the watcher was unsubscribed and drained cleanly within budget (TRA-2946).
    */
-  private async stopProject(root: string): Promise<void> {
+  private async stopProject(root: string): Promise<{ unsubscribed: boolean }> {
     // TRA-1608: the map is keyed by managerKey() for addProject() entries, but
     // tolerate raw-spelling keys too (see managedMapKey). Teardown below uses
     // the STORED managed.root spelling so collaborators (registry unregister,
@@ -1763,7 +1765,7 @@ export class ProjectManager {
     // was registered under. In production managed.root IS the normalized key,
     // so this is identical there.
     const mapKey = managedMapKey(this.projects, root);
-    if (!mapKey) return;
+    if (!mapKey) return { unsubscribed: true };
     const managed = this.projects.get(mapKey)!;
     root = managed.root;
     // TRA-1553: refuse new single-file reindex work from this point on. This
@@ -1848,10 +1850,11 @@ export class ProjectManager {
     // the chain never rejects (every branch catches into status), so nothing
     // is lost by detaching; its next DB statement after the close lands in
     // its own error handling.
+    let settled = true;
     {
       const drains: Array<Promise<unknown>> = [managed.watcher.drain()];
       if (managed.initialIndexPromise) drains.push(managed.initialIndexPromise);
-      const settled = await waitWithTimeout(Promise.all(drains), remainingMs());
+      settled = (await waitWithTimeout(Promise.all(drains), remainingMs())) ?? false;
       if (!settled) {
         logger.warn(
           { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
@@ -1951,6 +1954,7 @@ export class ProjectManager {
         'resourcePool.disposeProject failed (non-fatal)',
       );
     }
+    return { unsubscribed: Boolean(unsubscribed && settled) };
   }
 
   /**
@@ -1984,7 +1988,7 @@ export class ProjectManager {
       this.getProject(root)?.root ??
       registryRoot ??
       root;
-    await this.stopProject(root);
+    const stopResult = await this.stopProject(root);
     let artifacts: RemoveArtifactsResult;
     try {
       artifacts = removeProjectArtifacts(effective, options);
@@ -2000,6 +2004,7 @@ export class ProjectManager {
         failures: [{ tier: 'artifacts', error: String(err) }],
       };
     }
+    artifacts.watcherUnsubscribed = stopResult?.unsubscribed ?? true;
     unregisterProject(effective);
     if (effective !== root) {
       unregisterProject(root);
