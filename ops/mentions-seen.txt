@@ -426,3 +426,8 @@ abordage/awesome-mcp
 # ── Swept 2026-11-05 night pass (TRA-2918) ──
 # Bare-name slug collision (docs/decisions/ADR-0010-ask-layer-graphql-with-an-explain-trace-mcp-tools.md: 'explain trace, MCP tools'):
 Zugzwang-world/graphpay
+
+# ── Swept 2026-11-07 afternoon pass (TRA-2957) ──
+# Genuine third-party Claude Code component directory / templates repo (EdgeAgency / EdgeAgent, updated 2026-11-07):
+# INDEX.md and mcps/devtools/trace-mcp.json index trace-mcp as curated devtools MCP server with npx runner:
+EdgeAgent/agent-templates

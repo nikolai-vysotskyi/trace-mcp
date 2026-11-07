@@ -9653,3 +9653,45 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-07 14:00 pass (TRA-2957): organic catalog discovery (EdgeAgent/agent-templates), competitor deep-dive on Graphify pruned Linux inotify watch tree (#5075), Graphify SCIP protobuf index ingest (#5070), Serena TS LSP rename readiness race (#2254)
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 1 new hit outside seen list: `EdgeAgent/agent-templates`.
+- **Classification:** Genuine third-party curated directory of Claude Code components (327 curated components, updated 2026-11-07). `INDEX.md` and `mcps/devtools/trace-mcp.json` index `trace-mcp` with `npx -y trace-mcp@latest` and our core value proposition (framework-aware code intelligence, 30–60% session token reduction). Added to `ops/mentions-seen.txt`.
+- External touches: 0 (organic third-party adoption; listing is accurate and functional as-is).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Pruning ignored directories from inotify watch tree (PR #5075, open; fixes #5074, stacked on #5046)*: In Linux environments, recursive `observer.schedule(root, recursive=True)` creates a separate inotify watch for every directory under root—including directories excluded by `.gitignore` and `.graphifyignore` (e.g. `node_modules`, `vendor`). While events are dropped by the handler, inotify watches still exhaust the system's `fs.inotify.max_user_watches` table (in repro, 45,885 watches consumed down to 23 kept). PR #5075 replaces recursive scheduling with an explicit non-recursive directory walker gated by `ignored_predicate()`, managing dynamic subfolder addition/removal, directory moves, and graceful `ENOSPC` logging. Contrast: trace-mcp is engineered specifically for minimal daemon footprint (<30MB idle RAM); daemon watchers filter ignore rules at the discovery layer and leverage platform-native APIs (FSEvents on macOS, strict ignored directory exclusion on Linux) so kernel watch tables are never flooded with dependencies.
+  - *SCIP protobuf index ingestion (PR #5070, open; follow-up to #783)*: Implements a zero-dependency protobuf decoder (`graphify/scip_index.py`) to parse binary `index.scip` files emitted by external indexers (scip-python, scip-typescript, rust-analyzer). Maps SCIP occurrences to definition lines. Deliberately omits reference edges because standard SCIP indexers omit `enclosing_range` on reference occurrences, making edge attribution to caller symbols ambiguous without guessing. On large indexes (Sentry 266 MB), memory climbs to 2.4 GB peak RSS. Contrast: trace-mcp provides native, integrated multi-language AST extraction in a streaming single pass, building precise bidirectional call and reference graphs bounded to exact enclosing lexical scopes and storing them in compact SQLite tables without multi-gigabyte memory spikes or reliance on external protobuf indexers.
+- **oraios/serena**:
+  - *LSP rename readiness race condition (PR #2254, open)*: On large TypeScript projects (~2,000 files), issuing a `rename_symbol` immediately after startup caused `typescript-language-server` to route the query to its incomplete `partialSemantic` syntax server. Serena renamed only the local definition in the open file while reporting success ("(1 changes applied)"), leaving 12 cross-file caller references unrenamed and breaking builds (TS2724). PR #2254 forces Serena to wait for cross-file references readiness before dispatching rename requests. Contrast: trace-mcp does not rely on an external language server process's asynchronous initialization or partial syntax servers; trace-mcp indexes the entire workspace deterministically into an SQLite relational graph, guaranteeing atomic, consistent cross-file navigation and refactoring impact analysis without silent partial results.
+
+**Competitor pulse (as of 2026-11-07 14:00 pass vs 2026-11-07 08:00 pass TRA-2954):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,174★ (=), 1,625 forks (-1)
+- oraios/serena: 31,172★ (+10), 2,130 forks (+1)
+- DeusData/codebase-memory-mcp: 48,269★ (+21), 3,985 forks (+7)
+- tirth8205/code-review-graph: 32,628★ (-1), 2,967 forks (=)
+- colbymchenry/codegraph: 76,970★ (+25), 5,115 forks (=)
+- abhigyanpatwari/GitNexus: 48,318★ (+4), 5,230 forks (=)
+- jgravelle/jcodemunch-mcp: 2,836★ (+1), 373 forks (=)
+- continuedev/continue: 36,427★ (=), 5,556 forks (+1)
+- Aider-AI/aider: 49,999★ (+5, 1 star away from 50k★ milestone), 5,144 forks (+1)
+- Graphify-Labs/graphify: 143,719★ (+110), 13,746 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
