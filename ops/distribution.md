@@ -9785,3 +9785,48 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-08 02:00 pass (TRA-2964): mention sweep clean, competitor deep-dive on Graphify Linux inotify watch pruning (#5075), jcodemunch parse failure coverage & absence contract (#1351), GitNexus MCP policy oracle grading (#3844)
+
+**External threads audit (read-only via GitHub API):**
+- GetBindu/awesome-claude-code-and-skills#195: MERGED (merged 2026-11-07 13:54 UTC by raahulrahl; verified live in `readme.md`).
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 repos outside seen list: mention sweep cleanly verified (no new mentions detected).
+- External touches: 0 (standing no-ping rules and clean sweep; no outreach needed).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Linux inotify watch tree pruning and descriptor exhaustion (PR #5075, open; fixes #5074, stacked on #5046)*: In Graphify, `graphify watch` on Linux used recursive directory scheduling (`observer.schedule(root, recursive=True)`), installing inotify watch descriptors for every single subdirectory including ignored paths like `node_modules` and `vendor`. In large projects, this consumed thousands of inotify handles (up to 45,885 watches), triggering `ENOSPC` errors and crashing the observer thread. PR #5075 replaces the recursive schedule with a pruned, non-recursive directory walker on Linux using `ignored_predicate()`, managing dynamic folder creation/deletion and catching `ENOSPC`.
+  - *Contrast with trace-mcp*: trace-mcp uses native file system watching (macOS FSEvents, Linux inotify) with pre-filtering at the root: ignored patterns (`.git`, `node_modules`, `dist`, build caches) are excluded before registering watch handles. It operates with a debounced event processor and keeps daemon idle memory strictly below 30MB, avoiding kernel watch descriptor exhaustion without fragile manual subtree tracking.
+- **jgravelle/jcodemunch-mcp**:
+  - *Parse failure classification and search absence contract (PR #1351, merged; released in v1.108.423 #1352)*: In jcodemunch, files exceeding the 20-second per-file parse budget (`JCODEMUNCH_PARSE_BUDGET_SECONDS`) or encountering syntax exceptions only emitted a warning while still being treated as indexed. Because the index claimed to be "complete", `search_symbols` for functions defined only in those unparsed files answered `absent` on a clean index channel, misleading AI agents into concluding that the function did not exist. PR #1351 marks failed parses as `withheld.parse_failed` in coverage metadata, forcing the index channel to `partial` and refusing false negative absence proofs.
+  - *Contrast with trace-mcp*: trace-mcp relies on robust tree-sitter grammars designed for fault tolerance and incremental parsing: it never times out or throws unhandled exceptions on incomplete syntax, but extracts partial AST structures whenever possible. Furthermore, trace-mcp tracks workspace indexing status and symbol coverage transparently, providing explicit coverage indicators so agents never receive false-negative absence claims.
+- **abhigyanpatwari/GitNexus**:
+  - *MCP boundary policy wrapper bypass in automated grading (PR #3844, open; refs #3500)*: GitNexus's evaluation harness for repository filtering directly invoked `LocalBackend.callTool`, completely bypassing the public MCP policy wrapper layer. As a result, valid `name_contains` filtering implementations located inside the policy wrapper failed grading despite returning correct filtered results over the public MCP tool interface. PR #3844 refactors the oracle to test `tools/call` and `tools/list` across a real client/server MCP connection using in-memory transport.
+  - *Contrast with trace-mcp*: trace-mcp's MCP protocol layer and internal tool implementations are tested end-to-end against standardized JSON-RPC stdio transport and schema validation contracts. trace-mcp enforces strict protocol boundaries in both production and test suites, ensuring that all tool declarations, parameters, and filtering behaviors behave identically regardless of invocation pathway.
+
+**Competitor pulse (as of 2026-11-08 02:00 pass vs 2026-11-07 22:00 pass TRA-2961):**
+- nikolai-vysotskyi/trace-mcp: 203★ (+1, crossed 203★ milestone!), 24 forks (=)
+- yamadashy/repomix: 29,179★ (+2), 1,625 forks (=)
+- oraios/serena: 31,185★ (+4), 2,134 forks (+3)
+- DeusData/codebase-memory-mcp: 48,293★ (+6), 3,992 forks (+1)
+- tirth8205/code-review-graph: 32,633★ (+2), 2,965 forks (-2)
+- colbymchenry/codegraph: 77,005★ (+3), 5,117 forks (=)
+- abhigyanpatwari/GitNexus: 48,326★ (+1), 5,231 forks (=)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (=)
+- continuedev/continue: 36,429★ (+2), 5,559 forks (=)
+- Aider-AI/aider: 50,012★ (+4), 5,146 forks (+1)
+- Graphify-Labs/graphify: 143,960★ (+66), 13,775 forks (+11)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
