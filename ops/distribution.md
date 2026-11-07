@@ -9739,3 +9739,49 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-07 22:00 pass (TRA-2961): mention sweep clean, competitor deep-dive on Graphify document bisection & CloudFormation YAML (#5078, #5077), jcodemunch project config tightening (#1353), GitNexus RAM admission & worker heap (#3842)
+
+**External threads audit (read-only via GitHub API):**
+- GetBindu/awesome-claude-code-and-skills#195: MERGED (merged 2026-11-07 13:54 UTC by raahulrahl; verified live in `readme.md`).
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 repos outside seen list: mention sweep cleanly verified (no new mentions detected).
+- External touches: 0 (standing no-ping rules and clean sweep; no outreach needed).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Under-cap splittable document bisection on output truncation (PR #5078, open; fixes #5072)*: In semantic extraction using LLMs, documents under `_FILE_CHAR_CAP` (20,000 chars) were left as raw `Path` units by `expand_oversized_files()`. When the LLM truncated output (`finish_reason="length"`), `_split_lone_slice()` checked only `isinstance(chunk[0], FileSlice)` and returned `None`, immediately marking the file partial and abandoning bisection despite available recursion depth. PR #5078 adds `make_full_slice()` to promote eligible splittable text files (`.yaml`, `.yml`, `.md`, `.txt`, `.rst`) to `FileSlice` for bisection retry.
+  - *CloudFormation intrinsic tag handling in YAML extraction (PR #5077, open; fixes #5071)*: `extract_yaml` using `yaml.safe_load_all` raised `ConstructorError` on AWS CloudFormation/SAM short tags (`!Ref`, `!Sub`, `!Equals`), failing whole templates into zero-node outputs. PR #5077 adds `_permissive_loader()`.
+  - *Contrast with trace-mcp*: trace-mcp does not use generative LLMs for code or document symbol extraction, completely avoiding non-deterministic responses, output length truncation, token billing, and recursive chunk bisection heuristics. All code and config files are parsed deterministically via native tree-sitter grammars in milliseconds.
+- **jgravelle/jcodemunch-mcp**:
+  - *Project config files restricted to tightening settings only (PR #1353, open; release v1.108.423 in #1352)*: In jcodemunch, `.jcodemunch.jsonc` in a checked-out repo could previously override any configuration key in either direction, enabling untrusted repos to loosen user security settings (authorizing paid remote summarizers, sending code off-box, overriding `trusted_folders`, or un-disabling tools). PR #1353 enforces that project-level configs can only tighten settings, never loosen them.
+  - *Contrast with trace-mcp*: trace-mcp enforces strict user-level consent boundaries by default. All code parsing, symbol analysis, and graph indexing are 100% local. Remote embedding providers or telemetry require explicit consent saved in the user's home directory (`~/.trace-mcp/consent.json`), and repo-level files cannot bypass consent, disable security checks, or trigger remote network egress.
+- **abhigyanpatwari/GitNexus**:
+  - *RAM admission limits, worker heap reservation, and analysis recovery (PR #3842, open)*: GitNexus struggles with multi-worker memory limits and Node.js process heap crashes during concurrent analysis. PR #3842 introduces an automatic admission policy capping the process family at 75% of effective RAM, with per-worker heap reservations, vector readiness gating, and process-birth identity tagging for Linux/macOS/Windows to prevent stale PID reuse.
+  - *Contrast with trace-mcp*: trace-mcp is engineered from the ground up as a lean, single daemon architecture using native SQLite (`better-sqlite3`) and native tree-sitter parsers. It requires no multi-worker process pools or gigabytes of RAM; entire workspaces with 10k+ files are indexed in seconds with a memory footprint in tens of megabytes, completely eliminating worker heap allocation crashes and OS PID reuse synchronization bugs.
+
+**Competitor pulse (as of 2026-11-07 22:00 pass vs 2026-11-07 18:00 pass TRA-2959):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,177★ (+1), 1,625 forks (=)
+- oraios/serena: 31,181★ (+5), 2,131 forks (+1)
+- DeusData/codebase-memory-mcp: 48,287★ (+6), 3,991 forks (+4)
+- tirth8205/code-review-graph: 32,631★ (+1), 2,967 forks (=)
+- colbymchenry/codegraph: 77,002★ (+19, crossed 77k★ milestone!), 5,117 forks (+1)
+- abhigyanpatwari/GitNexus: 48,325★ (+4), 5,231 forks (=)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (=)
+- continuedev/continue: 36,427★ (-1), 5,559 forks (=)
+- Aider-AI/aider: 50,008★ (+3), 5,145 forks (=)
+- Graphify-Labs/graphify: 143,894★ (+107), 13,764 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
