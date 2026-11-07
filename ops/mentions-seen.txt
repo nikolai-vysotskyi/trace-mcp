@@ -431,3 +431,12 @@ Zugzwang-world/graphpay
 # Genuine third-party Claude Code component directory / templates repo (EdgeAgency / EdgeAgent, updated 2026-11-07):
 # INDEX.md and mcps/devtools/trace-mcp.json index trace-mcp as curated devtools MCP server with npx runner:
 EdgeAgent/agent-templates
+
+# ── Swept 2026-11-07 evening pass (TRA-2959) ──
+# Merged listing in GetBindu awesome list (PR #195 merged 2026-11-07 by raahulrahl, live in readme.md):
+GetBindu/awesome-claude-code-and-skills
+
+# Genuine third-party security research / investigation by Konstantinos Gkolias (@con_golias, November 2026) for X Article:
+# "29 npm packages write into your AI agent's setup the moment you install them. Postman's CLI is one":
+# 2026-11-07-npm-agent-configs/data/scan.json audited trace-mcp postinstall scripts and confirmed hits: {}, cmd_hit: false (clean, 0 config modifications):
+con-golias/workings

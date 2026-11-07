@@ -9695,3 +9695,47 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-07 18:00 pass (TRA-2959): GetBindu merged, security research audit discovery (con-golias/workings), competitor deep-dive on Graphify callback caller nodes (#5050), jcodemunch parse failure coverage (#1351), Serena Nix semicolon fix (#2257)
+
+**External threads audit (read-only via GitHub API):**
+- GetBindu/awesome-claude-code-and-skills#195: MERGED (merged 2026-11-07 13:54 UTC by raahulrahl; verified live in `readme.md`).
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 2 hits outside seen list:
+  - `GetBindu/awesome-claude-code-and-skills`: Organic sweep hit reflecting PR #195 merge today. Added to `ops/mentions-seen.txt`.
+  - `con-golias/workings`: Genuine third-party security research investigation by Konstantinos Gkolias (@con_golias, November 2026) for X Article *"29 npm packages write into your AI agent's setup the moment you install them. Postman's CLI is one"*. Pipeline screened npm agent packages with postinstall scripts for agent config tampering (`CLAUDE.md`, `AGENTS.md`, `~/.claude.json`). Scanned 7 postinstall scripts of `trace-mcp` (`preflight-native.mjs`, `postinstall-app.mjs`, `postinstall-control-plane.mjs`, etc.) and confirmed `hits: {}`, `cmd_hit: false` — clean, zero config modifications. Added to `ops/mentions-seen.txt`.
+- External touches: 0 (clean research dataset and autonomously merged list; no outreach needed).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Caller attribution for bare anonymous callback arguments (PR #5050, open; fixes #5048)*: In JavaScript/TypeScript extraction, function expressions passed directly as arguments in expression statements (`router.get('/path', (req, res) => {...})`, `addEventListener`, `setTimeout`) previously had their calls dropped entirely because caller attribution only keyed on named declarations/anchors. PR #5050 introduces synthetic caller nodes `anonymous()` (`stem_anonymous_<line>`) with INFERRED `calls` edges (weight 0.8). Contrast: trace-mcp uses native AST scope analysis where closures and callbacks naturally inherit and bind to their enclosing lexical scope and lexical definitions, accurately capturing bidirectional references and call graphs without synthetic pseudo-nodes or degraded edge confidence.
+- **jgravelle/jcodemunch-mcp**:
+  - *Parse failure withholding and false-negative absence prevention (PR #1351, open)*: When a file parse exceeded the 20s budget or raised an exception, it only emitted a warning while the index still marked itself complete. Subsequent `search_symbols` for functions in that file returned `absent` on a clean channel, misleading AI agents into treating the absence as proof of nonexistence. PR #1351 adds `parse_failed` to `WITHHELD_SKIP_REASONS` and forces index channel status to `partial` to refuse absence claims. Contrast: trace-mcp uses fast, deterministic native tree-sitter AST extraction that parses workspaces in seconds without timeouts, tracking file indexing states atomically in SQLite so searches never return false negative absence proofs on unindexed or corrupted files.
+- **oraios/serena**:
+  - *Nix binding semicolon stripping in `replace_symbol_body` (PR #2257, open)*: In Nix language editing, `replace_symbol_body` deleted trailing semicolons from bindings while reporting success (`OK`) because symbol ranges had been extended to include `;` while `find_symbol` body extraction used unextended ranges. Contrast: trace-mcp is a read-side indexing, symbol resolution, and impact analysis server that leaves file mutation to specialized editor tools or language servers without mutating source files on disk via lossy AST reconstructions, eliminating syntax corruption risks in language-specific edge cases.
+
+**Competitor pulse (as of 2026-11-07 18:00 pass vs 2026-11-07 14:00 pass TRA-2957):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,176★ (+2), 1,625 forks (=)
+- oraios/serena: 31,176★ (+4), 2,130 forks (=)
+- DeusData/codebase-memory-mcp: 48,281★ (+12), 3,987 forks (+2)
+- tirth8205/code-review-graph: 32,630★ (+2), 2,967 forks (=)
+- colbymchenry/codegraph: 76,983★ (+13), 5,116 forks (+1)
+- abhigyanpatwari/GitNexus: 48,321★ (+3), 5,231 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (=)
+- continuedev/continue: 36,428★ (+1), 5,559 forks (+3)
+- Aider-AI/aider: 50,005★ (+6, crossed major 50,000★ milestone!), 5,145 forks (+1)
+- Graphify-Labs/graphify: 143,787★ (+68), 13,754 forks (+8)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
