@@ -266,4 +266,65 @@ describeIfBuilt('built proxy.js survives the daemon dying mid-session (TRA-1112)
       if (existsSync(backup)) renameSync(backup, bundle);
     }
   }, 120_000);
+
+  it('keeps an open session when the whole package directory is swapped during daemon loss', async () => {
+    const sandbox = mkdtempSync(join(tmpdir(), 'trace-proxy-package-swap-'));
+    const project = join(sandbox, 'proj');
+    const home = join(sandbox, 'home');
+    const install = join(sandbox, 'trace-mcp');
+    const backup = join(sandbox, 'trace-mcp.tmcp-bak-123');
+    const dist = join(install, 'dist');
+    mkdirSync(project);
+    mkdirSync(home);
+    mkdirSync(dist, { recursive: true });
+    writeFileSync(join(project, 'a.ts'), 'export const alpha = 1;\n');
+    copyFileSync(PROXY, join(dist, 'proxy.js'));
+    copyFileSync(join(REPO_ROOT, 'dist', 'local-backend.js'), join(dist, 'local-backend.js'));
+    writeFileSync(join(install, 'package.json'), '{"type":"module"}\n');
+    symlinkSync(join(REPO_ROOT, 'node_modules'), join(install, 'node_modules'), 'dir');
+
+    const daemon = await startFakeDaemon();
+    const child = spawn(process.execPath, [join(dist, 'proxy.js'), 'serve'], {
+      cwd: project,
+      env: {
+        ...process.env,
+        TRACE_MCP_HOME: home,
+        TRACE_MCP_DAEMON_PORT: String(daemon.port),
+        TRACE_MCP_NO_DAEMON: '1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    cleanup = async () => {
+      if (child.exitCode === null) {
+        const exited = once(child, 'exit');
+        child.kill('SIGKILL');
+        await exited;
+      }
+      await daemon.kill().catch(() => {});
+      rmSync(sandbox, { recursive: true, force: true });
+    };
+
+    const client = attachClient(child);
+    const init = await client.request(1, 'initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'package-swap-test', version: '0' },
+    });
+    expect(init.error).toBeUndefined();
+    client.notify('notifications/initialized');
+    expect((await client.request(2, 'tools/list')).result?.servedBy).toBe('daemon');
+
+    renameSync(install, backup);
+    await daemon.kill();
+    const restore = setTimeout(() => renameSync(backup, install), 1_500);
+    try {
+      const response = await client.request(3, 'tools/list');
+      expect(response.error).toBeUndefined();
+      expect(response.result?.tools?.length ?? 0).toBeGreaterThan(0);
+      expect((await client.request(4, 'tools/list')).error).toBeUndefined();
+    } finally {
+      clearTimeout(restore);
+      if (existsSync(backup)) renameSync(backup, install);
+    }
+  }, 120_000);
 });
