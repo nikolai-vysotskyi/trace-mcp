@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.42.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.10...v3.42.11) (2026-11-07)
+
+
+### Bug Fixes
+
+* **api:** bound and cache coverage route, optimize child project discovery (TRA-2928) ([#1863](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1863)) ([f57a66a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f57a66a240fc13a71462fadcebd9bc8cb9bec79a))
+* **session:** avoid false stall warning on first entry after idle (TRA-2618) ([#1862](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1862)) ([7932a14](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7932a140bdd6d9be301bfa3a2769e932331de0c8))
+
+
+### Documentation
+
+* **ops:** record distribution outreach pass 2026-11-06 02:00 (TRA-2922) ([#1854](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1854)) ([7a34cb3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7a34cb32aea2600c9bfa33f9e962b39f5ce46158))
+* **ops:** record distribution outreach pass 2026-11-06 08:00 (TRA-2931) ([#1856](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1856)) ([64861f5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/64861f5e3945962c6212ee395be28a63fdc1a6d0))
+* **ops:** record distribution outreach pass 2026-11-06 14:00 (TRA-2934) ([#1857](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1857)) ([16885c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/16885c34e4476a23569dd391558f32c1c6024aa0))
+* **ops:** record distribution outreach pass 2026-11-06 18:00 (TRA-2936) ([#1858](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1858)) ([ff50c73](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ff50c73157968f81a4ecd312c14f2d4bfb0ddbfb))
+* **ops:** record distribution outreach pass 2026-11-06 22:00 (TRA-2938) ([#1859](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1859)) ([0bba176](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0bba1769e1337dd83e6889cfc558d5613c05a8a3))
+* **ops:** record distribution outreach pass 2026-11-07 02:00 (TRA-2943) ([#1860](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1860)) ([3fd6f18](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fd6f18e12afc74723ca57962aff49b25040c692))
+* **ops:** record distribution outreach pass 2026-11-07 08:00 (TRA-2954) ([#1867](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1867)) ([f181099](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f181099d60af6a57d5e03e31b207c426333b9366))
+* **ops:** record distribution outreach pass 2026-11-07 14:00 (TRA-2957) ([#1868](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1868)) ([2b911c6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2b911c61413b626d2aa679a19e3b6ed6ae32b071))
+* **ops:** record distribution outreach pass 2026-11-07 18:00 (TRA-2959) ([#1869](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1869)) ([ca5da6d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca5da6d389aa11e55e0373b40800f0aa5f30d057))
+* record daemon recovery after FSEvents storm ([#1861](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1861)) ([3ca7879](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ca787915aa196698607d94f9de32450cb496240))
+* record v3.42.10 daemon memory field sample ([#1853](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1853)) ([cfa62ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cfa62baf9a31060da17542aff06c8c247e873832))
+
+
+### Tests
+
+* **daemon:** isolate test daemon and add live daemon PID guard (TRA-2946) ([#1865](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1865)) ([a21a2dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a21a2dd4f3f4916f5c646514fb58498e1e1ed1f8))
+* **indexer:** add limit boundary and reconcile regression tests (TRA-2941) ([#1864](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1864)) ([7614450](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7614450e50a30e3d43390ee9d01239582f3bc2f7))
+* **proxy:** retain stdio session across package directory swap (TRA-2951) ([#1866](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1866)) ([6c07231](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c0723141ec62ff11f41b91fd2a93afa06848d7a))
+
+
+### Chores
+
+* **deps-dev:** bump @biomejs/biome from 2.5.15 to 2.6.3 in the development-minor-patch group ([#1829](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1829)) ([dafcfb3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dafcfb3616968ea836cd3b5d95cf7d53f7f1822b))
+
 ## [3.42.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.9...v3.42.10) (2026-11-05)
 
 
