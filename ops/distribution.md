@@ -9611,3 +9611,45 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Outreach pass, 2026-11-07 08:00 pass (TRA-2954): clean mention sweep (0 new hits), competitor deep-dive on Graphify offline path finder & focus view (#5073), Graphify affected ranking by link strength & depth (#5069), jcodemunch CI ratio floor merge & v1.108.422 release
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (upstream moved main; 0 external merges since July; marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 hits returned outside `ops/mentions-seen.txt`. Sweep is clean ("No repos outside the seen list. Nothing to read.").
+- External touches: 0.
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Offline interactive path finder & focus view in HTML export (PR #5073, open)*: Adds `graphify/exporters/html_path.py` and expands `html.py`, rendering an offline path route finder between any two nodes (`file:line` hops, dashed inferred edges) and a radial neighbor focus view in `graph.html`. Contrast: trace-mcp provides a native desktop Electron app with zero HTML generation overhead, streaming token-bounded symbol maps directly to AI agents.
+  - *Link-strength & depth ranking for affected node analysis (PR #5069, open; closes #5067)*: Implements `rank_hits` in `graphify/affected.py`, sorting impacted nodes primarily by distance, then by link edge multiplicity (calls, imports, references) between the candidate's file and the seed's file, breaking ties by path/line/id. On a 6-repo git history replay (2,070 queries), improved recall@10 from 0.179 to 0.221 and hit@10 from 0.340 to 0.395. Contrast: trace-mcp indexes structural dependency relationships directly into SQLite with precomputed reverse-edge tables and topological rank ordering, which allows constant-time impact traversal rather than in-memory Python graph post-processing and quadratic link-strength aggregation.
+- **jgravelle/jcodemunch-mcp**:
+  - *Ratio-based CI cold index floor merge (PR #1349 merged)* & *Release v1.108.422 (PR #1350 merged)*: jcodemunch merged the cold-index CI ratio floor (`index.cold_over_one_file_ratio <= 59`) and cut release v1.108.422 enforcing strict parser cache eviction (`the shared parse cache never serves what an older parser emitted`).
+
+**Competitor pulse (as of 2026-11-07 08:00 pass vs 2026-11-07 02:00 pass TRA-2943):**
+- nikolai-vysotskyi/trace-mcp: 202★ (=, holding milestone), 24 forks (=)
+- yamadashy/repomix: 29,174★ (+1), 1,626 forks (=)
+- oraios/serena: 31,162★ (+2), 2,129 forks (=)
+- DeusData/codebase-memory-mcp: 48,248★ (+14), 3,978 forks (+1)
+- tirth8205/code-review-graph: 32,629★ (+2), 2,967 forks (=)
+- colbymchenry/codegraph: 76,945★ (+17), 5,115 forks (+6)
+- abhigyanpatwari/GitNexus: 48,314★ (+7), 5,230 forks (=)
+- jgravelle/jcodemunch-mcp: 2,835★ (=), 373 forks (=)
+- continuedev/continue: 36,427★ (+3), 5,555 forks (=)
+- Aider-AI/aider: 49,994★ (+7), 5,143 forks (+2)
+- Graphify-Labs/graphify: 143,609★ (+91), 13,736 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
