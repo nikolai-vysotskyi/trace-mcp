@@ -14,7 +14,9 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
+import type { ChildProcess } from 'node:child_process';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   isDangerousProjectRoot,
   isTestFixturePath,
@@ -26,6 +28,7 @@ import {
   getLiveDaemonPid,
   registerTestProject,
   spawnTestDaemon,
+  stopChildProcess,
   teardownTestProject,
   type TestDaemonInstance,
 } from '../helpers/test-daemon.js';
@@ -339,6 +342,19 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
     });
+
+    it('fails closed and rejects when child process does not exit within timeoutMs in stopChildProcess', async () => {
+      // Mock hung ChildProcess that does not emit 'exit' or 'close'
+      const hungChild = new EventEmitter() as unknown as ChildProcess;
+      hungChild.pid = 999991;
+      hungChild.exitCode = null;
+      hungChild.signalCode = null;
+      hungChild.kill = vi.fn().mockReturnValue(true);
+
+      await expect(stopChildProcess(hungChild, 100)).rejects.toThrow(
+        /Failed to terminate child process PID 999991 within 100ms/,
+      );
+    });
   });
 
   describe('Isolated test daemon lifecycle and verifiable teardown', () => {
@@ -421,12 +437,10 @@ describe('TRA-2946: Test daemon isolation and live daemon protection', () => {
         // Teardown with stopDaemon: true awaits child process exit before resolving
         await localDaemon.teardownProject(localFixture, { stopDaemon: true });
 
-        // Verify the child process is genuinely terminated
-        expect(
-          localDaemon.child.exitCode !== null ||
-            localDaemon.child.signalCode !== null ||
-            localDaemon.child.killed,
-        ).toBe(true);
+        // Verify the child process is genuinely terminated (exit confirmed by kernel)
+        expect(localDaemon.child.exitCode !== null || localDaemon.child.signalCode !== null).toBe(
+          true,
+        );
 
         // Now safe to delete fixture files without risking watcher ENOENT storms
         expect(() => {

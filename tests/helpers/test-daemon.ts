@@ -296,41 +296,90 @@ export async function waitForDaemonHealth(
 
 /**
  * Stop a spawned child process reliably (SIGTERM with fallback to SIGKILL).
- * On Windows, waits for process exit after taskkill tree termination.
+ * Resolves ONLY after confirmed process termination ('exit' or 'close' event).
+ * Fails closed and rejects with diagnostic error if the child does not terminate within timeoutMs.
  */
 export function stopChildProcess(child: ChildProcess, timeoutMs = 5000): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (child.exitCode !== null || child.signalCode !== null) {
       resolve();
       return;
     }
 
     let settled = false;
-    const done = () => {
-      if (!settled) {
-        settled = true;
-        resolve();
-      }
+    let timer: NodeJS.Timeout | null = null;
+    let sigkillTimer: NodeJS.Timeout | null = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (sigkillTimer) clearTimeout(sigkillTimer);
+      child.removeListener('exit', onExit);
+      child.removeListener('close', onExit);
     };
 
-    child.once('exit', done);
+    const onExit = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    child.once('exit', onExit);
+    child.once('close', onExit);
 
     if (process.platform === 'win32') {
       try {
         execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
       } catch {
-        child.kill('SIGKILL');
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          /* ignore */
+        }
       }
     } else {
-      child.kill('SIGTERM');
-      setTimeout(() => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        /* ignore */
+      }
+
+      // Escalate to SIGKILL if SIGTERM did not settle within budget
+      const sigkillDelay = Math.min(2000, Math.floor(timeoutMs / 2));
+      sigkillTimer = setTimeout(() => {
         if (!settled && child.exitCode === null && child.signalCode === null) {
-          child.kill('SIGKILL');
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* ignore */
+          }
         }
-      }, 2000);
+      }, sigkillDelay);
     }
 
-    setTimeout(done, timeoutMs);
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+
+      // Final forced kill attempt before rejecting
+      try {
+        if (process.platform === 'win32') {
+          execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        } else {
+          child.kill('SIGKILL');
+        }
+      } catch {
+        /* best effort */
+      }
+
+      reject(
+        new Error(
+          `Failed to terminate child process PID ${child.pid} within ${timeoutMs}ms ` +
+            `(exitCode: ${child.exitCode}, signalCode: ${child.signalCode})`,
+        ),
+      );
+    }, timeoutMs);
   });
 }
 
