@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listProjects } from '../../registry.js';
 import { markToolConsultation } from '../../server/consultation-markers.js';
+import { classifyErrorResponse } from '../../server/tool-gate-helpers.js';
 import type { ServerContext } from '../../server/types.js';
 import { summarizeToolParams } from '../../session/journal.js';
 
@@ -184,11 +185,13 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
         /* journal is best-effort */
       }
       if (onJournalEntry && sessionId) {
+        const errorClass = relayed.isError ? classifyErrorResponse(relayed) : undefined;
+        const baseSummary = summarizeToolParams(tool, args ?? {});
         onJournalEntry({
           project: resolvedRoot,
           ts: Date.now(),
           tool,
-          params_summary: summarizeToolParams(tool, args ?? {}),
+          params_summary: errorClass ? `${baseSummary} [${errorClass}]` : baseSummary,
           result_count: relayed.isError ? 0 : 1,
           result_tokens: relayedTokens,
           latency_ms: Date.now() - relayStart,
