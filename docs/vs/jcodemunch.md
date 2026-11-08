@@ -250,4 +250,4 @@ If the codebase is Next.js, Django, Rails, or similar and the agent's questions 
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
 - Every knob is optional — [configuration](/configuration.html) works with none, reference when needed.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.

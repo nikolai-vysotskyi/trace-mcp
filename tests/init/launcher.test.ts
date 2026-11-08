@@ -235,6 +235,27 @@ describe('setupLauncher (install + config)', () => {
       process.argv[1] = argv1;
     }
   });
+
+  it('fails before installing a launcher when init runs from an ephemeral cache', () => {
+    const argv1 = process.argv[1];
+    process.argv[1] = path.join(
+      os.homedir(),
+      '.npm',
+      '_npx',
+      'hash',
+      'node_modules',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    try {
+      expect(() => setupLauncher({ pkgVersion: '3.41.0' })).toThrow(/npm install -g trace-mcp/);
+      expect(fs.existsSync(getLauncherPath())).toBe(false);
+      expect(fs.existsSync(getLauncherConfigPath())).toBe(false);
+    } finally {
+      process.argv[1] = argv1;
+    }
+  });
 });
 
 describe('recordPkgRoot', () => {

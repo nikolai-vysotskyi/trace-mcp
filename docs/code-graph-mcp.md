@@ -122,7 +122,7 @@ For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code
 Install trace-mcp in your project root:
 
 ```bash
-npx trace-mcp init
+npm i -g trace-mcp && trace-mcp init
 ```
 
 The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.

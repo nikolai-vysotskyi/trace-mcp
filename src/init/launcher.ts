@@ -717,6 +717,14 @@ export function resolveCurrentCliPath(): string {
 export function setupLauncher(
   opts: InstallLauncherOpts & { pkgVersion: string },
 ): InitStepResult[] {
+  if (!opts.dryRun && isEphemeralInstallPath(resolveCurrentCliPath())) {
+    const existing = readLauncherConfig();
+    if (!existing.cli || isEphemeralInstallPath(existing.cli)) {
+      throw new Error(
+        'Cannot configure MCP clients from an ephemeral package cache; run npm install -g trace-mcp, then trace init',
+      );
+    }
+  }
   const steps: InitStepResult[] = [];
   steps.push(installLauncher(opts));
 
