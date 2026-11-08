@@ -268,7 +268,7 @@ describe('docs footer nav and catalogue cover every indexed page', () => {
    * The two checks above only compare sitemap.xml against the nav, so a page
    * absent from *both* was invisible to them. On 2026-08-30 four such pages
    * were live on trace-mcp.com — /language-matrix.html, /daemon-memory.html,
-   * /ROADMAP.html and /DESIGN-WEB.html — each a fully rendered 200 with a
+   * /ROADMAP.html and /the private design standard.html — each a fully rendered 200 with a
    * <title>, each with no inbound link anywhere on the site, and all four
    * reported "URL is unknown to Google" by the Search Console API.
    *

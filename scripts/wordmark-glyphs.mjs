@@ -1,6 +1,6 @@
 // Space Mono Bold outlines, extracted once with fontTools from
 // docs/fonts/space-mono-700-latin.woff2 (1000 upem, every advance 612 —
-// it is a monospace). DESIGN-WEB §1a: outlining is a technical step, so the
+// it is a monospace). the private design standard §1a: outlining is a technical step, so the
 // contours are the font's own, not redrawn. Regenerate only if the font file
 // changes; nothing at build time reads the woff2.
 export const ADVANCE = 612;

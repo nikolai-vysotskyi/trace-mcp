@@ -1,4 +1,4 @@
-// Generates the README header images — see [internal record] §10.
+// Generates the README header images — see the private design standard §10.
 //
 // GitHub renders README images in an isolated context: an SVG's @font-face
 // never loads there, so Space Grotesk silently falls back to a system font and
@@ -89,7 +89,7 @@ const THEMES = {
 // The banner used to set the wordmark in Space Grotesk beside the icon PNG,
 // which is a third rendering of the logo alongside the site's and the app's.
 // It now inlines the generated row lockup, so all three come from one place
-// and a geometry change lands everywhere at once (DESIGN-WEB §1b).
+// and a geometry change lands everywhere at once (the private design standard §1b).
 const LOCKUP = fs.readFileSync(path.join(DOCS, 'images', 'logo', 'lockup-row-inherit.svg'), 'utf8');
 
 /** The lockup at a given height, coloured for the theme it is dropped into. */

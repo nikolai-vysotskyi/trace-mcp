@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * README header regression guard — see [internal record] §10.
+ * README header regression guard — see the private design standard §10.
  *
  * The banner ships in two cuts: 1200px for a desktop README column and 480px
  * for a phone, where GitHub scales the wide one to ~0.33 and its 25px tagline

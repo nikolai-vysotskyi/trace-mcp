@@ -9,12 +9,6 @@
 
     {% seo %}
 
-    {%- comment -%}
-      Internal working documents (ROADMAP, DESIGN-WEB) render at a public URL
-      because they live under docs/, but they are notes for the team, not
-      search results. `noindex: true` in their front matter keeps them off the
-      index without hiding them from anyone following a direct link.
-    {%- endcomment -%}
     {%- if page.noindex %}
     <meta name="robots" content="noindex, follow">
     {%- endif %}
@@ -122,7 +116,7 @@
       Hand-written Nothing stylesheet, not the GH Pages Primer default. Primer
       shipped 76.5 KB with zero prefers-color-scheme rules, system fonts and
       zebra-striped tables — none of which the site's design system allows.
-      Tokens mirror docs/index.html; the standard is [internal record].
+      Tokens mirror docs/index.html; the standard is the private design standard.
     {%- endcomment -%}
     <link rel="preload" href="{{ '/fonts/space-grotesk-variable-latin.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{{ '/assets/css/docs.css' | relative_url }}">
@@ -273,7 +267,7 @@
             firstCell.setAttribute('scope', 'row');
           }
         });
-        // Capability marks are ✓/✗ text, not ✅/❌ emoji (DESIGN-WEB.md §4).
+        // Capability marks are ✓/✗ text, not ✅/❌ emoji (the private design standard §4).
         // Wrapping them here rather than in the Markdown keeps the source a
         // scannable table for the SEO agent, gives the mark an accessible
         // name — a screen reader reads "Yes"/"No", not "check mark" — and

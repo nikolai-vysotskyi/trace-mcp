@@ -1,4 +1,4 @@
-// Guards on the generated lockups — see [internal record] §1b.
+// Guards on the generated lockups — see the private design standard §1b.
 //
 // The geometry here was settled by eye over four rejected rounds (TRA-780) and
 // none of it is derivable from anything else in the repo, so a well-meaning
@@ -52,7 +52,7 @@ describe('lockup geometry', () => {
     // The mark drives the lockup's own height, so at a fixed placement height a
     // bigger mark grows the icon *and* shrinks the word — one knob, not two.
     // 1220 with the placement raised ~7% is +16% icon and -16% word against the
-    // 885 this shipped with; the arithmetic is in DESIGN-WEB §1b.
+    // 885 this shipped with; the arithmetic is in the private design standard §1b.
     // The 300 is separate and settled: 232, the centre of the ink block, reads
     // as hanging because the block is dragged down by the descender of `p`
     // while the eye reads the line off the x-height; 442 lifts the mark clear.

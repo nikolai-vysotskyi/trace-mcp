@@ -326,7 +326,7 @@ updated: 2026-10-25
       --accent: #5B8CFF; /* 6.64 page / 5.97 surface / 5.50 raised (governs) */
       --accent-solid: #2B5FE3; /* landing-only fill under white text: 5.46:1 */
       --accent-solid-hover: #1B49B8; /* 7.80:1 with #FFFFFF */
-      --negative: #E54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
+      --negative: #E54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see the private design standard #1 */
       --success: #4A9E5C;
       --warning: #D4A843;
 
@@ -1480,7 +1480,7 @@ updated: 2026-10-25
        direction as the plain /Product and /Source lists either side of it. A
        row-flow grid put items 1, 4, 7… down the first sub-column, which
        scattered docs_nav.yml's order — the five /vs/ pages landed one per row
-       across all three. That order is the SEO agent's (DESIGN-WEB.md §2) and
+       across all three. That order is the SEO agent's (the private design standard §2) and
        reading down is what preserves it. It also drops the ragged rows: two
        labels wrap to a second line, and in a grid they set the height of
        every cell in their row, opening 48px gaps that read as group breaks. */
@@ -1499,7 +1499,7 @@ updated: 2026-10-25
        token usage`) take two lines in every layout; a sub-column wide enough
        for them would leave room for two, not three. `break-inside: avoid`
        keeps each one whole so it still reads as a single target
-       (DESIGN-WEB.md §2). */
+       (the private design standard §2). */
     .footer-doc-links a { break-inside: avoid; }
     .footer-bottom {
       display: flex; justify-content: space-between; align-items: center;
@@ -2139,7 +2139,7 @@ updated: 2026-10-25
        hand-written file, so it does not inherit the sheet the 17 doc pages
        share; without these three rules it was the only page on the site
        falling back to Chrome's default focus ring and ignoring
-       prefers-reduced-motion. Standard: [internal record] §5. */
+       prefers-reduced-motion. Standard: the private design standard §5. */
 
     .skip-link {
       position: absolute;
@@ -2186,7 +2186,7 @@ updated: 2026-10-25
 <nav>
   <div class="container">
     <!-- The home page paints its own header rather than the layout's, so the
-         lockup has to be inlined here too — DESIGN-WEB §1b. Generated; never
+         lockup has to be inlined here too — the private design standard §1b. Generated; never
          edit by hand: node scripts/gen-lockup.mjs -->
     <a href="{{ '/' | relative_url }}" class="nav-brand" aria-label="trace-mcp — home">
       <svg class="nav-lockup" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7491 1220" role="img" aria-label="trace-mcp">
@@ -3142,11 +3142,11 @@ updated: 2026-10-25
         picked up the ones added after them — the whole /vs/ cluster launched
         with no link from the one page on this site with any external
         authority. Same failure mode as the accessibility layer in
-        DESIGN-WEB.md §7: the fix landed in _layouts/default.html and this
+        the private design standard §7: the fix landed in _layouts/default.html and this
         page does not use that layout.
 
         Which pages are listed, their labels and their order belong to
-        docs_nav.yml and the SEO agent (DESIGN-WEB.md §2); the column split
+        docs_nav.yml and the SEO agent (the private design standard §2); the column split
         is the only decision made here.
       {%- endcomment -%}
       <div class="footer-col footer-col-docs">

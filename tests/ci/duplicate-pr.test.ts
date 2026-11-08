@@ -70,13 +70,13 @@ const PR_875 = {
 };
 const PR_882 = {
   number: 882,
-  title: 'docs(ops): user-signal run 2026-09-05 — code search as a channel',
-  body: 'Ledger update for the run of 2026-09-05 (TRA-837). Records TRA-845, TRA-846 and TRA-843, and the index-coverage work in TRA-791.',
+  title: 'docs: document code search findings',
+  body: 'Documentation update for TRA-837. Records TRA-845, TRA-846 and TRA-843.',
 };
 const PR_854 = {
   number: 854,
-  title: 'ops: index-coverage ledger — 11 of 24 pages unindexed (TRA-791)',
-  body: 'Records what Google actually has for trace-mcp.com, so a run stops re-deriving it by hand.',
+  title: 'docs: record indexing review (TRA-791)',
+  body: 'Documents the indexing review for trace-mcp.com.',
 };
 
 describe('isReleasePr', () => {

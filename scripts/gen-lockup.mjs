@@ -26,7 +26,7 @@
 //          height a bigger mark shrinks the word as well as growing the icon —
 //          the two are one knob, not two. 1220 with the placement raised ~7%
 //          lands +16% on the icon and -16% on the word, which is the change that
-//          was asked for; the arithmetic is in DESIGN-WEB §1b.
+//          was asked for; the arithmetic is in the private design standard §1b.
 //          The 300 is from a separate sweep: at 232 the mark is centred on the
 //          ink block including the descender of `p`, which reads as hanging —
 //          the word has to drop against the mark for the line to sit straight.
@@ -34,7 +34,7 @@
 const ROW = { mark: 1220, anchor: 300, gap: 275 };
 const STACK = { mark: 3600, gap: 800 };
 
-// The step that replaces the hyphen — DESIGN-WEB §1a, in the same units.
+// The step that replaces the hyphen — the private design standard §1a, in the same units.
 const STEP = { weight: 88, rise: 253, box: 900, lower: 383, airBefore: 88, airAfter: 112 };
 
 import fs from 'node:fs';
@@ -54,7 +54,7 @@ const WORD_W =
 const INK = { top: 675, bottom: 210 }; // of the rendered string, above/below baseline
 
 // The accent is the only colour the wordmark carries, and it differs per theme
-// so the step keeps its contrast on either ground (DESIGN-WEB §1).
+// so the step keeps its contrast on either ground (the private design standard §1).
 //
 // `inherit` is the variant for inlining into a page: the site switches themes
 // with `data-theme` off localStorage, so a `prefers-color-scheme` swap would

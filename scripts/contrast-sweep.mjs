@@ -1,4 +1,4 @@
-// Contrast sweep for trace-mcp.com — see [internal record] §5.
+// Contrast sweep for trace-mcp.com — see the private design standard §5.
 //
 // Renders every page in headless Chrome in both themes and checks each element
 // carrying its own text against its real painted background.

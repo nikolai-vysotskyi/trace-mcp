@@ -2,7 +2,7 @@
    trace-mcp docs — Nothing design system
    Replaces the stock GitHub Pages Primer sheet (76.5 KB, no dark
    mode, zebra tables, system fonts). Tokens are kept identical to
-   docs/index.html by hand; see [internal record].
+   docs/index.html by hand; see the private design standard.
    ────────────────────────────────────────────────────────────── */
 
 *,
@@ -70,7 +70,7 @@
   --text-primary: #e8e8e8;
   --text-display: #ffffff;
   --accent: #5b8cff; /* 6.64 page / 5.97 surface / 5.50 raised (governs) */
-  --negative: #e54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
+  --negative: #e54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see the private design standard #1 */
 
   --nav-bg: rgba(0, 0, 0, 0.85);
   --dot-color: var(--border);
@@ -178,7 +178,7 @@ body::before {
   align-items: center;
   gap: 10px;
 }
-/* The lockup replaces the bracketed wordmark (DESIGN-WEB §1b). Height, not
+/* The lockup replaces the bracketed wordmark (the private design standard §1b). Height, not
    width: the SVG carries its own aspect ratio, and the mark inside is 885 of
    the wordmark's 1000 units, so 26px here puts the word at roughly the 13px
    the nav used to set it in. */

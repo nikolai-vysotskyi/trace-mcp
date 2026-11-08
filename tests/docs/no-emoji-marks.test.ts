@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 /**
  * Emoji-free rendered pages (TRA-447).
  *
- * [internal record] §4 forbids emoji as UI: they are filled multi-colour
+ * the private design standard §4 forbids emoji as UI: they are filled multi-colour
  * icons, and on trace-mcp.com red is reserved as the single accent. The
  * comparison tables had drifted to 305 ✅/❌ marks on comparisons.html alone,
  * painting the page green and red. Capability marks are now ✓/✗ text, styled
@@ -24,7 +24,7 @@ const DOCS = join(import.meta.dirname, '..', '..', 'docs');
 const FORBIDDEN = ['✅', '❌', '⚠️', '✔️', '✖️', '🟢', '🟡', '🔴'];
 
 function renderedPages(): string[] {
-  const md = readdirSync(DOCS).filter((f) => f.endsWith('.md') && f !== 'DESIGN-WEB.md');
+  const md = readdirSync(DOCS).filter((f) => f.endsWith('.md'));
   const vs = readdirSync(join(DOCS, 'vs')).map((f) => join('vs', f));
   return [...md, ...vs, 'index.html'];
 }
@@ -35,7 +35,7 @@ describe('rendered pages carry no emoji', () => {
     const found = FORBIDDEN.filter((glyph) => source.includes(glyph));
     expect(
       found,
-      `emoji in docs/${page} — use ✓/✗ text marks instead ([internal record] §4)`,
+      `emoji in docs/${page} — use ✓/✗ text marks instead (the private design standard §4)`,
     ).toEqual([]);
   });
 });
