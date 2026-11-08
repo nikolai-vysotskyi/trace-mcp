@@ -607,6 +607,19 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 
 ---
 
+## Supported by
+
+<a href="https://assetfeed.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/sponsors/assetfeed-dark.svg" />
+    <img src="docs/images/sponsors/assetfeed-light.svg" alt="AssetFeed" height="56" />
+  </picture>
+</a>
+
+Built by the team behind [AssetFeed](https://assetfeed.com).
+
+---
+
 ## Star History
 
 <a href="https://www.star-history.com/#nikolai-vysotskyi/trace-mcp&Date">
