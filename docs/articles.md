@@ -435,7 +435,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/socraticode.html">SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents</a></h3>
 <p class="article-card-desc">SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring.</p>
@@ -444,7 +444,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/jcodemunch.html">jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents</a></h3>
 <p class="article-card-desc">Looking for a jCodeMunch alternative you can use commercially? Honest trace-mcp vs jCodeMunch comparison: license, framework edges, refactoring.</p>
@@ -453,7 +453,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-26</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/tokensave.html">TokenSave Alternative: trace-mcp vs TokenSave for AI agents</a></h3>
 <p class="article-card-desc">TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 91 framework integrations, AST refactoring, and OWASP taint analysis.</p>
@@ -462,7 +462,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-26</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/gitnexus.html">GitNexus Alternative: trace-mcp vs GitNexus for AI agents</a></h3>
 <p class="article-card-desc">GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 91 frameworks, typed tools, and AST refactoring.</p>
@@ -471,7 +471,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-26</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/graft.html">Graft Alternative: trace-mcp vs Graft for AI agents</a></h3>
 <p class="article-card-desc">Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 91 frameworks, and AST refactoring.</p>
@@ -480,7 +480,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-26</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/narsil-mcp.html">Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents</a></h3>
 <p class="article-card-desc">Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 91 framework integrations, AST refactoring write tools, and OWASP taint analysis.</p>
@@ -770,7 +770,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">CONCEPTS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/code-graph-mcp.html">Code Graph MCP Server for AI Coding Agents</a></h3>
 <p class="article-card-desc">How a code graph MCP server gives AI coding agents persistent symbol, call, and framework relationships without re-reading whole repositories.</p>
