@@ -790,7 +790,7 @@ export function scheduleBackgroundUpdate(
  *  1. Migrate global config (add new keys, remove stale ones)
  *  2. Re-install hooks (guard, reindex, precompact, worktree) — picks up new
  *     script versions shipped with the update
- *  3. Update global [internal record] block
+ *  3. Update global CLAUDE.md block
  *  4. Force-reindex every registered project so index schema changes and new
  *     parser/plugin improvements take effect
  *
@@ -822,7 +822,7 @@ export async function runPostUpdateMigrations(): Promise<void> {
   // killed mid-migration (e.g. by the desktop app's /health watchdog when
   // event loop is busy), the next startup must not re-run the migration
   // and re-enter the loop. We accept that an aborted migration may leave
-  // hooks/[internal record]/reindex partially applied — a partial migration is
+  // hooks/CLAUDE.md/reindex partially applied — a partial migration is
   // far better than an infinite restart loop. See tray.js shouldAttemptRestart.
   writeCache({ ...cache, installedVersion: CURRENT_VERSION });
 
@@ -889,12 +889,12 @@ export async function runPostUpdateMigrations(): Promise<void> {
     }
   }
 
-  // 3. Update global [internal record] block
+  // 3. Update global CLAUDE.md block
   try {
     updateClaudeMd(process.cwd(), { scope: 'global' });
-    logger.info('Post-update: [internal record] updated');
+    logger.info('Post-update: CLAUDE.md updated');
   } catch (err) {
-    logger.warn({ error: err }, 'Post-update: [internal record] update failed (non-fatal)');
+    logger.warn({ error: err }, 'Post-update: CLAUDE.md update failed (non-fatal)');
   }
 
   // 3b. Migrate the legacy `mcp__trace-mcp__` tool-name prefix in Claude-

@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     'レポートは実行されましたが、レスポンスが想定される形式と一致しませんでした — これは空のプロジェクトではなく、不具合のように見えます。',
 
-  reportDriftTitle: '[internal record] のずれ',
+  reportDriftTitle: 'CLAUDE.md のずれ',
   reportDriftDescription: 'エージェント設定ファイル内の古いパスと存在しないシンボル参照。',
   reportPagerankTitle: '中心的なファイル',
   reportPagerankDescription: 'インポートグラフの PageRank で見た、構造上もっとも中心的なファイル。',
@@ -46,7 +46,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} トークン',
   startupSourceDetail: '{{sessions}} セッションで計測',
   startupResidualDetail:
-    '内訳なし — システムプロンプト、ツールスキーマ、[internal record] はセッションログに残りません',
+    '内訳なし — システムプロンプト、ツールスキーマ、CLAUDE.md はセッションログに残りません',
   startupRebuildRow: 'キャッシュ再構築: {{cause}} — {{events}} 回',
   startupRebuildDetail: '同じトークンをキャッシュから読む場合に比べて {{usd}} 多い',
   startupServerRow: '{{server}} — {{sessions}} 件の起動ブロックに含まれる',

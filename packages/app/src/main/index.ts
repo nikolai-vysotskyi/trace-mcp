@@ -425,7 +425,7 @@ ipcMain.handle(
 });
 
 // IPC: configure trace-mcp for a specific MCP client
-// level: 'base' ([internal record] only), 'standard' (+ hooks), 'max' (+ hooks + tweakcc)
+// level: 'base' (CLAUDE.md only), 'standard' (+ hooks), 'max' (+ hooks + tweakcc)
 ipcMain.handle(
   'configure-mcp-client',
   async (_event, clientName: string, level: string = 'base') => {
@@ -528,7 +528,7 @@ ipcMain.handle(
 // IPC: remove the trace-mcp entry from one or more client configs (TRA-1932).
 //
 // Boundary: per-client disconnect removes ONLY the MCP entry. Hooks, tweakcc
-// and [internal record] are shared across the Claude family — disconnecting Cursor
+// and CLAUDE.md are shared across the Claude family — disconnecting Cursor
 // must not rip the redirect out from under Claude Code — so `clients
 // disconnect` never touches them, and neither does this handler.
 ipcMain.handle(
@@ -552,7 +552,7 @@ ipcMain.handle(
 
 // IPC: project-level prompt/hook state for the Clients screen (TRA-1933
 // Phase B). Read-only: `clients prompts` never writes — the renderer shows
-// the [internal record] block, the project settings.local.json hook and tweakcc next
+// the CLAUDE.md block, the project settings.local.json hook and tweakcc next
 // to the per-file rows, and every fix routes through the existing actions.
 ipcMain.handle('get-project-prompts', async (_event, projectRoot: string) => {
   return new Promise<{

@@ -1,8 +1,8 @@
 /**
- * [internal record] tool-routing block wrapper.
+ * CLAUDE.md tool-routing block wrapper.
  *
  * All content + marker + competitor-cleanup logic lives in `md-block.ts` so
- * [internal record] and AGENTS.md stay in sync. This module is just a path picker.
+ * CLAUDE.md and AGENTS.md stay in sync. This module is just a path picker.
  */
 
 import path from 'node:path';
@@ -15,8 +15,8 @@ export function updateClaudeMd(
 ): InitStepResult {
   const filePath =
     opts.scope === 'global'
-      ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.claude', '[internal record]')
-      : path.join(projectRoot, '[internal record]');
+      ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.claude', 'CLAUDE.md')
+      : path.join(projectRoot, 'CLAUDE.md');
 
   return upsertTraceMcpBlock(filePath, { dryRun: opts.dryRun });
 }

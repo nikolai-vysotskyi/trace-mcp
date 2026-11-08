@@ -12,7 +12,7 @@ export const insights = {
   errorToolFailed: '报告没有运行。',
   errorUnrecognizedShape: '报告已运行，但其响应与预期格式不匹配——这看起来像是一个错误，而不是空项目。',
 
-  reportDriftTitle: '[internal record] 偏移',
+  reportDriftTitle: 'CLAUDE.md 偏移',
   reportDriftDescription: '智能体配置文件中失效的路径和不存在的符号引用。',
   reportPagerankTitle: '最核心的文件',
   reportPagerankDescription: '按导入图 PageRank 排出的架构最核心文件。',
@@ -44,7 +44,7 @@ export const insights = {
   startupCostDetail: '占 {{days}} 天内输入花费 {{total}} 的一部分',
   startupSourceRow: '{{source}} — {{tokens}} 个 token',
   startupSourceDetail: '在 {{sessions}} 个会话中测得',
-  startupResidualDetail: '无法细分 — 系统提示词、工具 schema 和 [internal record] 从不写入会话日志',
+  startupResidualDetail: '无法细分 — 系统提示词、工具 schema 和 CLAUDE.md 从不写入会话日志',
   startupRebuildRow: '缓存重建：{{cause}} — {{events}} 次',
   startupRebuildDetail: '比从缓存读取同样的 token 多花 {{usd}}',
   startupServerRow: '{{server}} — 出现在 {{sessions}} 个启动块中',

@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     'Der Bericht wurde ausgeführt, aber die Antwort entsprach nicht der erwarteten Form — das sieht nach einem Fehler aus, nicht nach einem leeren Projekt.',
 
-  reportDriftTitle: '[internal record]-Abweichungen',
+  reportDriftTitle: 'CLAUDE.md-Abweichungen',
   reportDriftDescription: 'Veraltete Pfade und tote Symbolverweise in Agenten-Konfigurationsdateien.',
   reportPagerankTitle: 'Zentralste Dateien',
   reportPagerankDescription:
@@ -48,7 +48,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} Tokens',
   startupSourceDetail: 'gemessen in {{sessions}} Sitzungen',
   startupResidualDetail:
-    'Nicht aufgeschlüsselt — Systemprompt, Werkzeugschemata und [internal record] landen nie im Sitzungsprotokoll',
+    'Nicht aufgeschlüsselt — Systemprompt, Werkzeugschemata und CLAUDE.md landen nie im Sitzungsprotokoll',
   startupRebuildRow: 'Cache neu aufgebaut: {{cause}} — {{events}}-mal',
   startupRebuildDetail: '{{usd}} zusätzlich zum Lesen derselben Tokens aus dem Cache',
   startupServerRow: '{{server}} — in {{sessions}} Startblöcken',

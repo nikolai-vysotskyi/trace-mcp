@@ -83,11 +83,11 @@ export const clients = {
 
   enforcementLevel: 'Enforcement level',
   levelBase: 'Base',
-  levelBaseHint: '[internal record] only — soft routing rules',
+  levelBaseHint: 'CLAUDE.md only — soft routing rules',
   levelStandard: 'Standard',
-  levelStandardHint: '[internal record] and hooks',
+  levelStandardHint: 'CLAUDE.md and hooks',
   levelMax: 'Max',
-  levelMaxHint: '[internal record], hooks and tweakcc — recommended',
+  levelMaxHint: 'CLAUDE.md, hooks and tweakcc — recommended',
   /* TRA-1698 PreToolUse redirect: the entry alone does not close the value
      loop — without the hook agents keep reading files directly. */
   hookActive: 'Hook active',
@@ -108,7 +108,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

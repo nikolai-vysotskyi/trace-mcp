@@ -378,7 +378,7 @@ registrations and the serialized schema every MCP client without lazy tool
 loading pays at session start from 90,579 to 86,217 characters.
 
 Calling a retired name no longer fails with a bare "not found": the server
-answers with the replacement call, so a stale `[internal record]` is a one-line fix
+answers with the replacement call, so a stale `CLAUDE.md` is a one-line fix
 rather than a dead end.
 
 ### Policy: consolidations retire the old name, they don't alias it forever
@@ -462,7 +462,7 @@ which excludes the framework-specific rows.
 | `apply_startup_recommendations` | Apply or preview a get_startup_context_audit recommendation: disable an unused MCP server, move an unused skill aside, or delete duplicated instruction lines. | always |
 | `approve_decision` | Approve a decision currently in the memoir-style review queue (review_status="pending"). | always |
 | `assess_change_risk` | Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. | always |
-| `audit_config` | Scan AI agent config files ([internal record], AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
+| `audit_config` | Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
 | `batch` | Execute multiple trace-mcp tools in a single MCP request. | always |
 | `benchmark_project` | Synthetic token efficiency benchmark: compare raw file reads vs trace-mcp compact responses across symbol lookup, file exploration, search, and impact analys… | always |
 | `build_corpus` | Pack a slice of project context into a persistent corpus on disk so future query_corpus calls can prime an LLM with the same snapshot without re-running the… | always |
@@ -470,7 +470,7 @@ which excludes the framework-specific rows.
 | `call_project_tool` | Relay a trace-mcp tool call to a DIFFERENT registered project than this session's own (cross-project dispatch). | always |
 | `change_signature` | Change a function/method signature (add/remove/rename/reorder parameters) and update all call sites. | always |
 | `check_architecture` | Check architectural layer rules: detect forbidden imports between layers (e.g. | always |
-| `check_claudemd_drift` | Detect drift between AI agent config files ([internal record], AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to… | always |
+| `check_claudemd_drift` | Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to… | always |
 | `check_duplication` | Check if a function/class name already exists before creating it. | always |
 | `check_edit_safe` | Edit-safety preflight: before modifying a symbol or file, get one verdict for "is this safe to edit and what must I preserve". | always |
 | `check_embedding_drift` | Pin and re-check a 16-string canary against the active embedding provider. | always |
@@ -687,7 +687,7 @@ a footnote, and you can decline it.
 
 Every session pays for its startup block before you type anything — the
 harness system prompt, tool schemas, every MCP server's instructions, the skill
-and agent listings, `[internal record]`, and whatever your `SessionStart` hooks print.
+and agent listings, `CLAUDE.md`, and whatever your `SessionStart` hooks print.
 You are billed for it on the first turn and again on every cache rebuild.
 
 `get_startup_context_audit` measures **yours**. Not a decomposition we took on
@@ -703,7 +703,7 @@ It answers four things:
   start and whose tools were never called; a skill listed at every start and
   never invoked.
 - **Where it says the same thing twice** — `textCompression` compares your
-  `[internal record]` / `AGENTS.md` / `MEMORY.md` against the instruction text other
+  `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` against the instruction text other
   sources actually sent, and proposes deletions with a diff.
 
 Every recommendation rests on **evidence of non-use over a stated window**,
@@ -724,7 +724,7 @@ tracking](analytics.md#get_startup_context_audit).
 ## The guard: routing that survives a long session
 
 The failure mode with tool routing is not forgetting, it is skipping. The
-`[internal record]` block says "use the graph"; the agent reaches for `Grep` anyway
+`CLAUDE.md` block says "use the graph"; the agent reaches for `Grep` anyway
 under load, or after compression drops the block out of context.
 
 `trace-mcp-guard` is a `PreToolUse` hook on `Read|Grep|Glob|Bash|Agent`. It
@@ -777,7 +777,7 @@ is a `bash` + `jq` pipeline, so it is not available on Windows yet.
 | What | Where | Notes |
 |---|---|---|
 | MCP server entry | each detected client's native config | JSON, TOML or YAML depending on the client — see [supported MCP clients](configuration.md#supported-mcp-clients) |
-| Tool routing block | `[internal record]` / `AGENTS.md` | Only the block it generated; your own prose is not rewritten |
+| Tool routing block | `CLAUDE.md` / `AGENTS.md` | Only the block it generated; your own prose is not rewritten |
 | IDE rules file | `.cursor/rules/trace.mdc`, `.windsurfrules` | The Cursor and Windsurf equivalent of the routing block |
 | Lifecycle hooks | `SessionStart`, `UserPromptSubmit`, `Stop`, `SessionEnd` | Inject decision memory across the session lifecycle instead of waiting for the agent to ask |
 | Reindex hook | `PostToolUse` on `Edit|Write|MultiEdit` | Keeps the graph current as the agent edits |
@@ -1878,7 +1878,7 @@ Which entries above got a real read of their architecture/code and a concrete ta
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
-**Serena profiled this pass** (August 30, 2026 — repo cloned at commit `7fcbca7e` and read: `src/serena/agent.py`, `src/serena/tools/`, `src/serena/config/`, all sixteen context and ten mode YAMLs, `src/solidlsp/`, `[internal record]`). Findings and the take-or-pass on each are in the fourth mechanism under "Deep dive" above; it also corrected the debugger claim this page carried. A second, deeper read followed on August 30 at commit `43ae021`, and it corrected this page as much as it corrected theirs — see the [vs Serena](/vs/serena.html) page for the four rows that moved in Serena's favour. Two facts worth recording here rather than re-deriving: it keeps **no persistent graph**, but it does persist per-file document-symbol caches (an earlier revision of this page wrongly said every symbol query is a live LSP round-trip), and its "memory" is markdown files under `.serena/memories` — topic-namespaced and cross-referenced, but neither code-linked nor staleness-verified, which is why our row reads "✓ (notes, not code-linked)".
+**Serena profiled this pass** (August 30, 2026 — repo cloned at commit `7fcbca7e` and read: `src/serena/agent.py`, `src/serena/tools/`, `src/serena/config/`, all sixteen context and ten mode YAMLs, `src/solidlsp/`, `CHANGELOG.md`). Findings and the take-or-pass on each are in the fourth mechanism under "Deep dive" above; it also corrected the debugger claim this page carried. A second, deeper read followed on August 30 at commit `43ae021`, and it corrected this page as much as it corrected theirs — see the [vs Serena](/vs/serena.html) page for the four rows that moved in Serena's favour. Two facts worth recording here rather than re-deriving: it keeps **no persistent graph**, but it does persist per-file document-symbol caches (an earlier revision of this page wrongly said every symbol query is a live LSP round-trip), and its "memory" is markdown files under `.serena/memories` — topic-namespaced and cross-referenced, but neither code-linked nor staleness-verified, which is why our row reads "✓ (notes, not code-linked)".
 
 **Context Mode profiled this pass** (August 30, 2026 — read via the GitHub API at commit `8a35367`, no clone: `package.json`, `src/server.ts`, `src/executor.ts`, `BENCHMARK.md`, `LICENSE`). Findings are on the [vs Context Mode](/vs/context-mode.html) page: eleven MCP tools, no code parser among its eight runtime dependencies, "12 languages" that are subprocess runtimes rather than grammars, a 98% figure that measures tool-output bytes on committed fixtures, and Elastic License 2.0 rather than an OSI licence.
 
@@ -1963,7 +1963,7 @@ Three mechanisms were read at source and each got a decision:
 Three mechanisms were read at source and each got a decision:
 
 - **The Counter meta-dispatch front door (`order`, `menu`, `route`): passing on meta-dispatch, validating the prompt budget lesson.** Fronting 90 tools with a single `order(action, args)` dispatch verb drastically cuts top-level schema tokens, but forces an extra indirection turn and bypasses client schema validation, increasing parameter hallucination risk. trace-mcp instead uses task-tailored presets (`minimal` default with 28 tools, `review`, `architecture`, `dev`) and dynamic runtime escalation via `load_tools`, preserving type-safe client schemas without meta-tool indirection. Nothing to take.
-- **Agent configuration hygiene auditing (`audit_agent_config`): taking the idea for doc and config linting.** `audit_agent_config` cross-references `[internal record]`, `.cursorrules`, and `copilot-instructions.md` against the symbol index to find dead symbol names, broken paths, and token waste. We already check doc-to-code path integrity (`verify_docs`, `tests/docs/doc-path-refs.test.ts`), and extending this to user-facing agent instruction files is a high-value developer workflow.
+- **Agent configuration hygiene auditing (`audit_agent_config`): taking the idea for doc and config linting.** `audit_agent_config` cross-references `CLAUDE.md`, `.cursorrules`, and `copilot-instructions.md` against the symbol index to find dead symbol names, broken paths, and token waste. We already check doc-to-code path integrity (`verify_docs`, `tests/docs/doc-path-refs.test.ts`), and extending this to user-facing agent instruction files is a high-value developer workflow.
 - **Text-based refactoring plan generation (`plan_refactoring`): passing, we already do better.** `plan_refactoring` generates text find-and-replace candidate blocks `{old_text, new_text}` using regexes on imports. trace-mcp provides native AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) that execute atomic, syntax-verified transformations directly in the AST. Nothing to take.
 
 **TokenSave profiled this pass** (September 8, 2026 — read through the GitHub API at `master`, no clone and nothing executed: repository metadata, `Cargo.toml`, `server.json`, `src/mcp/tools/definitions.rs`, `src/mcp/server.rs`, `src/tokensave/memory.rs`, `src/tokensave/staleness.rs`, `src/accounting/`, `src/extraction_worker.rs`). 621 stars (GitHub API, this pass), MIT, Rust (edition 2021), v7.11.1. It defines 86 MCP tools in `get_tool_definitions()` and advertises all 85+ on standard MCP hosts, with only 5 tools carrying `anthropic/alwaysLoad: true` (`tokensave_search`, `tokensave_context`, `tokensave_callees`, `tokensave_impact`, `tokensave_status`). Storage is embedded libSQL (SQLite fork) with FTS5 and local ONNX runtime (`ort`) embeddings. AST extraction covers 50+ languages across three compilation tiers (lite 11, medium +9, full +40 more) with zero framework awareness. See the full head-to-head: [trace-mcp vs TokenSave](/vs/tokensave.html).
@@ -1977,7 +1977,7 @@ Four mechanisms were read at source and each got a decision:
 
 One take from the September 6 reading of the same project is not in the list above, because it is about us rather than about them. Its `verify_design` / `design_gaps` tools index a markdown document, pull the backtick-wrapped identifiers out of it, and check each against the graph — forward asks whether what the doc claims exists actually exists, reverse asks which public symbols the doc never mentions, and each miss comes back with the heading path that owns it. **We had no equivalent, and that is a real gap.** We generate documentation *from* the graph (`generate_docs`) and we gate published numbers in CI, but nothing checked an already-written document against the code, which is the direction that catches drift. Filed and shipped as `tests/docs/doc-path-refs.test.ts`; the first page it failed on was this one.
 
-**Graft profiled this pass** (September 6, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `README.md`, `[internal record]`, `src/mcp/server.ts`, `src/mcp/tool-names.ts`, the `src/graph/` tree including its sixteen `queries/*.scm` grammars and `refresh.ts`/`check.ts`, and the `src/claude/` and `src/hosts/` wiring trees). This is a new name on this page, not a re-check: the repository was created July 3, 2026, is MIT, TypeScript, published as `@nanonets/graft`, pushed daily, and sits at 5,656 stars — two months from zero, which is faster than any other entrant here reached its count.
+**Graft profiled this pass** (September 6, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `README.md`, `CHANGELOG.md`, `src/mcp/server.ts`, `src/mcp/tool-names.ts`, the `src/graph/` tree including its sixteen `queries/*.scm` grammars and `refresh.ts`/`check.ts`, and the `src/claude/` and `src/hosts/` wiring trees). This is a new name on this page, not a re-check: the repository was created July 3, 2026, is MIT, TypeScript, published as `@nanonets/graft`, pushed daily, and sits at 5,656 stars — two months from zero, which is faster than any other entrant here reached its count.
 
 What it is: a tree-sitter structural graph, plus an optional LLM enrichment pass under the user's own provider key that writes prose summaries. The artefact is **a folder of linked markdown files** (`graft/`, gitignored as a regenerable cache) rather than a database — the agent opens and greps them like any other file. There is **no daemon and no persistent index process**: every query re-derives the structural graph against the working tree first, which their README puts at ~3 ms when nothing moved, and `graft check` is the freshness signal. It wires into hosts rather than waiting to be called: `graft init` writes Claude Code hooks, a statusline and an `AGENTS.md` section, and there are per-host modules for Cursor, Codex and Antigravity alongside a `retract` path that removes them again.
 
@@ -2600,7 +2600,7 @@ Pick jCodeMunch for personal non-commercial projects where the 3-tool surface an
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
 | Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | Anti-pattern presets (`search_ast`) + secret redaction |
-| Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` ([internal record] / .cursorrules token audit) |
+| Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` (CLAUDE.md / .cursorrules token audit) |
 | Git archaeology | Commit diff history + change tracking | ✓ `get_symbol_provenance` + `get_delivery_metrics` |
 | Session memory | ✓ code-linked decision graph with staleness checks | SQLite index persistence |
 
@@ -2682,7 +2682,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 - **Non-commercial personal projects**: You are an individual open-source enthusiast or student working solely on hobby projects where commercial license restrictions do not apply.
 - **You prefer a minimal 3-tool dispatch entry point**: You want to experiment with `order`/`menu`/`route` meta-tools to keep top-level schema definitions under 3 tools.
-- **Agent config file auditing**: You want `audit_agent_config` to inspect your `[internal record]`, `.cursorrules`, or `copilot-instructions.md` for dead symbol references and token bloat.
+- **Agent config file auditing**: You want `audit_agent_config` to inspect your `CLAUDE.md`, `.cursorrules`, or `copilot-instructions.md` for dead symbol references and token bloat.
 - **Git archaeology insights**: You want `get_symbol_provenance` to generate commit narratives explaining how a specific function evolved over time.
 
 ## When to choose trace-mcp
@@ -4176,7 +4176,7 @@ Honest version — and most teams should do all of this regardless of the graph:
 - **Scoping is free and precise.** Globs attach guidance to exactly the files it governs; path-specific instruction files do the same for Copilot. Scoped text beats a global preamble on every session budget.
 - **Team-wide enforcement.** Team rules with enforced-vs-optional, organisation-level Copilot instructions — governance without a new tool to operate.
 - **Zero new machinery.** A markdown file needs no daemon, no index build, no MCP client. The cheapest context is the kind you already have.
-- **Portability where it exists.** `AGENTS.md` (and `[internal record]`) travel across agents — Cursor reads them, and so does everything Claude-shaped. Rules written there outlive any single IDE.
+- **Portability where it exists.** `AGENTS.md` (and `CLAUDE.md`) travel across agents — Cursor reads them, and so does everything Claude-shaped. Rules written there outlive any single IDE.
 
 ## When to pick trace-mcp
 
@@ -5127,13 +5127,13 @@ Every `tools.*` option works from a project-local config file (`.trace/.config.j
 
 | Value | What ships | When to use |
 |---|---|---|
-| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere ([internal record], [tweakcc](tweakcc.md)), or don't want opinionated rules |
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, [tweakcc](tweakcc.md)), or don't want opinionated rules |
 | `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
 | `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
 
 **Auto-set by `trace-mcp init`:** picking the **Max** enforcement level writes `"agent_behavior": "strict"` to your global config. Picking Base/Standard writes `"off"`. Re-run `init` to change tiers — the value updates idempotently.
 
-**Why it lives in MCP instructions (not [internal record] or tweakcc):**
+**Why it lives in MCP instructions (not CLAUDE.md or tweakcc):**
 - Cross-client — Cursor/Codex/Windsurf users get the same behavior without CC-specific setup.
 - Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
 - Single source of truth alongside the tool-routing block.
@@ -5290,7 +5290,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 > `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
 
 **Enforcement tiers (Claude Code / Claw / Desktop only):**
-- **Base** — `[internal record]` block with tool routing rules.
+- **Base** — `CLAUDE.md` block with tool routing rules.
 - **Standard** — Base + PreToolUse guard hooks that intercept built-in Read/Grep/Glob.
 - **Max** — Standard + tweakcc system-prompt patches and strict agent-behavior rules.
 
@@ -5325,7 +5325,7 @@ an upgrade) rewrites this everywhere it owns the file:
 
 **What stays manual.** Anything you wrote yourself outside those specific
 fields is not touched — most commonly, tool names spelled out in your own
-prose inside `[internal record]` / `AGENTS.md` (`init` only rewrites the routing
+prose inside `CLAUDE.md` / `AGENTS.md` (`init` only rewrites the routing
 block it generated, not arbitrary text you added), or a permission/hook
 config in a file trace-mcp doesn't manage the shape of. If a tool call stops
 matching a hook, or an allowlisted tool starts re-prompting for approval
@@ -5488,7 +5488,7 @@ reaches. Measured tick overhead on that same query is within run-to-run noise
 
 ```bash
 # Setup
-trace init                 # One-time global setup (MCP clients, hooks, [internal record])
+trace init                 # One-time global setup (MCP clients, hooks, CLAUDE.md)
 trace add [dir]            # Register a project for indexing
 trace list                 # List all registered projects
 trace upgrade [dir]        # Upgrade all projects (or specific one) — migrations + reindex
@@ -6436,7 +6436,7 @@ Session logs (JSONL)                   Project manifests
 
 | Client | Session log location | Config files |
 |--------|---------------------|--------------|
-| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `[internal record]`, `.claude/settings.json` |
+| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `CLAUDE.md`, `.claude/settings.json` |
 | **Claw Code** | `<project>/.claw/sessions/<session-id>.jsonl` | `.claw.json`, `.claw/settings.json` |
 
 Both formats are auto-detected during sync. No configuration needed.
@@ -6523,7 +6523,7 @@ Returns: the block's size distribution across fresh sessions, a decomposition by
 
 Every recommendation rests on **evidence of non-use over a stated observation window**, never on size: an MCP server whose instructions loaded into N startups and whose tools were never called, a skill listed at every start and never invoked, text duplicated between the global and project instruction files. A tool that is missing from the startup block is a tool the agent will not call, so a suggestion made because something is *big* can cost its reader far more than it saves. SessionStart hooks are deliberately excluded from suggestions for the same reason — nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on. They stay in the decomposition, where the reader sees the cost and decides.
 
-Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and [internal record] are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
 
 #### `textCompression` — where the block says the same thing twice
 
@@ -6531,7 +6531,7 @@ The audit answers "what does the block cost and what in it went unused". The `te
 
 It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
 
-It compares your own `[internal record]`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
 
 **Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
 
@@ -6539,7 +6539,7 @@ It compares your own `[internal record]`, `AGENTS.md` and `MEMORY.md` against th
 
 The word doing the work is *every*. An earlier version removed a line once 60% of its characters were matched and validated that with a "some sentence matched" check — which deletes the other 40%, text nothing else says. Two independent reviews reproduced it. Any threshold below "every unit" reintroduces it, so the rule is universal and the report proposes less rather than guessing.
 
-That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `[internal record]` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
+That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
 
 Matching is on sentences and word overlap, with three guards:
 
@@ -6614,7 +6614,7 @@ get_session_stats()
 
 ### `audit_config`
 
-Audit AI agent config files ([internal record], .cursorrules, .claw.json, etc.) for stale references, dead paths, token bloat, scope leaks, and redundancy.
+Audit AI agent config files (CLAUDE.md, .cursorrules, .claw.json, etc.) for stale references, dead paths, token bloat, scope leaks, and redundancy.
 
 ```
 audit_config()
@@ -8281,13 +8281,13 @@ usage](reduce-claude-code-token-usage.md).
 
 ## Why system prompt routing?
 
-The common failure mode with trace-mcp routing isn't forgetting — it's **skipping**. Claude sees the [internal record] policy and reaches for `Read` or `Grep` anyway because native tools feel faster under pressure or in long sessions — especially after context compression drops the [internal record] block.
+The common failure mode with trace-mcp routing isn't forgetting — it's **skipping**. Claude sees the CLAUDE.md policy and reaches for `Read` or `Grep` anyway because native tools feel faster under pressure or in long sessions — especially after context compression drops the CLAUDE.md block.
 
 trace-mcp has three enforcement layers:
 
 | Layer | Mechanism | Strength |
 |-------|-----------|----------|
-| **Base** — [internal record] policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
+| **Base** — CLAUDE.md policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
 | **Standard** — hooks | PreToolUse guards intercept tool calls at runtime | Medium — stderr warnings, allows Read for edits, catches violations |
 | **Max** — system prompt rewrites (this doc) + agent behavior rules | Patch Claude's core tool descriptions via tweakcc; inject anti-sycophancy + goal-driven discipline rules via MCP instructions | Strongest — model internalizes the preference from the start, behaves like a senior engineer by default |
 
@@ -8301,17 +8301,17 @@ Picking **Max** during `trace-mcp init` does two things beyond Standard:
 
 ## Architecture
 
-### Base ([internal record] only)
+### Base (CLAUDE.md only)
 
 ```
-[internal record] (soft)
+CLAUDE.md (soft)
   routing policy tables
 ```
 
 ### Standard (current default after `trace-mcp init`)
 
 ```
-[internal record] (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
+CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
   routing policy      blocks Read/Grep/Glob/     index-file after Edit/Write
                       Bash on code files +
                       Agent(Explore) subagents
@@ -8323,7 +8323,7 @@ Picking **Max** during `trace-mcp init` does two things beyond Standard:
 ### Max (Standard + tweakcc + agent_behavior rules)
 
 ```
-System prompts (deep)   →  MCP instructions (every session)  →  [internal record] (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
+System prompts (deep)   →  MCP instructions (every session)  →  CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
   routing built into        tool routing + agent_behavior=       full policy          catches remaining 5%        unchanged
   core tool descriptions    "strict" (anti-sycophancy,            (reinforcement)
                             goal-driven, 2-strike rule)
@@ -8466,7 +8466,7 @@ This layered approach gives the strongest enforcement with the least friction.
 
 ## Rollback
 
-To revert: restore original tweakcc prompt files. No changes to [internal record], hooks, or settings are needed — the existing Standard setup continues to work independently.
+To revert: restore original tweakcc prompt files. No changes to CLAUDE.md, hooks, or settings are needed — the existing Standard setup continues to work independently.
 
 ---
 

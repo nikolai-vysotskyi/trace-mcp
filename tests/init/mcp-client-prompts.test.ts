@@ -65,24 +65,24 @@ describe('getProjectPromptsStatus', () => {
     });
   });
 
-  it('detects the trace block in [internal record] (both marker generations)', () => {
-    fs.writeFileSync(path.join(projectRoot, '[internal record]'), '# P\n<!-- trace:start -->\n');
+  it('detects the trace block in CLAUDE.md (both marker generations)', () => {
+    fs.writeFileSync(path.join(projectRoot, 'CLAUDE.md'), '# P\n<!-- trace:start -->\n');
     const withNew = getProjectPromptsStatus(projectRoot);
     expect(withNew.claudeMdExists).toBe(true);
     expect(withNew.claudeMdHasTraceBlock).toBe(true);
 
-    fs.writeFileSync(path.join(projectRoot, '[internal record]'), '# P\n<!-- trace-mcp:start -->\n');
+    fs.writeFileSync(path.join(projectRoot, 'CLAUDE.md'), '# P\n<!-- trace-mcp:start -->\n');
     expect(getProjectPromptsStatus(projectRoot).claudeMdHasTraceBlock).toBe(true);
   });
 
-  it('does not mistake a plain [internal record] for a routed one', () => {
-    fs.writeFileSync(path.join(projectRoot, '[internal record]'), '# Plain project notes\n');
+  it('does not mistake a plain CLAUDE.md for a routed one', () => {
+    fs.writeFileSync(path.join(projectRoot, 'CLAUDE.md'), '# Plain project notes\n');
     const s = getProjectPromptsStatus(projectRoot);
     expect(s.claudeMdExists).toBe(true);
     expect(s.claudeMdHasTraceBlock).toBe(false);
   });
 
-  it('detects the trace block in AGENTS.md independently of [internal record]', () => {
+  it('detects the trace block in AGENTS.md independently of CLAUDE.md', () => {
     fs.writeFileSync(path.join(projectRoot, 'AGENTS.md'), '<!-- trace:start -->\n');
     const s = getProjectPromptsStatus(projectRoot);
     expect(s.claudeMdExists).toBe(false);

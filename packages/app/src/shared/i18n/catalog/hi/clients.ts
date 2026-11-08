@@ -65,11 +65,11 @@ export const clients = {
 
   enforcementLevel: 'एनफ़ोर्समेंट स्तर',
   levelBase: 'Base',
-  levelBaseHint: 'केवल [internal record] — सॉफ़्ट रूटिंग नियम',
+  levelBaseHint: 'केवल CLAUDE.md — सॉफ़्ट रूटिंग नियम',
   levelStandard: 'Standard',
-  levelStandardHint: '[internal record] और hooks',
+  levelStandardHint: 'CLAUDE.md और hooks',
   levelMax: 'Max',
-  levelMaxHint: '[internal record], hooks और tweakcc — अनुशंसित',
+  levelMaxHint: 'CLAUDE.md, hooks और tweakcc — अनुशंसित',
   hookActive: 'हुक सक्रिय',
   hookActiveHint: 'PreToolUse रीडायरेक्ट चालू है — फ़ाइल रीड trace-mcp से होते हैं',
   hookMissing: 'रीडायरेक्ट हुक नहीं',
@@ -88,7 +88,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

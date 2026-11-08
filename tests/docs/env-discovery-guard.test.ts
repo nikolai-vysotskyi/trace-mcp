@@ -57,7 +57,7 @@ function proseFiles(): string[] {
     }
   };
   for (const dir of ['docs', 'skills', 'examples']) walk(join(REPO_ROOT, dir));
-  for (const root of ['README.md', '[internal record]', 'AGENTS.md']) {
+  for (const root of ['README.md', 'CLAUDE.md', 'AGENTS.md']) {
     const full = join(REPO_ROOT, root);
     if (existsSync(full)) out.push(full);
   }

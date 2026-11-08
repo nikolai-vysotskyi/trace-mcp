@@ -2,7 +2,7 @@
  * Language filter — drops decision candidates that are predominantly
  * non-English (Russian, Chinese, Arabic, etc.).
  *
- * The project's "English only in code and content" rule (see [internal record])
+ * The project's "English only in code and content" rule (see CLAUDE.md)
  * applies to anything that lands in the persistent knowledge graph.
  * Mined sessions frequently include user prose in other languages — that
  * prose should not silently leak into decision titles or content.

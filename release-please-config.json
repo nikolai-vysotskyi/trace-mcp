@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "changelog-path": "[internal record]",
+      "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "extra-files": [

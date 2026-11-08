@@ -545,7 +545,7 @@
     {
       "repo": "axios/axios",
       "number": 11096,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -553,7 +553,7 @@
     {
       "repo": "axios/axios",
       "number": 11096,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -649,7 +649,7 @@
     {
       "repo": "axios/axios",
       "number": 11087,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -657,7 +657,7 @@
     {
       "repo": "axios/axios",
       "number": 11087,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Unreleased#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Unreleased#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -665,7 +665,7 @@
     {
       "repo": "axios/axios",
       "number": 11087,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -769,7 +769,7 @@
     {
       "repo": "axios/axios",
       "number": 11121,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -777,7 +777,7 @@
     {
       "repo": "axios/axios",
       "number": 11121,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -937,7 +937,7 @@
     {
       "repo": "axios/axios",
       "number": 11094,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -945,7 +945,7 @@
     {
       "repo": "axios/axios",
       "number": 11094,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -1049,7 +1049,7 @@
     {
       "repo": "axios/axios",
       "number": 11109,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -1057,7 +1057,7 @@
     {
       "repo": "axios/axios",
       "number": 11109,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false
@@ -1129,7 +1129,7 @@
     {
       "repo": "axios/axios",
       "number": 11035,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#namespace",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
       "kind": "namespace",
       "detail": "full",
       "module_level": true
@@ -1137,7 +1137,7 @@
     {
       "repo": "axios/axios",
       "number": 11035,
-      "symbol_id": "PRE_RELEASE_[internal record]::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
       "kind": "heading",
       "detail": "full",
       "module_level": false

@@ -98,7 +98,7 @@ beforeAll(() => {
   fs.writeFileSync(path.join(logDir, 'session.jsonl'), session(LOG_LINES));
 
   projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-startup-text-proj-'));
-  fs.writeFileSync(path.join(projectDir, '[internal record]'), USER_CLAUDE_MD);
+  fs.writeFileSync(path.join(projectDir, 'CLAUDE.md'), USER_CLAUDE_MD);
 });
 
 afterAll(() => {
@@ -125,7 +125,7 @@ function run() {
 async function analyseFixture(claudeMd: string, corpusText = SERVER_INSTRUCTIONS) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-startup-case-'));
   const logs = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-startup-caselog-'));
-  fs.writeFileSync(path.join(dir, '[internal record]'), claudeMd);
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), claudeMd);
   fs.writeFileSync(
     path.join(logs, 's.jsonl'),
     session([
@@ -179,7 +179,7 @@ describe('startup corpus', () => {
 describe('startup text compression', () => {
   it("finds a rule restated in the user's own words, though no line is a copy", async () => {
     const result = await run();
-    const candidate = result.candidates.find((c) => c.path.endsWith('[internal record]'));
+    const candidate = result.candidates.find((c) => c.path.endsWith('CLAUDE.md'));
 
     expect(candidate).toBeDefined();
     expect(candidate?.savedTokens).toBeGreaterThan(0);
@@ -204,7 +204,7 @@ describe('startup text compression', () => {
 
   it('leaves alone the text nothing else in the block says', async () => {
     const result = await run();
-    const candidate = result.candidates.find((c) => c.path.endsWith('[internal record]'));
+    const candidate = result.candidates.find((c) => c.path.endsWith('CLAUDE.md'));
 
     expect(candidate?.diff).not.toContain('-The release branch is cut on Thursdays');
     expect(candidate?.diff).not.toContain('-Run `pnpm build`');
@@ -229,7 +229,7 @@ describe('startup text compression', () => {
 
   it('drops a heading only when its whole body has gone', async () => {
     const result = await run();
-    const diff = result.candidates.find((c) => c.path.endsWith('[internal record]'))?.diff ?? '';
+    const diff = result.candidates.find((c) => c.path.endsWith('CLAUDE.md'))?.diff ?? '';
 
     expect(diff).toContain('-### No flattery, no filler');
     // This section keeps a line the server never sent, so its heading stays.
@@ -237,7 +237,7 @@ describe('startup text compression', () => {
   });
 
   it('proposes a diff and a delta, and writes nothing', async () => {
-    const before = fs.readFileSync(path.join(projectDir, '[internal record]'), 'utf8');
+    const before = fs.readFileSync(path.join(projectDir, 'CLAUDE.md'), 'utf8');
     const result = await run();
     const candidate = result.candidates[0];
 
@@ -245,7 +245,7 @@ describe('startup text compression', () => {
     // Deletions only: a compressor that adds a line has reworded something.
     expect(candidate.diff.split('\n').some((l) => /^\+[^+]/.test(l))).toBe(false);
     expect(candidate.currentTokens - candidate.compressedTokens).toBe(candidate.savedTokens);
-    expect(fs.readFileSync(path.join(projectDir, '[internal record]'), 'utf8')).toBe(before);
+    expect(fs.readFileSync(path.join(projectDir, 'CLAUDE.md'), 'utf8')).toBe(before);
   });
 
   it('reports third-party startup text as read-only, with what it costs and why', async () => {
@@ -352,7 +352,7 @@ describe('invariant: nothing goes unless the block still says it', () => {
   it("does not use another project's startup block as evidence", async () => {
     const projectB = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-startup-b-'));
     fs.writeFileSync(
-      path.join(projectB, '[internal record]'),
+      path.join(projectB, 'CLAUDE.md'),
       [
         '# B',
         '',

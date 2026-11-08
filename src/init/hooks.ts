@@ -475,7 +475,7 @@ export function uninstallGuardHook(opts: { global?: boolean }): InitStepResult {
 
 /**
  * Is the guard hook currently wired into a Claude-family client's global
- * settings? Base installs [internal record] only; Standard and Max also install hooks —
+ * settings? Base installs CLAUDE.md only; Standard and Max also install hooks —
  * so this is what lets `clients status` report the enforcement level a config
  * is already on instead of asking the user to pick it again.
  *

@@ -221,7 +221,7 @@ describe('checkStartupWatch (end-to-end)', () => {
     expect(notice).toBeNull();
   });
 
-  it('reports the correct delta after a [internal record]-sized growth', async () => {
+  it('reports the correct delta after a CLAUDE.md-sized growth', async () => {
     const file1 = path.join(dir, 's1.jsonl');
     writeSessionFile(file1, 18_000, '2026-01-01T00:00:00Z');
     await checkStartupWatch({

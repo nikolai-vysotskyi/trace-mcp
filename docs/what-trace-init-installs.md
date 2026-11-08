@@ -62,7 +62,7 @@ a footnote, and you can decline it.
 
 Every session pays for its startup block before you type anything — the
 harness system prompt, tool schemas, every MCP server's instructions, the skill
-and agent listings, `[internal record]`, and whatever your `SessionStart` hooks print.
+and agent listings, `CLAUDE.md`, and whatever your `SessionStart` hooks print.
 You are billed for it on the first turn and again on every cache rebuild.
 
 `get_startup_context_audit` measures **yours**. Not a decomposition we took on
@@ -78,7 +78,7 @@ It answers four things:
   start and whose tools were never called; a skill listed at every start and
   never invoked.
 - **Where it says the same thing twice** — `textCompression` compares your
-  `[internal record]` / `AGENTS.md` / `MEMORY.md` against the instruction text other
+  `CLAUDE.md` / `AGENTS.md` / `MEMORY.md` against the instruction text other
   sources actually sent, and proposes deletions with a diff.
 
 Every recommendation rests on **evidence of non-use over a stated window**,
@@ -99,7 +99,7 @@ tracking](analytics.md#get_startup_context_audit).
 ## The guard: routing that survives a long session
 
 The failure mode with tool routing is not forgetting, it is skipping. The
-`[internal record]` block says "use the graph"; the agent reaches for `Grep` anyway
+`CLAUDE.md` block says "use the graph"; the agent reaches for `Grep` anyway
 under load, or after compression drops the block out of context.
 
 `trace-mcp-guard` is a `PreToolUse` hook on `Read|Grep|Glob|Bash|Agent`. It
@@ -152,7 +152,7 @@ is a `bash` + `jq` pipeline, so it is not available on Windows yet.
 | What | Where | Notes |
 |---|---|---|
 | MCP server entry | each detected client's native config | JSON, TOML or YAML depending on the client — see [supported MCP clients](configuration.md#supported-mcp-clients) |
-| Tool routing block | `[internal record]` / `AGENTS.md` | Only the block it generated; your own prose is not rewritten |
+| Tool routing block | `CLAUDE.md` / `AGENTS.md` | Only the block it generated; your own prose is not rewritten |
 | IDE rules file | `.cursor/rules/trace.mdc`, `.windsurfrules` | The Cursor and Windsurf equivalent of the routing block |
 | Lifecycle hooks | `SessionStart`, `UserPromptSubmit`, `Stop`, `SessionEnd` | Inject decision memory across the session lifecycle instead of waiting for the agent to ask |
 | Reindex hook | `PostToolUse` on `Edit|Write|MultiEdit` | Keeps the graph current as the agent edits |

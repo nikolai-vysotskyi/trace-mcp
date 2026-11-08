@@ -72,7 +72,7 @@ describe('updateClaudeMd', () => {
     expect(result.detail).toContain('Would append');
   });
 
-  it('creates new [internal record] when file does not exist', () => {
+  it('creates new CLAUDE.md when file does not exist', () => {
     const result = updateClaudeMd('/project', {});
     expect(result.action).toBe('created');
     expect(mockFs.writeFileSync).toHaveBeenCalledOnce();
@@ -94,7 +94,7 @@ describe('updateClaudeMd', () => {
     const result = updateClaudeMd('/project', { scope: 'global' });
     // path.join uses native separator; assert against the platform-correct
     // form so the test doesn't bake in POSIX expectations.
-    expect(result.target).toContain(path.join('.claude', '[internal record]'));
+    expect(result.target).toContain(path.join('.claude', 'CLAUDE.md'));
 
     if (origHome !== undefined) process.env.HOME = origHome;
     else delete process.env.HOME;
@@ -232,7 +232,7 @@ describe('updateAgentsMd', () => {
     expect(content).not.toContain('Read (full file)');
   });
 
-  it('preserves Claude-specific tool names in [internal record] while AGENTS.md stays neutral', () => {
+  it('preserves Claude-specific tool names in CLAUDE.md while AGENTS.md stays neutral', () => {
     updateClaudeMd('/project', {});
     const claudeContent = String(mockFs.writeFileSync.mock.calls[0][1]);
     expect(claudeContent).toContain('NEVER use Read/Grep/Glob/Bash(ls,find)');

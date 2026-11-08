@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     'Le rapport s’est exécuté, mais sa réponse ne correspondait pas à la forme attendue — cela ressemble à un bug, pas à un projet vide.',
 
-  reportDriftTitle: 'Dérive de [internal record]',
+  reportDriftTitle: 'Dérive de CLAUDE.md',
   reportDriftDescription:
     'Chemins obsolètes et références de symboles mortes dans les fichiers de config des agents.',
   reportPagerankTitle: 'Fichiers les plus centraux',
@@ -48,7 +48,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} jetons',
   startupSourceDetail: 'mesuré sur {{sessions}} sessions',
   startupResidualDetail:
-    'Non détaillé — l’invite système, les schémas d’outils et [internal record] n’atteignent jamais le journal de session',
+    'Non détaillé — l’invite système, les schémas d’outils et CLAUDE.md n’atteignent jamais le journal de session',
   startupRebuildRow: 'Cache reconstruit : {{cause}} — {{events}} fois',
   startupRebuildDetail: '{{usd}} en plus de la lecture des mêmes jetons depuis le cache',
   startupServerRow: '{{server}} — dans {{sessions}} blocs de démarrage',

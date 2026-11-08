@@ -198,7 +198,7 @@ describe('Community Detection', () => {
         return localStore.getNodeId('symbol', syms[0].id);
       };
 
-      // 40 auth files + 40 payment files + 1 hub file ([internal record] analogue)
+      // 40 auth files + 40 payment files + 1 hub file (CLAUDE.md analogue)
       const authNodes: number[] = [];
       const payNodes: number[] = [];
       for (let i = 0; i < 40; i++) {

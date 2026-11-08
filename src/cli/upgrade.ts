@@ -1,6 +1,6 @@
 /**
  * `trace-mcp upgrade` command.
- * Updates hooks, runs DB migrations, force-reindexes, refreshes [internal record].
+ * Updates hooks, runs DB migrations, force-reindexes, refreshes CLAUDE.md.
  * Operates on all registered projects by default, or a specific one if [dir] is given.
  */
 
@@ -30,12 +30,12 @@ import { listProjects, updateLastIndexed } from '../registry.js';
 
 export const upgradeCommand = new Command('upgrade')
   .description(
-    'Upgrade trace-mcp: run DB migrations, reindex with latest plugins, update hooks and [internal record]',
+    'Upgrade trace-mcp: run DB migrations, reindex with latest plugins, update hooks and CLAUDE.md',
   )
   .argument('[dir]', 'Project directory (omit to upgrade all registered projects)')
   .option('--skip-hooks', 'Do not update guard hooks')
   .option('--skip-reindex', 'Do not trigger reindex')
-  .option('--skip-claude-md', 'Do not update [internal record] block')
+  .option('--skip-claude-md', 'Do not update CLAUDE.md block')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON')
   .action(
@@ -64,7 +64,7 @@ export const upgradeCommand = new Command('upgrade')
           }
         }
         // Note: no projects is allowed — global work (launcher, hooks,
-        // [internal record]) still runs so `npm i -g trace-mcp@new && trace-mcp upgrade`
+        // CLAUDE.md) still runs so `npm i -g trace-mcp@new && trace-mcp upgrade`
         // refreshes the shim even before any project is registered.
       }
 
@@ -190,7 +190,7 @@ export const upgradeCommand = new Command('upgrade')
         globalSteps.push(...installWorktreeHook({ dryRun: opts.dryRun }));
       }
 
-      // Global: refresh [internal record]
+      // Global: refresh CLAUDE.md
       if (!opts.skipClaudeMd) {
         globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
       }

@@ -97,7 +97,7 @@ all terminology.
 | English (en) | Chinese (zh) | Notes / Context |
 | :--- | :--- | :--- |
 | **Guard** | guard | Untranslated, as in every other catalogue. Two strings called it 守卫 while thirteen others in the same file said `guard` — one feature, two names, on one screen. |
-| **Enforcement** | 管控 | Guard row label; 管控级别 for MCP Clients' "Enforcement level". Was 强制 ("coerce"), the word this glossary already rejects for Japanese. Not 拦截 either: interception is only the strict half of what the guard does. A row labelled 拦截 sits directly under a Coach mode whose own help text promises 从不拦截, and MCP Clients' `levelBase` is [internal record] routing hints with no interception at all. 管控 covers both halves. |
+| **Enforcement** | 管控 | Guard row label; 管控级别 for MCP Clients' "Enforcement level". Was 强制 ("coerce"), the word this glossary already rejects for Japanese. Not 拦截 either: interception is only the strict half of what the guard does. A row labelled 拦截 sits directly under a Coach mode whose own help text promises 从不拦截, and MCP Clients' `levelBase` is CLAUDE.md routing hints with no interception at all. 管控 covers both halves. |
 | **Coach** (mode) | 指导 | Advisory, hints-only mode. Was 教练 — a sports coach — in the segmented control, the promotion row and the setup copy. |
 | **Strict** (mode) | 严格 | |
 | **Off** (mode) | 关闭 | |

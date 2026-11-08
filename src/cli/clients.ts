@@ -147,7 +147,7 @@ clientsCommand
 clientsCommand
   .command('disconnect')
   .description(
-    'Remove the trace-mcp entry from one or more client configs. Never touches hooks, tweakcc, [internal record] or agent_behavior.',
+    'Remove the trace-mcp entry from one or more client configs. Never touches hooks, tweakcc, CLAUDE.md or agent_behavior.',
   )
   .argument(
     '[clients...]',
@@ -205,7 +205,7 @@ clientsCommand
 clientsCommand
   .command('prompts')
   .description(
-    'Report project-level prompt/hook state ([internal record] trace block, project settings.local.json hook, tweakcc). Read-only.',
+    'Report project-level prompt/hook state (CLAUDE.md trace block, project settings.local.json hook, tweakcc). Read-only.',
   )
   .option('--json', 'Output machine-readable JSON')
   .option('--project <path>', 'Project root to inspect (default: auto-detect from cwd)')
@@ -224,7 +224,7 @@ function printPromptsReport(p: ProjectPromptsStatus): void {
   console.log(`Project prompts (${p.projectRoot})\n`);
   const block = (exists: boolean, hasBlock: boolean) =>
     !exists ? '[absent]' : hasBlock ? '[ok]    ' : '[plain] ';
-  console.log(`  [internal record]  ${block(p.claudeMdExists, p.claudeMdHasTraceBlock)}  trace block`);
+  console.log(`  CLAUDE.md  ${block(p.claudeMdExists, p.claudeMdHasTraceBlock)}  trace block`);
   console.log(`  AGENTS.md  ${block(p.agentsMdExists, p.agentsMdHasTraceBlock)}  trace block`);
   console.log(
     `  hook       ${p.projectHook === 'active' ? '[ok]    ' : '[missing]'}  ${p.projectHookPath ?? 'no settings.local.json'}`,

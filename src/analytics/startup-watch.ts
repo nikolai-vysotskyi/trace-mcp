@@ -13,7 +13,7 @@
  * Deliberately NOT what `analyzeStartupContext` does:
  *  - Scoped to one project by default. The audit's log scan is machine-wide
  *    on purpose (a 30-day median needs volume); this tracks one project's
- *    trend, and mixing in a second project's differently-sized [internal record]
+ *    trend, and mixing in a second project's differently-sized CLAUDE.md
  *    would read as "grew" on nothing but a `cd`.
  *  - No cost, no recommendations, no text compression — just one number.
  *
@@ -37,7 +37,7 @@ const MAX_HISTORY_PER_PROJECT = 60;
 /**
  * How far back a baseline may be. "Did it grow" compares the latest sample
  * to the oldest snapshot still inside this window, not to the immediately
- * preceding one — a [internal record] that doubles over many small edits across a
+ * preceding one — a CLAUDE.md that doubles over many small edits across a
  * month should still trip this, even though no single session-to-session
  * delta looks large.
  */

@@ -212,7 +212,7 @@ function foo() { return 1; }
     test('skips markdown files (CHANGELOG headings must not match BUG tag)', () => {
       writeFile(
         store,
-        '[internal record]',
+        'CHANGELOG.md',
         `
 ## [1.29.0] - 2026-04-22
 

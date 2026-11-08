@@ -378,7 +378,7 @@ describe('clients prompts', () => {
     await run(['prompts', '--project', OTHER_ROOT]);
 
     const out = printed();
-    expect(out).toContain('[internal record]');
+    expect(out).toContain('CLAUDE.md');
     expect(out).toContain('AGENTS.md');
     expect(out).toContain('hook');
     expect(out).toContain('tweakcc');

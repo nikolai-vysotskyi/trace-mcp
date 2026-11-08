@@ -21,7 +21,7 @@ interface AuditOptions {
   configFiles?: string[];
   fixSuggestions?: boolean;
   /**
-   * E14 — opt into [internal record] drift detection. Adds dead_tool_ref,
+   * E14 — opt into CLAUDE.md drift detection. Adds dead_tool_ref,
    * dead_skill_ref, dead_command_ref, and oversized_section categories on
    * top of the v1 issue set. Default false for back-compat.
    */
@@ -74,8 +74,8 @@ interface AuditResult {
 
 /** Known AI agent config file patterns */
 const CONFIG_PATTERNS = [
-  '[internal record]',
-  '.claude/[internal record]',
+  'CLAUDE.md',
+  '.claude/CLAUDE.md',
   '.cursorrules',
   '.cursor/rules',
   '.github/copilot-instructions.md',
@@ -99,7 +99,7 @@ const CONFIG_PATTERNS = [
 
 /** Global config locations */
 const GLOBAL_CONFIG_PATTERNS = [
-  '~/.claude/[internal record]',
+  '~/.claude/CLAUDE.md',
   '~/.claw/settings.json',
   '~/.config/amp/settings.json',
   '~/.config/amp/settings.jsonc',
@@ -491,7 +491,7 @@ function resolveConfigPath(file: string, projectRoot: string): string {
 function isGlobalConfig(file: string): boolean {
   return (
     file.startsWith('~') ||
-    file.includes('.claude/[internal record]') ||
+    file.includes('.claude/CLAUDE.md') ||
     file.includes('.claw/settings.json')
   );
 }

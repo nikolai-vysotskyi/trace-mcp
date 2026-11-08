@@ -492,7 +492,7 @@ export function configureMcpClients(
  *
  * Boundary (TRA-1932): this removes ONLY the MCP entry — both the current
  * `trace` key and the legacy `trace-mcp` key. Hooks, tweakcc prompts and the
- * [internal record] block are shared across the Claude family and stay untouched:
+ * CLAUDE.md block are shared across the Claude family and stay untouched:
  * disconnecting Cursor must not rip the redirect out from under Claude Code.
  *
  * Missing config file (or a file with neither key) is `already_absent`, not
@@ -1483,9 +1483,9 @@ export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanagea
 
 /**
  * Enforcement level a Claude-family config is on, as `init` installs it:
- * - `base`     — [internal record] only, no hooks.
- * - `standard` — [internal record] + hooks.
- * - `max`      — [internal record] + hooks + tweakcc system prompts.
+ * - `base`     — CLAUDE.md only, no hooks.
+ * - `standard` — CLAUDE.md + hooks.
+ * - `max`      — CLAUDE.md + hooks + tweakcc system prompts.
  */
 export type EnforcementLevel = 'base' | 'standard' | 'max';
 
@@ -1845,7 +1845,7 @@ export function getMcpClientStatuses(
  * Project-level prompt/hook state for the Clients screen (TRA-1933 Phase B).
  *
  * Read-only by construction: it never writes, only reports what
- * `detectProject` ([internal record] trace block) and the TRA-650 migration path
+ * `detectProject` (CLAUDE.md trace block) and the TRA-650 migration path
  * (`<project>/.claude/settings.local.json` (or `.claw/…`) hook wiring) already know,
  * plus the tweakcc prompt presence `init` grades levels on. The desktop app
  * surfaces this next to the per-file client rows; every fix routes through
@@ -1895,7 +1895,7 @@ function settingsLocalHasGuardHook(filePath: string): boolean {
 
 export function getProjectPromptsStatus(projectRoot: string): ProjectPromptsStatus {
   const root = path.resolve(projectRoot);
-  const claudeMd = readIfExists(path.join(root, '[internal record]'));
+  const claudeMd = readIfExists(path.join(root, 'CLAUDE.md'));
   const agentsMd = readIfExists(path.join(root, 'AGENTS.md'));
   const candidates = ['.claude', '.claw'].map((d) => path.join(root, d, 'settings.local.json'));
   const existing = candidates.filter((p) => fs.existsSync(p));

@@ -1,6 +1,6 @@
 /**
  * `trace-mcp doctor` command.
- * Scans for competing MCP servers, hooks, [internal record] injections, and other
+ * Scans for competing MCP servers, hooks, CLAUDE.md injections, and other
  * artifacts that may conflict with trace-mcp. Optionally fixes them.
  */
 

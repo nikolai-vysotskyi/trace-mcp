@@ -131,7 +131,7 @@ describe('fixClaudeMdBlock — bare mention fallback (TRA-49)', () => {
 
   it('is fixable and comments out a bare tool-reference line instead of requiring manual fix', () => {
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\nAlways use get_file_outline from jcodemunch for file exploration.\n',
     });
 
@@ -156,7 +156,7 @@ describe('fixClaudeMdBlock — bare mention fallback (TRA-49)', () => {
 
   it('leaves negated mentions alone even inside an otherwise-fixed file', () => {
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\nUse get_file_outline from jcodemunch for exploration.\n' +
         'Never call jcodemunch tools for anything else; prefer trace-mcp.\n',
     });
@@ -177,7 +177,7 @@ describe('fixClaudeMdBlock — bare mention fallback (TRA-49)', () => {
 
   it('dry-run reports the fix without touching the file', () => {
     const root = fixture({
-      '[internal record]': '# Project\n\nAlways use get_file_outline from jcodemunch.\n',
+      'CLAUDE.md': '# Project\n\nAlways use get_file_outline from jcodemunch.\n',
     });
 
     const conflict = detectConflicts(root).conflicts.find(

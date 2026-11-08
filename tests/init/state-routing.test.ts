@@ -27,7 +27,7 @@ describe('SKILL.state routing', () => {
     expect(text).toContain('load_tools({preset:"state"})');
   };
 
-  it('names the state tools in the [internal record] / AGENTS.md block', () => {
+  it('names the state tools in the CLAUDE.md / AGENTS.md block', () => {
     mustRoute(TRACE_ROUTING_BLOCK);
     mustRoute(AGENTS_ROUTING_BLOCK);
   });

@@ -145,11 +145,11 @@ describe('detectConflicts', () => {
     expect(dirConflicts.length).toBeGreaterThanOrEqual(2);
   });
 
-  // --- [internal record] injections ---
+  // --- CLAUDE.md injections ---
 
-  it('detects competing [internal record] with marker blocks', () => {
+  it('detects competing CLAUDE.md with marker blocks', () => {
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\n<!-- jcodemunch:start -->\nUse jcodemunch tools\n<!-- jcodemunch:end -->',
     });
 
@@ -165,9 +165,9 @@ describe('detectConflicts', () => {
     expect(jcm!.fixable).toBe(true);
   });
 
-  it('detects competing [internal record] with tool name references', () => {
+  it('detects competing CLAUDE.md with tool name references', () => {
     const root = fixture({
-      '[internal record]': '# Project\n\nAlways use get_file_outline from jcodemunch for file exploration.',
+      'CLAUDE.md': '# Project\n\nAlways use get_file_outline from jcodemunch for file exploration.',
     });
 
     const report = detectConflicts(root);
@@ -177,9 +177,9 @@ describe('detectConflicts', () => {
     expect(claudeConflicts.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('does not flag [internal record] that rejects the competing tool', () => {
+  it('does not flag CLAUDE.md that rejects the competing tool', () => {
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\njCodeMunch is deprecated for this user. Never call jcodemunch tools; ' +
         'use trace-mcp equivalents instead.',
     });
@@ -193,7 +193,7 @@ describe('detectConflicts', () => {
 
   it('still flags a marker block even when surrounding text uses negation words', () => {
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\n<!-- jcodemunch:start -->\nNever skip jcodemunch tools\n<!-- jcodemunch:end -->',
     });
 
@@ -208,10 +208,10 @@ describe('detectConflicts', () => {
     expect(jcm!.severity).toBe('critical');
   });
 
-  it('does not flag a [internal record] that documents trace-mcp own tools', () => {
+  it('does not flag a CLAUDE.md that documents trace-mcp own tools', () => {
     // TRA-746: these names belong to trace-mcp, not to any competitor.
     const root = fixture({
-      '[internal record]':
+      'CLAUDE.md':
         '# Project\n\n' +
         '- `get_context_bundle({ symbol_id: "..." })` returns symbol + imports\n' +
         '- `embed_repo` precomputes embeddings\n' +
@@ -226,7 +226,7 @@ describe('detectConflicts', () => {
     expect(claudeConflicts).toHaveLength(0);
   });
 
-  it("does not flag this repo's own [internal record]", () => {
+  it("does not flag this repo's own CLAUDE.md", () => {
     // TRA-746: the reported false positive, guarded against the real file.
     const root = process.cwd();
     const claudeConflicts = detectConflicts(root).conflicts.filter(
@@ -235,9 +235,9 @@ describe('detectConflicts', () => {
     expect(claudeConflicts).toEqual([]);
   });
 
-  it('does not flag clean [internal record]', () => {
+  it('does not flag clean CLAUDE.md', () => {
     const root = fixture({
-      '[internal record]': '# Project\n\nUse trace-mcp tools for code navigation.\n',
+      'CLAUDE.md': '# Project\n\nUse trace-mcp tools for code navigation.\n',
     });
 
     const report = detectConflicts(root);

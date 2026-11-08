@@ -65,11 +65,11 @@ export const clients = {
 
   enforcementLevel: 'Nivel de aplicación',
   levelBase: 'Básico',
-  levelBaseHint: 'Solo [internal record] — reglas de enrutado orientativas',
+  levelBaseHint: 'Solo CLAUDE.md — reglas de enrutado orientativas',
   levelStandard: 'Estándar',
-  levelStandardHint: '[internal record] y hooks',
+  levelStandardHint: 'CLAUDE.md y hooks',
   levelMax: 'Máximo',
-  levelMaxHint: '[internal record], hooks y tweakcc — recomendado',
+  levelMaxHint: 'CLAUDE.md, hooks y tweakcc — recomendado',
   hookActive: 'Hook activo',
   hookActiveHint: 'La redirección PreToolUse está activa — las lecturas pasan por trace-mcp',
   hookMissing: 'Sin hook de redirección',
@@ -88,7 +88,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

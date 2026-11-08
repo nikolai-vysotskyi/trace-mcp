@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const CHANGELOG = readFileSync(join(process.cwd(), '[internal record]'), 'utf8');
+const CHANGELOG = readFileSync(join(process.cwd(), 'CHANGELOG.md'), 'utf8');
 
 /** `### ⚠ BREAKING CHANGES` body text, keyed by the release heading above it. */
 function breakingSections(): Array<{ release: string; body: string }> {

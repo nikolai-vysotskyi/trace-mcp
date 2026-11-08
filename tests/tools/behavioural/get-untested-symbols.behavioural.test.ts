@@ -177,9 +177,9 @@ describe('get_untested_symbols — behavioural contract', () => {
     // Mimic markdown plugin output: heading registered as kind=class, file
     // language=markdown. Use a CHANGELOG-style name to exercise the actual
     // regression we are guarding against.
-    const mdId = store.insertFile('[internal record]', 'markdown', 'h2', 100);
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h2', 100);
     store.insertSymbol(mdId, {
-      symbolId: '[internal record]::CHANGELOG#[1.10.0]#class',
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
       name: '[1.10.0]',
       kind: 'class',
       byteStart: 0,
@@ -225,9 +225,9 @@ describe('get_untested_symbols — behavioural contract', () => {
       byteStart: 0,
       byteEnd: 40,
     });
-    const mdId = store.insertFile('[internal record]', 'markdown', 'h2', 100);
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h2', 100);
     store.insertSymbol(mdId, {
-      symbolId: '[internal record]::CHANGELOG#[1.10.0]#class',
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
       name: '[1.10.0]',
       kind: 'class',
       byteStart: 0,
@@ -275,9 +275,9 @@ describe('get_untested_symbols — behavioural contract', () => {
     store.insertEdge(testFileNid, srcFileNid, 'imports', true, undefined, false, 'ast_resolved');
 
     // Markdown noise that would otherwise mask the real signal.
-    const mdId = store.insertFile('[internal record]', 'markdown', 'h4', 100);
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h4', 100);
     store.insertSymbol(mdId, {
-      symbolId: '[internal record]::CHANGELOG#[1.10.0]#class',
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
       name: '[1.10.0]',
       kind: 'class',
       byteStart: 0,

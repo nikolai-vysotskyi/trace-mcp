@@ -106,7 +106,7 @@ Honest version — and most teams should do all of this regardless of the graph:
 - **Scoping is free and precise.** Globs attach guidance to exactly the files it governs; path-specific instruction files do the same for Copilot. Scoped text beats a global preamble on every session budget.
 - **Team-wide enforcement.** Team rules with enforced-vs-optional, organisation-level Copilot instructions — governance without a new tool to operate.
 - **Zero new machinery.** A markdown file needs no daemon, no index build, no MCP client. The cheapest context is the kind you already have.
-- **Portability where it exists.** `AGENTS.md` (and `[internal record]`) travel across agents — Cursor reads them, and so does everything Claude-shaped. Rules written there outlive any single IDE.
+- **Portability where it exists.** `AGENTS.md` (and `CLAUDE.md`) travel across agents — Cursor reads them, and so does everything Claude-shaped. Rules written there outlive any single IDE.
 
 ## When to pick trace-mcp
 

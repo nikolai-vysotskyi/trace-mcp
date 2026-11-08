@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     '리포트는 실행되었지만 응답이 예상한 형식과 일치하지 않았습니다 — 빈 프로젝트가 아니라 버그로 보입니다.',
 
-  reportDriftTitle: '[internal record] 불일치',
+  reportDriftTitle: 'CLAUDE.md 불일치',
   reportDriftDescription: '에이전트 설정 파일의 오래된 경로와 사라진 심볼 참조.',
   reportPagerankTitle: '중심 파일 상위',
   reportPagerankDescription: '임포트 그래프의 PageRank 기준으로 구조상 가장 중심이 되는 파일.',
@@ -46,7 +46,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} 토큰',
   startupSourceDetail: '{{sessions}}개 세션에서 측정',
   startupResidualDetail:
-    '항목별로 나눌 수 없음 — 시스템 프롬프트, 도구 스키마, [internal record]는 세션 로그에 남지 않습니다',
+    '항목별로 나눌 수 없음 — 시스템 프롬프트, 도구 스키마, CLAUDE.md는 세션 로그에 남지 않습니다',
   startupRebuildRow: '캐시 재생성: {{cause}} — {{events}}회',
   startupRebuildDetail: '같은 토큰을 캐시에서 읽을 때보다 {{usd}} 더 듦',
   startupServerRow: '{{server}} — {{sessions}}개 시작 블록에 포함',

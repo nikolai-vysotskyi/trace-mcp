@@ -5,7 +5,7 @@
  * isolation; this file complements it by asserting:
  *
  *  - cross-category interaction: tool refs AND skill refs in one file each
- *    surface their own drift category (one [internal record], two findings).
+ *    surface their own drift category (one CLAUDE.md, two findings).
  *  - back-compat: without `includeDrift`/`driftOnly`, drift categories are
  *    silent.
  *  - `driftOnly: true` filters non-drift categories (stale_symbol, dead_path)

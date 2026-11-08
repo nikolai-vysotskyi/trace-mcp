@@ -83,7 +83,7 @@ describe('countReindexingProjects', () => {
 
 /**
  * `register_edit` (`src/tools/register/core.ts`) reindexes in-process on the
- * daemon's own MCP server, and [internal record] tells every agent to call it after
+ * daemon's own MCP server, and CLAUDE.md tells every agent to call it after
  * every edit — so it is the dominant reindex path, not the HTTP one. Counting
  * only the HTTP handler would leave most of a busy daemon still reporting
  * idle. Caught in review of PR #1092.

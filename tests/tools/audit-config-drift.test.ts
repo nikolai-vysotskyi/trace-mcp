@@ -1,10 +1,10 @@
 /**
- * E14 — [internal record] drift detection tests.
+ * E14 — CLAUDE.md drift detection tests.
  *
  * Covers the four drift categories the audit picks up when `includeDrift`
  * or `driftOnly` is set: dead_path (already covered by the base suite),
  * dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section.
- * Each test feeds a synthetic [internal record] fixture into auditConfig and
+ * Each test feeds a synthetic CLAUDE.md fixture into auditConfig and
  * asserts the relevant category surfaces in `issues`.
  */
 
@@ -29,7 +29,7 @@ describe('Audit Config — E14 drift detection', () => {
   });
 
   it('emits no drift categories when includeDrift is false (back-compat)', () => {
-    const configPath = path.join(tmpDir, '[internal record]');
+    const configPath = path.join(tmpDir, 'CLAUDE.md');
     fs.writeFileSync(
       configPath,
       [

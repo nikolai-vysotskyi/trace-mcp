@@ -63,11 +63,11 @@ export const clients = {
 
   enforcementLevel: '管控级别',
   levelBase: '基础',
-  levelBaseHint: '仅 [internal record] — 软性路由规则',
+  levelBaseHint: '仅 CLAUDE.md — 软性路由规则',
   levelStandard: '标准',
-  levelStandardHint: '[internal record] 与 hooks',
+  levelStandardHint: 'CLAUDE.md 与 hooks',
   levelMax: '最高',
-  levelMaxHint: '[internal record]、hooks 与 tweakcc — 推荐',
+  levelMaxHint: 'CLAUDE.md、hooks 与 tweakcc — 推荐',
   hookActive: '钩子已启用',
   hookActiveHint: 'PreToolUse 重定向已生效 — 文件读取将经由 trace-mcp',
   hookMissing: '无重定向钩子',
@@ -86,7 +86,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

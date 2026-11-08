@@ -25,7 +25,7 @@ export const insights = {
      false about the user's data, so it surfaces as an error instead. */
   errorUnrecognizedShape: "The report ran, but its response didn't match the shape this report expects — this looks like a bug, not an empty project.",
 
-  reportDriftTitle: '[internal record] drift',
+  reportDriftTitle: 'CLAUDE.md drift',
   reportDriftDescription: 'Stale paths and dead symbol references in agent config files.',
   reportPagerankTitle: 'Top central files',
   reportPagerankDescription:
@@ -64,7 +64,7 @@ export const insights = {
   /* The one row that is a subtraction rather than a measurement. Saying so is
      the difference between a number and a claim. */
   startupResidualDetail:
-    'Not itemised — the system prompt, tool schemas and [internal record] never reach the session log',
+    'Not itemised — the system prompt, tool schemas and CLAUDE.md never reach the session log',
   startupRebuildRow: 'Cache rebuilt: {{cause}} — {{events}} times',
   startupRebuildDetail: '{{usd}} on top of reading the same tokens from cache',
   startupServerRow: '{{server}} — in {{sessions}} startup blocks',

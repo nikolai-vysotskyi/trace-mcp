@@ -156,7 +156,7 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
   <img src="docs/images/app-dark-projects.webp#gh-dark-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
-**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — [internal record] only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
+**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
 <p align="center">
   <img src="docs/images/app-overview.webp#gh-light-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
@@ -332,11 +332,11 @@ Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact a
 
 ```bash
 npm install -g trace-mcp
-trace init        # one-time global setup (MCP clients, hooks, [internal record])
+trace init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
 trace add         # register current project for indexing
 ```
 
-- `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/[internal record]`.
+- `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/CLAUDE.md`.
 - `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace to understand.
 
 *(The npm package is still called `trace-mcp` — only the command it installs is shortened. `trace-mcp init`, `trace-mcp add`, and every other `trace-mcp …` invocation keep working.)*
@@ -393,7 +393,7 @@ What does change, and what stays:
 - **Project config** — `.trace.json` is read first, `.trace-mcp.json` after it. Existing files keep working where they are.
 - **Plugin and registry identifiers** — unchanged: `@nikolai-vysotskyi/trace-mcp` for the Claude Code plugin, `io.github.nikolai-vysotskyi/trace-mcp` in the MCP registry.
 
-**One thing `init` can't do for you.** The MCP tool prefix moves too — `mcp__trace-mcp__search` becomes `mcp__trace__search`. `init` migrates the `mcpServers` entry it owns, but not text you wrote yourself: Claude Code permission allowlists, hook matchers, or your own `mcp__trace-mcp__*` mentions in `[internal record]`/`AGENTS.md` prose. If a hook stops matching or an allowlisted tool starts re-prompting after upgrading, grep your own config for `mcp__trace-mcp__` and replace it with `mcp__trace__`. Everything else above happens automatically the next time you run `trace init` or `trace upgrade` — details: [Configuration](https://trace-mcp.com/configuration.html#renaming-trace-mcp--trace-what-init-can-and-cant-reach).
+**One thing `init` can't do for you.** The MCP tool prefix moves too — `mcp__trace-mcp__search` becomes `mcp__trace__search`. `init` migrates the `mcpServers` entry it owns, but not text you wrote yourself: Claude Code permission allowlists, hook matchers, or your own `mcp__trace-mcp__*` mentions in `CLAUDE.md`/`AGENTS.md` prose. If a hook stops matching or an allowlisted tool starts re-prompting after upgrading, grep your own config for `mcp__trace-mcp__` and replace it with `mcp__trace__`. Everything else above happens automatically the next time you run `trace init` or `trace upgrade` — details: [Configuration](https://trace-mcp.com/configuration.html#renaming-trace-mcp--trace-what-init-can-and-cant-reach).
 
 ---
 
@@ -429,9 +429,9 @@ trace-mcp works on three levels to make AI agents use its tools instead of raw f
 
 The MCP server provides **instructions** and **tool descriptions** with routing hints that tell AI agents when to prefer trace-mcp over native Read/Grep/Glob. This works with any MCP-compatible client — no configuration needed.
 
-### Level 2: [internal record] (recommended)
+### Level 2: CLAUDE.md (recommended)
 
-`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/[internal record]` (or your project's `[internal record]`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](https://trace-mcp.com/tweakcc.html) for the full block and how to tune enforcement.
+`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](https://trace-mcp.com/tweakcc.html) for the full block and how to tune enforcement.
 
 ### Level 3: Hook enforcement (Claude Code only)
 

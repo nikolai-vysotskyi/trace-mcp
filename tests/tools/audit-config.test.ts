@@ -49,7 +49,7 @@ describe('Audit Config', () => {
   });
 
   it('detects dead file paths', () => {
-    const configPath = path.join(tmpDir, '[internal record]');
+    const configPath = path.join(tmpDir, 'CLAUDE.md');
     fs.writeFileSync(
       configPath,
       [

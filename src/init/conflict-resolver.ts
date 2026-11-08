@@ -321,7 +321,7 @@ function fixHookScript(conflict: Conflict, opts: { dryRun?: boolean }): FixResul
 }
 
 /**
- * Remove competing content from [internal record] / memory files.
+ * Remove competing content from CLAUDE.md / memory files.
  * Supports three strategies:
  * 1. Marker-delimited blocks: <!-- tool:start --> ... <!-- tool:end -->
  * 2. Markdown sections: headings containing competitor name → remove to next same-level heading
