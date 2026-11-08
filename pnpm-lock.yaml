@@ -157,7 +157,7 @@ importers:
     optionalDependencies:
       '@huggingface/transformers':
         specifier: ^4.0.1
-        version: 4.3.1(@types/node@22.20.5)
+        version: 4.3.2(@types/node@22.20.5)
       sqlite-vec:
         specifier: ^0.1.9
         version: 0.1.9
@@ -722,15 +722,15 @@ packages:
     peerDependencies:
       hono: '>=4.13.12'
 
-  '@huggingface/jinja@0.5.10':
-    resolution: {integrity: sha512-SgS1D1bglQ94ceD4ZCL6eayUDy9uV1xuyk61OjgSxU5GJh7upqZCKII0JoTYMc6wWsg3JUgaPRX0ElQzXPk3Cw==}
+  '@huggingface/jinja@0.5.11':
+    resolution: {integrity: sha512-YzEzwM5oQf4r0vs7ifWQ+yuVR1YkAHrjERQ+a8WRsStHHp4NRBg+NesjiFc+X2AFUpRvvrIeHDS1xFy9jY/IjQ==}
     engines: {node: '>=18'}
 
   '@huggingface/tokenizers@0.2.0':
     resolution: {integrity: sha512-LidMHe1FpcSYH4vcSjXooda34pC0M8m1gmDOv7SQi6Iv+ib1zX7J3sHBCC9/3FPCkn2k1b55FneVqMRxrr99pg==}
 
-  '@huggingface/transformers@4.3.1':
-    resolution: {integrity: sha512-5+voSeUCFK6PCKlY15dPhNOKq3/zOTxDN7oC+Wy9dFb1QZ0TSQomZRRy7URRK8YRuUoE9fGMQTTPC5d/pWBJhA==}
+  '@huggingface/transformers@4.3.2':
+    resolution: {integrity: sha512-V3+dqf3iWlRYJ9I9GreM3zGQd0lAXnnoPeddmkOQYWAEE4l/+Fi6p7tx/qVUJlKQgLXGim2W76rTOzz+eC0i7g==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -1918,8 +1918,8 @@ packages:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
 
-  global-agent@4.1.3:
-    resolution: {integrity: sha512-KUJEViiuFT3I97t+GYMikLPJS2Lfo/S2F+DQuBWzuzaMPnvt5yyZePzArx36fBzpGTxZjIpDbXLeySLgh+k76g==}
+  global-agent@4.1.6:
+    resolution: {integrity: sha512-V9u791atI/bS7RryfRTK2oixDWo6/RCrIikjwuQ4kADPRZZml1C6LUJXc7y6qRhaAF8geo3bIvE/siAGJCw38A==}
     engines: {node: '>=10.0'}
 
   globalthis@1.0.4:
@@ -2756,6 +2756,9 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
+
   tsup@8.5.1:
     resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
     engines: {node: '>=18'}
@@ -3187,7 +3190,7 @@ snapshots:
 
   '@emnapi/runtime@1.11.3':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     optional: true
 
   '@emnapi/wasi-threads@1.2.2':
@@ -3357,15 +3360,15 @@ snapshots:
     dependencies:
       hono: 4.13.13
 
-  '@huggingface/jinja@0.5.10':
+  '@huggingface/jinja@0.5.11':
     optional: true
 
   '@huggingface/tokenizers@0.2.0':
     optional: true
 
-  '@huggingface/transformers@4.3.1(@types/node@22.20.5)':
+  '@huggingface/transformers@4.3.2(@types/node@22.20.5)':
     dependencies:
-      '@huggingface/jinja': 0.5.10
+      '@huggingface/jinja': 0.5.11
       '@huggingface/tokenizers': 0.2.0
       onnxruntime-node: 1.30.0
       onnxruntime-web: 1.31.0-dev.20260914-8d85527a0
@@ -4348,7 +4351,7 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  global-agent@4.1.3:
+  global-agent@4.1.6:
     dependencies:
       globalthis: 1.0.4
       matcher: 4.0.0
@@ -4696,7 +4699,7 @@ snapshots:
   onnxruntime-node@1.30.0:
     dependencies:
       adm-zip: 0.6.1
-      global-agent: 4.1.3
+      global-agent: 4.1.6
       onnxruntime-common: 1.30.0
     optional: true
 
@@ -5234,6 +5237,9 @@ snapshots:
   ts-interface-checker@0.1.13: {}
 
   tslib@2.8.1:
+    optional: true
+
+  tslib@2.9.1:
     optional: true
 
   tsup@8.5.1(postcss@8.5.31)(tsx@4.23.15)(typescript@6.0.3)(yaml@2.9.1):
