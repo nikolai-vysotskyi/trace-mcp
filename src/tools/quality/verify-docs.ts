@@ -61,7 +61,7 @@ export interface VerifyDocsResult {
   };
 }
 
-/** A code span that is prose, not code — measured on our own docs, see [internal record]. */
+/** A code span that is prose, not code — measured on our own docs, see the internal documentation audit. */
 function isProse(token: string): boolean {
   return (
     token.length === 0 ||

@@ -43,8 +43,7 @@
 <!-- The banner carries this sentence as a picture; this line carries it as text,
      so search and screen readers get the same claim. Keep the two in sync, and keep
      both verbatim with the hero on trace-mcp.com and with docs/_config.yml —
-     [internal record] holds the sentence. The boundary line under it is not a
-     footnote: it travels with the claim wherever the claim goes, including the one
+     The boundary line under it is not a footnote: it travels with the claim wherever the claim goes, including the one
      declinable exception (TRA-979) — keep that clause verbatim with the hero too. -->
 <p align="center">
   <strong>trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.</strong><br />

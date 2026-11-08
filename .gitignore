@@ -45,3 +45,7 @@ docs/images/.banner-tmp-*.html
 
 # TRA-568: bench-pr-context --dump-prompts output. Regenerable, ~5 MB.
 benchmarks/pr-context/prompts/
+
+# Internal operations records belong in the private repository.
+/ops/*
+!/ops/telemetry/

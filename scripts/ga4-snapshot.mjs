@@ -140,7 +140,7 @@ const why = (e) =>
  *
  * GitHub's traffic API is the only acquisition source available to us — the
  * docs site has no analytics of its own, and the largest external referrer is
- * unreadable from a run at all (`[internal record]`, private repo). Its window is a rolling
+ * unreadable from a run at all (`the internal user signal ledger`, private repo). Its window is a rolling
  * 14 days and nothing older is retrievable, which is exactly why the numbers
  * are copied into the daily snapshot: the `adoption-data` branch becomes the
  * durable record, the same argument that created it for GA4.
@@ -534,8 +534,8 @@ ${yaml(useByClient.installs, 4)}
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
 # site carries no analytics, and the largest external referrer cannot be read
-# from a run at all (\`[internal record]\`, private repo). Cross-check these names
-# against \`ops/arrivals.md\` in private project repository before adding another directory.
+# from a run at all (\`the internal user signal ledger\`, private repo). Cross-check these names
+# against \`the internal arrivals ledger\` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: ${yamlNum(arrivals.views_uniques_14d)}
 ${errLine(arrivals.error)}  referrers_uniques_14d:
@@ -619,7 +619,7 @@ if (savings.inflation_suspected) {
     `::warning title=tokens_saved inflation::raw is ${savings.raw_ratio}x the sanitized total ` +
       `(over ${INFLATION_RATIO}x), ${savings.capped_days} of ${savings.days} days capped. ` +
       `Published figures stay correct — the sanitizer caps them — but the endpoint is ` +
-      `receiving more than it plausibly should. See [internal record] in private project repository.`,
+      `receiving more than it plausibly should. See the internal user signal ledger in the private repository.`,
   );
 }
 

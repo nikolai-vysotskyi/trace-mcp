@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
  * returned no clicks at all — the `-mcp` suffix is what keeps us apart from
  * a same-prefix product and from the observability category.
  *
- * `[internal record]` therefore decided: the domain, the npm package,
+ * `the internal naming decision` therefore decided: the domain, the npm package,
  * the registry identity and the on-page titles keep `trace-mcp`; only the CLI
  * verb and the MCP server key become `trace`. This test is that boundary's
  * guard — a rename sweep that reaches these strings would remove 100% of the

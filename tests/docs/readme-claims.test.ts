@@ -276,13 +276,6 @@ describe('docs site numeric claims (TRA-174)', () => {
     // TRA-634: the Agent Plugins root manifest is a scanner-facing surface with
     // the same prose counts, so it drifts the same way the others did.
     { path: 'plugin.json' },
-    // TRA-722 guarded [internal record] and [internal record] here, because
-    // the drafts are the copy that goes out under the project's name and had
-    // sat at 169 tools for four days while counts.yml moved to 177. Both moved
-    // to the private repo on 2026-09-05 (they name people and analyse other
-    // communities' moderation rules), and a test in this repo cannot read them
-    // any more. The guard is genuinely lost, not relocated — private project repository
-    // carries the rule as prose instead.
   ];
 
   for (const { path, skipLine } of docs) {
@@ -566,7 +559,7 @@ describe('docs site numeric claims (TRA-174)', () => {
   // launch drafts here. The drafts left this repo on 2026-09-05; nothing in a
   // public test can reach them now. Before either is posted, re-read
   // docs/_data/pr_context_bench.json by hand — that instruction is the whole
-  // replacement and it lives in private project repository/README.md.
+  // replacement and it lives in the private repository guidance.
 
   it('the Jekyll surfaces read the benchmark from _data instead of hardcoding it (TRA-647)', () => {
     // Asking only whether the file contains one tag *somewhere* passes as long
@@ -684,7 +677,7 @@ describe('docs site numeric claims (TRA-174)', () => {
         `${path} quotes the ${BENCH.median_savings_pct}% saving in a description too short for ` +
           'the quality table, so it owes the reader the verdict: "comprehension at parity" ' +
           '(docs/perf/prereg-pr-quality.md, verdict MET). Keep it in step with the GitHub repo ' +
-          'description in [internal record].',
+          'description in the internal distribution ledger.',
       ).toBe(true);
     }
   });

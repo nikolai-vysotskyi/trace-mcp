@@ -111,7 +111,7 @@ export function checkRemoteClaims(surfaces, anchor) {
     if (retired) {
       fail(
         `quotes the retired "${retired[0]}". Retiring a claim does not retire the copies of it; ` +
-          'see the TRA-1090 note in [internal record] before restoring any number.',
+          'see the TRA-1090 note in the internal distribution ledger before restoring any number.',
       );
     }
 
@@ -200,7 +200,7 @@ async function main() {
   for (const p of problems) console.error(`  - ${p}\n`);
   console.error(
     'The GitHub description is one `gh api -X PATCH repos/:owner/:repo -f description=...` away.\n' +
-      'The npm one is fixed by package.json plus a release — see [internal record].',
+      'The npm one is fixed by package.json plus a release — see the internal distribution ledger.',
   );
   process.exitCode = 1;
 }

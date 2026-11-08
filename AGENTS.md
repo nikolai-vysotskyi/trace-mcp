@@ -1,3 +1,7 @@
+## Confidential project operations
+
+Keep internal operations ledgers, strategy, outreach, traffic findings, and launch drafts in the private project repository. Do not commit them or excerpts to this public repository.
+
 <!-- trace:start -->
 ## trace Tool Routing
 

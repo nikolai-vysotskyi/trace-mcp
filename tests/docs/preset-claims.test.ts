@@ -34,9 +34,9 @@ const DOCS = [
   'docs/llms-full.txt',
   'docs/comparisons.md',
   'docs/reduce-claude-code-token-usage.md',
-  // TRA-722 added [internal record] and [internal record] here. Both moved to
+  // TRA-722 added an internal launch draft and an internal launch draft here. Both moved to
   // the private repo on 2026-09-05 and this guard cannot follow them across a
-  // repository boundary; private project repository/README.md carries the replacement
+  // repository boundary; the private repository guidance carries the replacement
   // rule in words ("re-read counts.yml before anything here is posted").
 ];
 const PRESETS = [

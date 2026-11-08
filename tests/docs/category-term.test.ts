@@ -38,7 +38,7 @@ describe('the home page names the code graph category', () => {
     // Tags stripped: metadata alone matches the SERP snippet while the page a
     // visitor lands on says something else, which is what Google demotes. It
     // lives on the graph section's own heading, not in the hero — the hero
-    // sentence is the position claim and `[internal record]` forbids narrowing
+    // sentence is the position claim and `the internal positioning notes` forbids narrowing
     // it back to the graph.
     const body = index.slice(index.indexOf('<body'));
     const visible = body.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');

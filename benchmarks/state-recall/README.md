@@ -77,7 +77,7 @@ caveat to wave at.
 `docs/SKILL_STATE.md` stays `noindex` and the Phase-4 token numbers stay off
 public surfaces. TRA-1008's condition was "an arm that can fail"; that now
 exists, and the arm failed. Publishing the −66.8% now would repeat exactly what
-`[internal record]` was written to stop.
+`the internal positioning notes` was written to stop.
 
 Next, in order:
 
