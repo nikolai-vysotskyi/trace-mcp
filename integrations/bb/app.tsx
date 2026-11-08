@@ -313,9 +313,12 @@ function TraceContextPanel({ threadId }: { threadId: string }) {
 }
 
 export default definePluginApp((app) => {
-  app.slots.threadPanelAction({
+  app.slots.experimental_tab({
     id: 'trace-context',
     title: 'Trace context',
+    icon: 'info',
+    context: { kind: 'thread' },
+    availability: 'action',
     component: TraceContextPanel,
   });
 });

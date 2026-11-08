@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import type { ComponentType } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadPluginApp, renderSlot } from '@get-bb/plugin-sdk/testing/app';
 
 const app = await loadPluginApp(() => import('./app.js'));
+const tracePanel = { component: app.tabs[0]!.component as ComponentType<{ threadId: string }> };
 
 afterEach(cleanup);
 
@@ -20,8 +22,8 @@ function overview() {
 describe('Trace context panel', () => {
   it('shows index, bb context usage, and project decisions, then saves a new decision', async () => {
     const slot = renderSlot(
-      app.threadPanelActions[0]!,
-      { threadId: 'thread-1', params: null },
+      tracePanel,
+      { threadId: 'thread-1' },
       {
         rpc: {
           readOverview: () => overview(),
@@ -60,8 +62,8 @@ describe('Trace context panel', () => {
 
   it('shows a truthful empty context state and lets the user index an empty repository', async () => {
     const slot = renderSlot(
-      app.threadPanelActions[0]!,
-      { threadId: 'thread-2', params: null },
+      tracePanel,
+      { threadId: 'thread-2' },
       {
         rpc: {
           readOverview: () => ({

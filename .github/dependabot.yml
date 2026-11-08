@@ -81,6 +81,11 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
+      # Keep the plugin on TypeScript 5 until its build and SDK types are
+      # checked against a major upgrade.
+      - dependency-name: "typescript"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
