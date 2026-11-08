@@ -2,7 +2,7 @@
 title: "Code Graph MCP Server for AI Coding Agents"
 description: "How a code graph MCP server gives AI coding agents persistent symbol, call, and framework relationships without re-reading whole repositories."
 category: concepts
-updated: 2026-10-19
+updated: 2026-11-08
 ---
 
 # Code graph MCP server for AI coding agents
@@ -122,7 +122,7 @@ For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code
 Install trace-mcp in your project root:
 
 ```bash
-npx trace-mcp init
+npm i -g trace-mcp && trace-mcp init
 ```
 
 The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.

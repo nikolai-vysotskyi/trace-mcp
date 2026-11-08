@@ -166,10 +166,14 @@ describe('installLauncher', () => {
 
 describe('setupLauncher (install + config)', () => {
   let tmp: string;
+  let originalArgv1: string | undefined;
   beforeEach(() => {
     tmp = mkTmpHome();
+    originalArgv1 = process.argv[1];
+    process.argv[1] = path.join(os.homedir(), 'trace-mcp-stable', 'dist', 'cli.js');
   });
   afterEach(() => {
+    process.argv[1] = originalArgv1;
     delete process.env.TRACE_MCP_HOME;
     fs.rmSync(tmp, { recursive: true, force: true });
   });
@@ -197,6 +201,60 @@ describe('setupLauncher (install + config)', () => {
     const second = setupLauncher({ pkgVersion: '2.0.0' });
     expect(second[1].action).toBe('updated');
     expect(readLauncherConfig().version).toBe('2.0.0');
+  });
+
+  it('does not pin launcher.env to a pnpm dlx cache during init', () => {
+    const stable = {
+      node: '/stable/bin/node',
+      cli: '/stable/lib/node_modules/trace-mcp/dist/cli.js',
+      version: '3.42.9',
+    };
+    writeLauncherConfig(stable);
+    const argv1 = process.argv[1];
+    process.argv[1] = path.join(
+      os.homedir(),
+      'Library',
+      'Caches',
+      'pnpm',
+      'dlx',
+      'hash',
+      'node_modules',
+      '.pnpm',
+      'trace-mcp@3.41.0',
+      'node_modules',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    try {
+      const steps = setupLauncher({ pkgVersion: '3.41.0' });
+      expect(steps[1].action).toBe('skipped');
+      expect(readLauncherConfig()).toEqual(stable);
+      expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+    } finally {
+      process.argv[1] = argv1;
+    }
+  });
+
+  it('fails before installing a launcher when init runs from an ephemeral cache', () => {
+    const argv1 = process.argv[1];
+    process.argv[1] = path.join(
+      os.homedir(),
+      '.npm',
+      '_npx',
+      'hash',
+      'node_modules',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    try {
+      expect(() => setupLauncher({ pkgVersion: '3.41.0' })).toThrow(/npm install -g trace-mcp/);
+      expect(fs.existsSync(getLauncherPath())).toBe(false);
+      expect(fs.existsSync(getLauncherConfigPath())).toBe(false);
+    } finally {
+      process.argv[1] = argv1;
+    }
   });
 });
 
@@ -259,6 +317,24 @@ describe('recordPkgRoot', () => {
 
   it('ignores a cli path that is not under a node_modules root', () => {
     recordPkgRoot('/somewhere/dist/cli.js');
+    expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+  });
+
+  it('does not record a disposable pnpm dlx package root', () => {
+    recordPkgRoot(
+      path.join(
+        os.homedir(),
+        'Library',
+        'Caches',
+        'pnpm',
+        'dlx',
+        'hash',
+        'node_modules',
+        'trace-mcp',
+        'dist',
+        'cli.js',
+      ),
+    );
     expect(fs.existsSync(getPkgRootsPath())).toBe(false);
   });
 

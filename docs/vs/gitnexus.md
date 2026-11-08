@@ -2,7 +2,7 @@
 title: "GitNexus Alternative: trace-mcp vs GitNexus for AI agents"
 description: "GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 91 frameworks, typed tools, and AST refactoring."
 category: vs-comparisons
-updated: 2026-10-26
+updated: 2026-11-08
 ---
 
 # GitNexus alternative: trace-mcp vs GitNexus
@@ -217,4 +217,4 @@ trace-mcp pairs architectural read analysis with **production-grade write tools*
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
