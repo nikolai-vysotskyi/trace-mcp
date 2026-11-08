@@ -74,7 +74,7 @@ For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code
 Install trace-mcp in your project root:
 
 ```bash
-npx trace-mcp init
+npm i -g trace-mcp && trace-mcp init
 ```
 
 The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.
@@ -2563,7 +2563,7 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 
@@ -2717,7 +2717,7 @@ If the codebase is Next.js, Django, Rails, or similar and the agent's questions 
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
 - Every knob is optional — [configuration](/configuration.html) works with none, reference when needed.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 
@@ -2874,7 +2874,7 @@ The control arm reads the raw files that answer each fixture — no index, the p
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 
@@ -3019,7 +3019,7 @@ trace-mcp pairs architectural read analysis with **production-grade write tools*
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 
@@ -3156,7 +3156,7 @@ trace-mcp is engineered for **zero-setup, universal portability**:
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 
@@ -3301,7 +3301,7 @@ trace-mcp implements **True AST Dataflow Taint Analysis**:
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
 
 ---
 

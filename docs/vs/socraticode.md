@@ -2,7 +2,7 @@
 title: "SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents"
 description: "SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring."
 category: vs-comparisons
-updated: 2026-10-19
+updated: 2026-11-08
 ---
 
 # SocratiCode alternative: trace-mcp vs SocratiCode
