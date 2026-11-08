@@ -9875,3 +9875,48 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-08 14:00 pass (TRA-2974): mention sweep clean, competitor deep-dive on Graphify incremental mtime collision (#5090), Repomix root workspace sandbox containment (#2020), Serena LSP cross-file rename readiness (#2254)
+
+**External threads audit (read-only via GitHub API):**
+- GetBindu/awesome-claude-code-and-skills#195: MERGED (merged 2026-11-07 13:54 UTC by raahulrahl; verified live in `readme.md`).
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (dirty, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 repos outside seen list: mention sweep cleanly verified (no new mentions detected).
+- External touches: 0 (standing no-ping rules and clean sweep; no outreach needed).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Racily-clean mtime check inversion and incremental cache invalidation (PR #5090, open; fixes #5036)*: In Graphify, `_mtime_may_hide_a_rewrite()` returned `False` when `seen - mtime < 0`, assuming that "the mtime check already fired". However, `seen` was stamped from Python's wall clock `time.time()` while `mtime` came from the filesystem stat. Under sub-second file modifications or clock skew (especially noticeable on NTFS), `seen` could land slightly earlier than the file's recorded `mtime`. When this negative delta occurred within the same tick, Graphify skipped hash verification on the file, causing `detect_incremental` to treat the file as unchanged and reuse stale graph index entries. PR #5090 fixes the sign check to compare `-delta` within the same racily-clean tolerance window.
+  - *Contrast with trace-mcp*: trace-mcp indexes code deterministically with atomic SQLite transactions and robust change detection. It pairs filesystem event notifications (macOS FSEvents / Linux inotify) with exact content hashing and content-length checks rather than relying on naive wall-clock vs mtime heuristics that are vulnerable to filesystem clock skew.
+- **yamadashy/repomix**:
+  - *Filesystem root path separator handling in MCP sandbox boundary check (PR #2020, open; fixes #2019)*: When an MCP sandbox workspace was configured at a filesystem root (such as `/` in containers or `C:\` on Windows), `isInside` verified containment via `candidate.startsWith(root + path.sep)`. Because root paths on POSIX already end with `/` (and Windows drive roots with `\`), appending `path.sep` checked for doubled separators (`//` or `C:\\`), incorrectly rejecting all valid relative descendant paths inside the workspace. PR #2020 replaces the brittle string-prefix check with `isPathWithin` using `path.relative`.
+  - *Contrast with trace-mcp*: trace-mcp enforces strict path sandboxing and security boundaries (`SECURITY_VIOLATION` on directory traversal or escape) using normalized canonical paths (`path.resolve` / `realpath`) and relative path prefix math. It correctly handles filesystem root corner cases and symlink dereferencing without string-manipulation edge cases.
+- **oraios/serena**:
+  - *Premature LSP rename requests during background project loading (PR #2254, open)*: When executing `rename_symbol` through `typescript-language-server` immediately upon workspace startup, Serena applied renames only to the symbol definition file, silently skipping all call sites across other project files while reporting success ("(1 changes applied)"). This occurred because `typescript-language-server` delegates rename requests to a `partialSemantic` syntax server while the full project is loading in the background, only seeing currently opened files. While Serena already included `_wait_for_cross_file_references_if_needed()` for reference queries, it bypassed this readiness gate in `request_rename_symbol_edit()`. PR #2254 adds the readiness wait before sending rename requests.
+  - *Contrast with trace-mcp*: trace-mcp does not depend on heavyweight external language servers (LSPs) that perform opaque background indexing or return incomplete workspace edits. Instead, trace-mcp maintains its own precomputed SQLite code graph and AST symbol index. Workspace refactorings (such as `apply_rename`) deterministically find all references across the codebase from the index, perform dry-run previews, enforce transaction limits (`confirm_large` if > 20 files), and never produce partial or silent failures due to background initialization races.
+
+**Competitor pulse (as of 2026-11-08 14:00 pass vs 2026-11-08 08:00 pass TRA-2971):**
+- nikolai-vysotskyi/trace-mcp: 203★ (=), 24 forks (=)
+- yamadashy/repomix: 29,184★ (+4), 1,629 forks (+2)
+- oraios/serena: 31,199★ (+7), 2,134 forks (=)
+- DeusData/codebase-memory-mcp: 48,318★ (+11), 3,994 forks (+2)
+- tirth8205/code-review-graph: 32,638★ (+2), 2,969 forks (+2)
+- colbymchenry/codegraph: 77,041★ (+25), 5,122 forks (+3)
+- abhigyanpatwari/GitNexus: 48,337★ (+5), 5,235 forks (+3)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (=)
+- continuedev/continue: 36,431★ (+2), 5,557 forks (=)
+- Aider-AI/aider: 50,019★ (+5), 5,148 forks (+1)
+- Graphify-Labs/graphify: 144,167★ (+110), 13,799 forks (+14)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
