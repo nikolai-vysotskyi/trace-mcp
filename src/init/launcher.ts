@@ -21,7 +21,12 @@ import { withPs1Bom } from './ps1-bom.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
 import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
-import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME, isEphemeralProjectRoot } from '../global.js';
+import {
+  LEGACY_MIGRATION_MARKER,
+  TRACE_MCP_HOME,
+  isEphemeralInstallPath,
+  isEphemeralProjectRoot,
+} from '../global.js';
 import { getHomeDir } from './home.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
@@ -251,6 +256,7 @@ export function recordPkgRoot(cliPath: string): void {
     // entries found live, wasting nearly a third of the list).
     const tmpDir = path.resolve(os.tmpdir());
     if (
+      isEphemeralInstallPath(cliPath) ||
       isEphemeralProjectRoot(root) ||
       isEphemeralProjectRoot(cliPath) ||
       root === tmpDir ||
@@ -729,6 +735,17 @@ export function setupLauncher(
       cli: resolveCurrentCliPath(),
       version: opts.pkgVersion,
     };
+    // `init` can be invoked from pnpm dlx or npx even though postinstall
+    // refuses to adopt those caches. Never replace a durable launcher pair
+    // with a one-shot extract that a cache cleanup may remove.
+    if (isEphemeralInstallPath(cfg.cli)) {
+      steps.push({
+        target: getLauncherConfigPath(),
+        action: 'skipped',
+        detail: 'Cannot pin launcher.env to an ephemeral package cache',
+      });
+      return steps;
+    }
     recordPkgRoot(cfg.cli);
     const existing = readLauncherConfig();
     const unchanged =
