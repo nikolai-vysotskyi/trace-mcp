@@ -390,7 +390,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-26</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/comparisons.html">MCP Code-Graph Tools Compared: Serena, Repomix + 20 More</a></h3>
 <p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 91 frameworks, GitHub stars. Pick the one that fits your stack.</p>
@@ -570,7 +570,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/vs/ide-context.html">IDE Context Alternative: trace-mcp vs Cursor rules, Copilot setup</a></h3>
 <p class="article-card-desc">Cursor rules and Copilot instructions steer one IDE session; trace-mcp is the persistent graph every agent queries. Session context vs stored edges.</p>
@@ -614,7 +614,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">GUIDES</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/what-trace-init-installs.html">What trace init installs — guard hooks, Read/Bash mirrors and client config</a></h3>
 <p class="article-card-desc">What trace init writes to your machine and how to audit it: guard hooks, opt-in Read/Bash mirrors, the routing block, client config, tweakcc tiers.</p>
@@ -632,7 +632,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">GUIDES</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/configuration.html">trace-mcp Configuration Guide — .trace.json Reference</a></h3>
 <p class="article-card-desc">Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional.</p>
@@ -641,7 +641,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">GUIDES</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/tweakcc.html">System Prompt Routing via tweakcc — pairing trace-mcp with Claude Code</a></h3>
 <p class="article-card-desc">How to pair trace-mcp with tweakcc to patch Claude Code&#39;s system prompts and route tool selection toward trace-mcp instead of native file reads.</p>
@@ -730,7 +730,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">REFERENCE</span>
-<time class="article-card-date">2026-10-19</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/tools-reference.html">MCP Tools Reference — code-intelligence tools by task and framework</a></h3>
 <p class="article-card-desc">The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries.</p>
@@ -739,7 +739,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">REFERENCE</span>
-<time class="article-card-date">2026-10-25</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/tools-index.html">Tool index — every MCP tool the server registers</a></h3>
 <p class="article-card-desc">Alphabetical index of every trace-mcp MCP tool, generated from the server&#39;s own registrations: what each one does and when it is available.</p>
@@ -788,7 +788,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">CONCEPTS</span>
-<time class="article-card-date">2026-10-25</time>
+<time class="article-card-date">2026-11-08</time>
 </div>
 <h3 class="article-card-title"><a href="/analytics.html">Session Analytics &amp; Coverage Intelligence — token savings, wasteful patterns</a></h3>
 <p class="article-card-desc">trace-mcp&#39;s built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage.</p>

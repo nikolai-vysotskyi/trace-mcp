@@ -250,17 +250,52 @@ export interface GatedCallbackContext {
   isSessionLocalTool?: (name: string) => boolean;
 }
 
+/** Classify an error tool response into a short, safe diagnostic label (TRA-2981). */
+export function classifyErrorResponse(resultObj: WrappedToolResponse | undefined): string {
+  if (!resultObj) return 'ERROR';
+  try {
+    const text = resultObj.content?.[0]?.text;
+    if (text) {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') {
+        const errObj = parsed.error;
+        if (errObj && typeof errObj === 'object') {
+          const code = errObj.code || 'ERROR';
+          const isAmbiguous = Array.isArray(errObj.suggestions) && errObj.suggestions.length > 0;
+          const reason = isAmbiguous ? 'ambiguous' : errObj.reason;
+          return reason ? `${code}:${reason}` : String(code);
+        } else if (typeof errObj === 'string') {
+          const reason = parsed.reason;
+          return reason ? `NOT_FOUND:${reason}` : 'ERROR';
+        }
+      }
+    }
+  } catch {
+    /* fallback to generic */
+  }
+  return 'ERROR';
+}
+
 /** Emit a journal-broadcast entry for the most recent journal record. */
 function emitJournalEntry(
   ctx: GatedCallbackContext,
-  fields: { count: number; resultTokens: number | undefined; latencyMs: number; isError: boolean },
+  fields: {
+    count: number;
+    resultTokens: number | undefined;
+    latencyMs: number;
+    isError: boolean;
+    errorClass?: string;
+  },
 ): void {
   if (!ctx.onJournalEntry || !ctx.sessionId) return;
+  const baseSummary = ctx.journal.getEntries().at(-1)?.params_summary ?? '';
+  const paramsSummary =
+    fields.isError && fields.errorClass ? `${baseSummary} [${fields.errorClass}]` : baseSummary;
   ctx.onJournalEntry({
     project: ctx.projectRoot ?? '',
     ts: Date.now(),
     tool: ctx.name,
-    params_summary: ctx.journal.getEntries().at(-1)?.params_summary ?? '',
+    params_summary: paramsSummary,
     result_count: fields.count,
     result_tokens: fields.resultTokens,
     latency_ms: fields.latencyMs,
@@ -526,11 +561,13 @@ export function createGatedCallback(
       // journal.record: a count-0 entry would poison dedup with a bogus
       // "executed with 0 results" warning on the next identical call.
       if (ctx.onJournalEntry && ctx.sessionId) {
+        const errorClass = err instanceof Error ? `THROW:${err.name || 'Error'}` : 'THROW';
+        const baseSummary = summarizeToolParams(ctx.name, params);
         ctx.onJournalEntry({
           project: ctx.projectRoot ?? '',
           ts: Date.now(),
           tool: ctx.name,
-          params_summary: summarizeToolParams(ctx.name, params),
+          params_summary: `${baseSummary} [${errorClass}]`,
           result_count: 0,
           result_tokens: undefined,
           latency_ms: throwLatency,
@@ -554,11 +591,13 @@ export function createGatedCallback(
     const compactResult = ctx.extractCompactResult(ctx.name, resultObj);
     const resultTokens = responseTokens(resultObj);
     ctx.journal.record(ctx.name, params, count, { compactResult, resultTokens });
+    const errorClass = resultObj?.isError ? classifyErrorResponse(resultObj) : undefined;
     emitJournalEntry(ctx, {
       count,
       resultTokens,
       latencyMs: normalLatency,
       isError: !!resultObj?.isError,
+      errorClass,
     });
 
     // Only a worktree session has a resolver; everywhere else this stays null

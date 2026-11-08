@@ -28,6 +28,7 @@ import { checkEmbeddingDrift } from '../../runtime/embedding-drift.js';
 import { tuneRepoWeights } from '../../runtime/tuning.js';
 import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
 import type { MetaContext } from '../../server/types.js';
+import { classifyErrorResponse } from '../../server/tool-gate-helpers.js';
 import { summarizeToolParams } from '../../session/journal.js';
 import { getSessionResume } from '../../session/resume.js';
 import { registerAITools } from '../ai/ai-tools.js';
@@ -1030,11 +1031,13 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             /* journal is best-effort */
           }
           if (onJournalEntry && sessionId) {
+            const errorClass = response.isError ? classifyErrorResponse(response) : undefined;
+            const baseSummary = summarizeToolParams(call.tool, call.args);
             onJournalEntry({
               project: projectRoot,
               ts: Date.now(),
               tool: call.tool,
-              params_summary: summarizeToolParams(call.tool, call.args),
+              params_summary: errorClass ? `${baseSummary} [${errorClass}]` : baseSummary,
               result_count: subCount,
               result_tokens: subTokens,
               latency_ms: subLatency,
