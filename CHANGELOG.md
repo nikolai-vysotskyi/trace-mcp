@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.43.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.11...v3.43.0) (2026-11-08)
+
+
+### Features
+
+* **activity:** classify tool errors in journal params_summary (TRA-2981) ([#1882](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1882)) ([fb3decc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb3decc3ddba0bca03458072fb25a4bcd5bfbff0))
+
+
+### Bug Fixes
+
+* prevent init from pinning ephemeral CLI caches ([#1874](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1874)) ([3d963d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3d963d8ff503b99f1752f565e868ee4831c0e55a))
+* restore public filename references after history rewrite ([#1879](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1879)) ([c734d02](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c734d023e0bb65f85b15590b893d89606e0c3a07))
+
+
+### Documentation
+
+* add Supported by section with AssetFeed to README and homepage ([#1878](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1878)) ([dd2d64e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dd2d64e81a014e3bb9eeafef466b0f25cb9d41a7))
+* point Supported by links to AssetFeed search ([#1880](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1880)) ([1a03055](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1a03055c1ab21c832372b4c2c871ec6444e83c97))
+* restore sanitized public instructions and changelog ([341f9c6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/341f9c675e9cf4840e1bce2d219a69a766f071cd))
+
+
+### Tests
+
+* **session:** isolate Codex home in provider tests (TRA-2965) ([#1873](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1873)) ([1fd364c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1fd364c0eefb5e094b5e34fffdacdbb52177261b))
+
+
+### CI/CD
+
+* remove GEO workflow after private migration ([9054bd9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9054bd98d47e4eaf200d686722bbd123113f5c2f))
+
 ## [3.42.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.10...v3.42.11) (2026-11-07)
 
 
