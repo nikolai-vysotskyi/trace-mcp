@@ -2,7 +2,7 @@
 title: "TokenSave Alternative: trace-mcp vs TokenSave for AI agents"
 description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 91 framework integrations, AST refactoring, and OWASP taint analysis."
 category: vs-comparisons
-updated: 2026-10-26
+updated: 2026-11-08
 ---
 
 # TokenSave alternative: trace-mcp vs TokenSave
@@ -229,4 +229,4 @@ The control arm reads the raw files that answer each fixture — no index, the p
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.

@@ -2,7 +2,7 @@
 title: "SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents"
 description: "SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring."
 category: vs-comparisons
-updated: 2026-10-19
+updated: 2026-11-08
 ---
 
 # SocratiCode alternative: trace-mcp vs SocratiCode
@@ -181,4 +181,4 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+- Install trace-mcp: `npm i -g trace-mcp && trace-mcp init`.
