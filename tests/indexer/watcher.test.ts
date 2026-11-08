@@ -2,9 +2,14 @@ import * as parcelWatcher from '@parcel/watcher';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { TraceMcpConfigSchema, type TraceMcpConfig } from '../../src/config.js';
+import { initializeDatabase } from '../../src/db/schema.js';
+import { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { FileWatcher } from '../../src/indexer/watcher.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 
 vi.mock('@parcel/watcher', () => ({
   subscribe: vi.fn(),
@@ -107,6 +112,89 @@ describe('FileWatcher', () => {
     expect(onChanges).toHaveBeenCalledTimes(1);
     expect(onChanges).toHaveBeenCalledWith(['/project/src/app.ts']);
   });
+
+  it('drops repeated paths outside include before debounce but keeps source edits', async () => {
+    const onChanges = vi.fn().mockResolvedValue(undefined);
+    await watcher.start('/project', mockConfig, onChanges);
+
+    for (let i = 0; i < 5; i++) {
+      await capturedCallback(null, [
+        { type: 'update', path: '/project/gem/calls.jsonl' },
+        { type: 'update', path: '/project/notes.unparsed' },
+      ]);
+    }
+    expect(timer.hasPending()).toBe(false);
+    expect(onChanges).not.toHaveBeenCalled();
+
+    await capturedCallback(null, [{ type: 'update', path: '/project/src/app.ts' }]);
+    await timer.flush();
+    await capturedCallback(null, [{ type: 'update', path: '/project/src/app.ts' }]);
+    await timer.flush();
+    expect(onChanges).toHaveBeenCalledTimes(2);
+    expect(onChanges).toHaveBeenNthCalledWith(1, ['/project/src/app.ts']);
+    expect(onChanges).toHaveBeenNthCalledWith(2, ['/project/src/app.ts']);
+  });
+
+  it('keeps jsonl when a project explicitly includes it', async () => {
+    const onChanges = vi.fn().mockResolvedValue(undefined);
+    await watcher.start(
+      '/project',
+      { ...mockConfig, include: ['src/**/*.ts', 'gem/**/*.jsonl'] },
+      onChanges,
+    );
+    await capturedCallback(null, [{ type: 'update', path: '/project/gem/calls.jsonl' }]);
+    await timer.flush();
+    expect(onChanges).toHaveBeenCalledWith(['/project/gem/calls.jsonl']);
+  });
+
+  it('indexes repeated real source edits while ignoring append-only data and unsupported files', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-watcher-include-'));
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.mkdirSync(path.join(root, 'gem'));
+    const source = path.join(root, 'src', 'app.ts');
+    const journal = path.join(root, 'gem', 'calls.jsonl');
+    const unsupported = path.join(root, 'notes.unparsed');
+    fs.writeFileSync(source, 'export const first = 1;\n');
+    fs.writeFileSync(journal, '{}\n');
+    fs.writeFileSync(unsupported, 'notes\n');
+    const db: Database.Database = initializeDatabase(path.join(root, 'index.db'));
+    const store = new Store(db);
+    const config = TraceMcpConfigSchema.parse({ root });
+    const pipeline = new IndexingPipeline(store, PluginRegistry.createWithDefaults(), config, root);
+    const indexed: number[] = [];
+    try {
+      await watcher.start(root, config, async (paths) => {
+        indexed.push((await pipeline.indexFiles(paths)).indexed);
+      });
+      for (let i = 0; i < 5; i++) {
+        fs.appendFileSync(journal, '{}\n');
+        fs.appendFileSync(unsupported, 'more\n');
+        await capturedCallback(null, [
+          { type: 'update', path: journal },
+          { type: 'update', path: unsupported },
+        ]);
+      }
+      expect(timer.hasPending()).toBe(false);
+      expect(indexed).toEqual([]);
+
+      await capturedCallback(null, [{ type: 'update', path: source }]);
+      await timer.flush();
+      await watcher.drain();
+      fs.writeFileSync(source, 'export const first = 1;\nexport const second = 2;\n');
+      await capturedCallback(null, [{ type: 'update', path: source }]);
+      await timer.flush();
+      await watcher.drain();
+      expect(indexed).toEqual([1, 1]);
+      const file = store.getFile('src/app.ts');
+      expect(file).toBeDefined();
+      expect(store.getSymbolsByFile(file!.id).map((s) => s.name)).toContain('second');
+    } finally {
+      await watcher.stop();
+      await pipeline.dispose();
+      db.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('passes nested skip-dir globs and exclude globs to the native ignore list', async () => {
     const config: TraceMcpConfig = { ...mockConfig, exclude: ['**/storage/**'] };

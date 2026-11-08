@@ -985,7 +985,7 @@ export class ProjectManager {
           }
           for (const rel of skipped) {
             const elapsedMs = Math.round(performance.now() - watchStart);
-            logger.info(
+            logger.debug(
               {
                 event: 'reindex-file',
                 project: projectRoot,
@@ -1097,7 +1097,10 @@ export class ProjectManager {
                   });
                 }
               } else {
-                logger.info(
+                // Keep successful changes visible at info; empty watcher
+                // outcomes remain in /api/stats without flooding daemon.log.
+                const log = indexed > 0 ? logger.info : logger.debug;
+                log(
                   {
                     event: 'reindex-file',
                     project: projectRoot,

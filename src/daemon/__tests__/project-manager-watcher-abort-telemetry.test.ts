@@ -26,7 +26,7 @@ const loggerMocks = vi.hoisted(() => ({
 }));
 
 /** 'abort' → indexFiles rejects with IndexAbortedError; 'error' → generic Error. */
-const mode = vi.hoisted(() => ({ current: 'abort' as 'abort' | 'error' }));
+const mode = vi.hoisted(() => ({ current: 'abort' as 'abort' | 'error' | 'empty' | 'indexed' }));
 
 /** Watcher paths-callback captured from FileWatcher.start. */
 const captured = vi.hoisted((): { cb?: (paths: string[]) => Promise<void> } => ({}));
@@ -44,7 +44,8 @@ vi.mock('../../indexer/pipeline.js', async () => {
     }
     async indexFiles() {
       if (mode.current === 'abort') throw new IndexAbortedError('root vanished mid-batch');
-      throw new Error('disk boom');
+      if (mode.current === 'error') throw new Error('disk boom');
+      return { indexed: mode.current === 'indexed' ? 1 : 0, skipped: 0, durationMs: 1 };
     }
     deleteFiles() {}
     async dispose() {}
@@ -113,6 +114,26 @@ async function addProjectWithWatcher(): Promise<{ root: string; files: string[] 
 }
 
 describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
+  it('records empty watcher calls without info log lines and reports indexed edits', async () => {
+    const { files } = await addProjectWithWatcher();
+    const { getReindexStats } = await import('../reindex-stats.js');
+    const before = getReindexStats().summarize();
+    vi.clearAllMocks();
+
+    mode.current = 'empty';
+    for (let i = 0; i < 10; i++) await captured.cb!([files[0]]);
+    expect(
+      loggerMocks.info.mock.calls.filter(([, msg]) => msg === 'reindex-file telemetry'),
+    ).toHaveLength(0);
+    expect(getReindexStats().summarize().total - before.total).toBe(10);
+
+    mode.current = 'indexed';
+    await captured.cb!([files[1]]);
+    expect(
+      loggerMocks.info.mock.calls.filter(([, msg]) => msg === 'reindex-file telemetry'),
+    ).toHaveLength(1);
+  }, 60_000);
+
   it('collapses an aborted batch into one warn line and zero error lines', async () => {
     mode.current = 'abort';
     const { root, files } = await addProjectWithWatcher();

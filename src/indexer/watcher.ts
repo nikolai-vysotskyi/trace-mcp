@@ -349,6 +349,24 @@ export class FileWatcher {
     // dirs excluded from full indexing (Laravel storage/framework/sessions,
     // caches) still triggered per-event reindexes. Apply the same globs here.
     const isExcluded = picomatch(config.exclude ?? [], { dot: true });
+    // Only reject paths that cannot match either the direct include glob or
+    // its workspace/deep-fallback form. The pipeline makes the final include
+    // decision; this cheap guard keeps unindexable journal churn out of the
+    // debounce queue without changing explicit project includes.
+    // Some direct FileWatcher callers provide a partial config. Without an
+    // include list, leave filtering to the pipeline rather than dropping edits.
+    const includes = config.include ?? [];
+    const positives = includes.filter((p) => !p.startsWith('!') || p.startsWith('!('));
+    const negatives = includes.filter((p) => p.startsWith('!') && !p.startsWith('!('));
+    const isIncludedDirectly = picomatch(positives, { dot: false });
+    const isIncludedDeep = picomatch(
+      positives.filter((p) => !p.startsWith('**/')).map((p) => `**/${p}`),
+      { dot: false },
+    );
+    const isExcludedFromInclude = picomatch(
+      negatives.map((p) => p.slice(1)),
+      { dot: false },
+    );
     const descendantGlobs = opts?.descendantExcludeGlobs ?? [];
     // Cheap per-event guard mirroring the native-level ignore below: covers
     // the race where a project is registered under this ancestor AFTER this
@@ -370,6 +388,9 @@ export class FileWatcher {
       gitignore,
       ignoreDirs,
       isExcluded,
+      isPotentiallyIncluded: (p) =>
+        config.include === undefined ||
+        (!isExcludedFromInclude(p) && (isIncludedDirectly(p) || isIncludedDeep(p))),
       isOwnedByDescendant,
       descendantGlobs,
     });
@@ -397,6 +418,7 @@ export class FileWatcher {
       gitignore: GitignoreMatcher;
       ignoreDirs: string[];
       isExcluded: (path: string) => boolean;
+      isPotentiallyIncluded: (path: string) => boolean;
       isOwnedByDescendant: ((path: string) => boolean) | undefined;
       descendantGlobs: string[];
     },
@@ -411,6 +433,7 @@ export class FileWatcher {
       gitignore,
       ignoreDirs,
       isExcluded,
+      isPotentiallyIncluded,
       isOwnedByDescendant,
       descendantGlobs,
     } = args;
@@ -455,6 +478,7 @@ export class FileWatcher {
           // ~250 s of indexer-elapsed per hour on these alone).
           if (isHotChurnPath(relPosix)) return false;
           if (isExcluded(relPosix)) return false;
+          if (!isPotentiallyIncluded(relPosix)) return false;
           if (isOwnedByDescendant?.(relPosix)) return false;
           if (gitignore.isIgnored(rel)) return false;
           return !traceignore.isIgnored(rel);
