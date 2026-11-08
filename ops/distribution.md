@@ -9830,3 +9830,48 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Outreach pass, 2026-11-08 08:00 pass (TRA-2971): mention sweep clean, competitor deep-dive on Graphify fallback endpoint tokenization (#5085), repomix jschardet 4.1 UTF-8 BOM decode edges (#2015), Serena Nix semicolon retention in replace_symbol_body (#2257)
+
+**External threads audit (read-only via GitHub API):**
+- GetBindu/awesome-claude-code-and-skills#195: MERGED (merged 2026-11-07 13:54 UTC by raahulrahl; verified live in `readme.md`).
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 3 verified in `bc461c7`, awaiting maintainer review/merge; quiet since 2026-10-09).
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: OPEN / CONFLICTING (dirty, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- Dokploy/mcp#81: OPEN (third-party discussion between contributor and other devs; quiet since 2026-10-24; standing no-ping rule holds).
+- hashgraph-online/awesome-ai-plugins#182: MERGED (standing no-claim rule holds).
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran across 9 search queries (4 general/domain/npx queries, 5 paired competitor queries).
+- 0 repos outside seen list: mention sweep cleanly verified (no new mentions detected).
+- External touches: 0 (standing no-ping rules and clean sweep; no outreach needed).
+
+**Competitor intelligence & architectural triage:**
+- **Graphify-Labs/graphify**:
+  - *Fallback endpoint name tokenization and false path resolution (PR #5085, open; fixes #5079)*: In Graphify, `graphify path` and the `shortest_path` MCP tool resolved endpoints by falling back to scored token rankings. When queried with nonexistent symbol names like `zzqqxx_no_such_symbol_9137`, tokenization matched common tokens in candidates like `no_such_symbol_helper()`, returning a 1-hop shortest path and exit code 0 rather than failing with `EXIT_NOT_FOUND`. PR #5085 guards the fallback so that it only runs when every token of the query exists in some node name/id in the graph, failing closed on unknown words.
+  - *Contrast with trace-mcp*: trace-mcp handles symbol queries deterministically through exact/FTS symbol resolution in SQLite and syntax AST indexing. It never invents candidate edges or returns hallucinated paths when a symbol does not exist in the codebase, consistently returning explicit not-found or partial indicators to agent callers.
+- **yamadashy/repomix**:
+  - *Encoding detection regressions with UTF-8 BOM under jschardet 4.1 (PR #2015, merged; release v1.19.0 #2016)*: When bumping jschardet to 4.1.0 (#2011), files containing a UTF-8 BOM followed by invalid UTF-8 bytes were misclassified as single-byte legacy encodings rather than being rejected as UTF-8 decoding errors, outputting garbled text instead of skipping the malformed file. PR #2015 adapted tests and acknowledged the narrow edge case in `readRawFile`.
+  - *Contrast with trace-mcp*: trace-mcp operates with strict UTF-8 buffer parsing and tree-sitter grammars with explicit binary/text file heuristics. It avoids relying on fragile statistical encoding guesses that can silently inject corrupted tokens into context windows.
+- **oraios/serena**:
+  - *Nix symbol body replacement trailing semicolon truncation (PR #2257, open; refs #1956)*: In Serena, `replace_symbol_body` for Nix stripped the trailing semicolon `;` from bindings while still reporting success (`OK`). While symbol ranges included the semicolon, `find_symbol` returned the body from the unextended range; rewriting the returned body deleted the semicolon and caused syntax breakage across nix files. PR #2257 restricts semicolon inclusion to recognized binding expressions and rebuilds the body from the extended range.
+  - *Contrast with trace-mcp*: trace-mcp's AST-based code transformation and extraction tools preserve exact node boundaries, delimiters, and surrounding trivia. When replacing or inspecting symbols, trace-mcp ensures AST invariants remain valid so language-specific delimiters are never dropped.
+
+**Competitor pulse (as of 2026-11-08 08:00 pass vs 2026-11-08 02:00 pass TRA-2964):**
+- nikolai-vysotskyi/trace-mcp: 203★ (=), 24 forks (=)
+- yamadashy/repomix: 29,180★ (+1), 1,627 forks (+2)
+- oraios/serena: 31,192★ (+7), 2,134 forks (=)
+- DeusData/codebase-memory-mcp: 48,307★ (+14), 3,992 forks (=)
+- tirth8205/code-review-graph: 32,636★ (+3), 2,967 forks (+2)
+- colbymchenry/codegraph: 77,016★ (+11), 5,119 forks (+2)
+- abhigyanpatwari/GitNexus: 48,332★ (+6), 5,232 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,836★ (=), 373 forks (=)
+- continuedev/continue: 36,429★ (=), 5,557 forks (-2)
+- Aider-AI/aider: 50,014★ (+2), 5,147 forks (+1)
+- Graphify-Labs/graphify: 144,057★ (+97), 13,785 forks (+10)
+- alperhankendi/Ctxo: 74★ (=), 10 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
