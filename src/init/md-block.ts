@@ -1,8 +1,8 @@
 /**
- * Shared markdown routing-block writer used by both [internal record] and AGENTS.md.
+ * Shared markdown routing-block writer used by both CLAUDE.md and AGENTS.md.
  *
  * The BLOCK content is the single source of truth for "how an AI agent should
- * route through trace". Anything that drifts between [internal record] and
+ * route through trace". Anything that drifts between CLAUDE.md and
  * AGENTS.md is a bug — the block is authored here so both files stay in sync.
  *
  * File-I/O is intentionally kept here (not in the caller) so competitor
@@ -73,7 +73,7 @@ export const TRACE_MCP_ROUTING_BLOCK = TRACE_ROUTING_BLOCK;
 
 /**
  * Neutral routing block for AGENTS.md.
- * Unlike [internal record], which targets Claude Code and names its native tools
+ * Unlike CLAUDE.md, which targets Claude Code and names its native tools
  * (Read, Grep, Glob, Edit), AGENTS.md targets cross-client agents (Hermes,
  * OpenCode, Codex, Factory Droid, AMP) and uses neutral tool descriptions.
  */

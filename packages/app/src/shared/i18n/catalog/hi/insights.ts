@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     'रिपोर्ट चली, लेकिन उसका जवाब अपेक्षित रूप से मेल नहीं खाया — यह खाली प्रोजेक्ट नहीं, बग जैसा लगता है।',
 
-  reportDriftTitle: '[internal record] drift',
+  reportDriftTitle: 'CLAUDE.md drift',
   reportDriftDescription: 'एजेंट कॉन्फ़िग फ़ाइलों में पुराने पाथ और मृत सिंबल संदर्भ।',
   reportPagerankTitle: 'सबसे केंद्रीय फ़ाइलें',
   reportPagerankDescription:
@@ -47,7 +47,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} टोकन',
   startupSourceDetail: '{{sessions}} सत्रों में मापा गया',
   startupResidualDetail:
-    'अलग-अलग नहीं दिखाया जा सकता — सिस्टम प्रॉम्प्ट, टूल स्कीमा और [internal record] कभी सत्र लॉग में नहीं आते',
+    'अलग-अलग नहीं दिखाया जा सकता — सिस्टम प्रॉम्प्ट, टूल स्कीमा और CLAUDE.md कभी सत्र लॉग में नहीं आते',
   startupRebuildRow: 'कैश दोबारा बना: {{cause}} — {{events}} बार',
   startupRebuildDetail: 'वही टोकन कैश से पढ़ने की तुलना में {{usd}} अतिरिक्त',
   startupServerRow: '{{server}} — {{sessions}} शुरुआती ब्लॉक में',

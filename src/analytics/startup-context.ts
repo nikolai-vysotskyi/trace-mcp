@@ -20,7 +20,7 @@
  *    writes to the log as an `attachment` — hook output by hook name, the
  *    skill listing, the deferred-tool and agent listings, MCP instructions.
  *  - NOT ITEMISED: the system prompt, the native and MCP tool schemas, and
- *    [internal record]. The harness never logs them, so they can only be reported
+ *    CLAUDE.md. The harness never logs them, so they can only be reported
  *    together, as the residual. Splitting them further needs a proxy in front
  *    of the API — out of scope here, and not something we would ship.
  *
@@ -535,10 +535,10 @@ export async function scanSessionFile(filePath: string, projectPath: string): Pr
 function readInstructionFiles(projectRoot?: string): InstructionFileRow[] {
   const home = claudeHome();
   const candidates = [
-    path.join(home, '[internal record]'),
+    path.join(home, 'CLAUDE.md'),
     path.join(home, 'AGENTS.md'),
     ...(projectRoot
-      ? [path.join(projectRoot, '[internal record]'), path.join(projectRoot, 'AGENTS.md')]
+      ? [path.join(projectRoot, 'CLAUDE.md'), path.join(projectRoot, 'AGENTS.md')]
       : []),
   ];
   const rows: InstructionFileRow[] = [];
@@ -667,12 +667,12 @@ function buildRecommendations(input: RecommendationInputs): Recommendation[] {
 
      Both files must be named, not merely "the first two on the list": the list
      is sorted by size and holds up to two GLOBAL files, so picking the largest
-     and then "any other" pairs ~/.claude/AGENTS.md against ~/.claude/[internal record]
+     and then "any other" pairs ~/.claude/AGENTS.md against ~/.claude/CLAUDE.md
      and never looks at the project at all. Pair by basename, with one file
      inside ~/.claude and the other outside it. */
   const home = claudeHome();
   const isGlobal = (f: InstructionFileRow) => f.path.startsWith(home + path.sep);
-  for (const basename of ['[internal record]', 'AGENTS.md']) {
+  for (const basename of ['CLAUDE.md', 'AGENTS.md']) {
     const named = input.instructionFiles.filter((f) => path.basename(f.path) === basename);
     const global = named.find(isGlobal);
     const project = named.find((f) => !isGlobal(f));
@@ -963,7 +963,7 @@ export async function analyzeStartupContext(
       'textCompression proposes deletions only, and only where another source in the same startup block still says the same thing. Nothing is reworded and nothing is written.',
       'Every recommendation rests on evidence of non-use over the stated window — never on size. A tool missing from the startup block is a tool the agent will not call.',
       "SessionStart hooks get no recommendation on purpose: nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on.",
-      'The system prompt, tool schemas and [internal record] are never written to the session log — they can only be reported together, as the residual row.',
+      'The system prompt, tool schemas and CLAUDE.md are never written to the session log — they can only be reported together, as the residual row.',
       'Itemised rows estimate tokens as chars/4; the total and the residual are exact.',
       'Rows are means per fresh session so they sum to the mean block; the distribution above is medians.',
       'Prices are sonnet-class list rates and ignore any plan or discount.',

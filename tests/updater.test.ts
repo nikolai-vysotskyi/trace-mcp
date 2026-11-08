@@ -219,7 +219,7 @@ describe('runPostUpdateMigrations', () => {
     const { installGuardHook, migrateLegacyToolPrefix } = await import('../src/init/hooks.js');
     expect(installGuardHook).not.toHaveBeenCalled();
 
-    // But [internal record] should still be updated
+    // But CLAUDE.md should still be updated
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
 
@@ -268,7 +268,7 @@ describe('runPostUpdateMigrations', () => {
     // Should not throw
     await runPostUpdateMigrations();
 
-    // Should still update [internal record] and stamp installedVersion in cache
+    // Should still update CLAUDE.md and stamp installedVersion in cache
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
     const written = getWrittenCache();
@@ -292,7 +292,7 @@ describe('runPostUpdateMigrations', () => {
     // Should not throw
     await runPostUpdateMigrations();
 
-    // Should still update [internal record] and stamp version
+    // Should still update CLAUDE.md and stamp version
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
     const written = getWrittenCache();
@@ -306,7 +306,7 @@ describe('runPostUpdateMigrations', () => {
     expect(String(stampCall![1])).toBe('2.0.0\n');
   });
 
-  it('continues on [internal record] update failure', async () => {
+  it('continues on CLAUDE.md update failure', async () => {
     setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
 
     const claudeMd = await import('../src/init/claude-md.js');

@@ -815,13 +815,13 @@ Every `tools.*` option works from a project-local config file (`.trace/.config.j
 
 | Value | What ships | When to use |
 |---|---|---|
-| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere ([internal record], [tweakcc](tweakcc.md)), or don't want opinionated rules |
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, [tweakcc](tweakcc.md)), or don't want opinionated rules |
 | `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
 | `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
 
 **Auto-set by `trace-mcp init`:** picking the **Max** enforcement level writes `"agent_behavior": "strict"` to your global config. Picking Base/Standard writes `"off"`. Re-run `init` to change tiers — the value updates idempotently.
 
-**Why it lives in MCP instructions (not [internal record] or tweakcc):**
+**Why it lives in MCP instructions (not CLAUDE.md or tweakcc):**
 - Cross-client — Cursor/Codex/Windsurf users get the same behavior without CC-specific setup.
 - Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
 - Single source of truth alongside the tool-routing block.
@@ -978,7 +978,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 > `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
 
 **Enforcement tiers (Claude Code / Claw / Desktop only):**
-- **Base** — `[internal record]` block with tool routing rules.
+- **Base** — `CLAUDE.md` block with tool routing rules.
 - **Standard** — Base + PreToolUse guard hooks that intercept built-in Read/Grep/Glob.
 - **Max** — Standard + tweakcc system-prompt patches and strict agent-behavior rules.
 
@@ -1013,7 +1013,7 @@ an upgrade) rewrites this everywhere it owns the file:
 
 **What stays manual.** Anything you wrote yourself outside those specific
 fields is not touched — most commonly, tool names spelled out in your own
-prose inside `[internal record]` / `AGENTS.md` (`init` only rewrites the routing
+prose inside `CLAUDE.md` / `AGENTS.md` (`init` only rewrites the routing
 block it generated, not arbitrary text you added), or a permission/hook
 config in a file trace-mcp doesn't manage the shape of. If a tool call stops
 matching a hook, or an allowlisted tool starts re-prompting for approval
@@ -1176,7 +1176,7 @@ reaches. Measured tick overhead on that same query is within run-to-run noise
 
 ```bash
 # Setup
-trace init                 # One-time global setup (MCP clients, hooks, [internal record])
+trace init                 # One-time global setup (MCP clients, hooks, CLAUDE.md)
 trace add [dir]            # Register a project for indexing
 trace list                 # List all registered projects
 trace upgrade [dir]        # Upgrade all projects (or specific one) — migrations + reindex

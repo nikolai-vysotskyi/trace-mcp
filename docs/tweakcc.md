@@ -55,13 +55,13 @@ usage](reduce-claude-code-token-usage.md).
 
 ## Why system prompt routing?
 
-The common failure mode with trace-mcp routing isn't forgetting — it's **skipping**. Claude sees the [internal record] policy and reaches for `Read` or `Grep` anyway because native tools feel faster under pressure or in long sessions — especially after context compression drops the [internal record] block.
+The common failure mode with trace-mcp routing isn't forgetting — it's **skipping**. Claude sees the CLAUDE.md policy and reaches for `Read` or `Grep` anyway because native tools feel faster under pressure or in long sessions — especially after context compression drops the CLAUDE.md block.
 
 trace-mcp has three enforcement layers:
 
 | Layer | Mechanism | Strength |
 |-------|-----------|----------|
-| **Base** — [internal record] policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
+| **Base** — CLAUDE.md policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
 | **Standard** — hooks | PreToolUse guards intercept tool calls at runtime | Medium — stderr warnings, allows Read for edits, catches violations |
 | **Max** — system prompt rewrites (this doc) + agent behavior rules | Patch Claude's core tool descriptions via tweakcc; inject anti-sycophancy + goal-driven discipline rules via MCP instructions | Strongest — model internalizes the preference from the start, behaves like a senior engineer by default |
 
@@ -75,17 +75,17 @@ Picking **Max** during `trace-mcp init` does two things beyond Standard:
 
 ## Architecture
 
-### Base ([internal record] only)
+### Base (CLAUDE.md only)
 
 ```
-[internal record] (soft)
+CLAUDE.md (soft)
   routing policy tables
 ```
 
 ### Standard (current default after `trace-mcp init`)
 
 ```
-[internal record] (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
+CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
   routing policy      blocks Read/Grep/Glob/     index-file after Edit/Write
                       Bash on code files +
                       Agent(Explore) subagents
@@ -97,7 +97,7 @@ Picking **Max** during `trace-mcp init` does two things beyond Standard:
 ### Max (Standard + tweakcc + agent_behavior rules)
 
 ```
-System prompts (deep)   →  MCP instructions (every session)  →  [internal record] (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
+System prompts (deep)   →  MCP instructions (every session)  →  CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
   routing built into        tool routing + agent_behavior=       full policy          catches remaining 5%        unchanged
   core tool descriptions    "strict" (anti-sycophancy,            (reinforcement)
                             goal-driven, 2-strike rule)
@@ -240,4 +240,4 @@ This layered approach gives the strongest enforcement with the least friction.
 
 ## Rollback
 
-To revert: restore original tweakcc prompt files. No changes to [internal record], hooks, or settings are needed — the existing Standard setup continues to work independently.
+To revert: restore original tweakcc prompt files. No changes to CLAUDE.md, hooks, or settings are needed — the existing Standard setup continues to work independently.

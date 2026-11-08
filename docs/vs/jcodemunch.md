@@ -133,7 +133,7 @@ Pick jCodeMunch for personal non-commercial projects where the 3-tool surface an
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
 | Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | Anti-pattern presets (`search_ast`) + secret redaction |
-| Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` ([internal record] / .cursorrules token audit) |
+| Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` (CLAUDE.md / .cursorrules token audit) |
 | Git archaeology | Commit diff history + change tracking | ✓ `get_symbol_provenance` + `get_delivery_metrics` |
 | Session memory | ✓ code-linked decision graph with staleness checks | SQLite index persistence |
 
@@ -215,7 +215,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 - **Non-commercial personal projects**: You are an individual open-source enthusiast or student working solely on hobby projects where commercial license restrictions do not apply.
 - **You prefer a minimal 3-tool dispatch entry point**: You want to experiment with `order`/`menu`/`route` meta-tools to keep top-level schema definitions under 3 tools.
-- **Agent config file auditing**: You want `audit_agent_config` to inspect your `[internal record]`, `.cursorrules`, or `copilot-instructions.md` for dead symbol references and token bloat.
+- **Agent config file auditing**: You want `audit_agent_config` to inspect your `CLAUDE.md`, `.cursorrules`, or `copilot-instructions.md` for dead symbol references and token bloat.
 - **Git archaeology insights**: You want `get_symbol_provenance` to generate commit narratives explaining how a specific function evolved over time.
 
 ## When to choose trace-mcp

@@ -26,7 +26,7 @@ One variable changes between neighbours.
 
 Both treatment arms run `TRACE_MCP_ENFORCE=strict`. Isolation is
 `--setting-sources project` plus an explicit `--settings` file per arm;
-transcripts confirm no user-level hook or [internal record] leaked in.
+transcripts confirm no user-level hook or CLAUDE.md leaked in.
 
 Tasks are outside the tuning contour — the detector was tuned on the burst
 histogram of session transcripts, not on these two repositories (a Laravel app

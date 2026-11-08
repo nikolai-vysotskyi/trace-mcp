@@ -1,4 +1,4 @@
-/* Русские строки вкладки «Аналитика». [internal record], PageRank и git — имена
+/* Русские строки вкладки «Аналитика». CLAUDE.md, PageRank и git — имена
    собственные и не переводятся. */
 
 export const insights = {
@@ -16,7 +16,7 @@ export const insights = {
   errorUnrecognizedShape:
     'Отчёт выполнился, но его ответ не совпал с ожидаемой формой — это похоже на баг, а не на пустой проект.',
 
-  reportDriftTitle: 'Расхождения в [internal record]',
+  reportDriftTitle: 'Расхождения в CLAUDE.md',
   reportDriftDescription:
     'Устаревшие пути и ссылки на исчезнувшие символы в файлах настроек агента.',
   reportPagerankTitle: 'Самые центральные файлы',
@@ -53,7 +53,7 @@ export const insights = {
   startupSourceRow: '{{source}} — {{tokens}} токенов',
   startupSourceDetail: 'измерено в {{sessions}} сессиях',
   startupResidualDetail:
-    'Не разложено — системный промпт, схемы инструментов и [internal record] в журнал сессии не попадают',
+    'Не разложено — системный промпт, схемы инструментов и CLAUDE.md в журнал сессии не попадают',
   startupRebuildRow: 'Кэш пересобран: {{cause}} — раз: {{events}}',
   startupRebuildDetail: '{{usd}} сверх того, во что обошлось бы чтение тех же токенов из кэша',
   startupServerRow: '{{server}} — в {{sessions}} стартовых блоках',

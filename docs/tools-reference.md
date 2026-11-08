@@ -320,7 +320,7 @@ registrations and the serialized schema every MCP client without lazy tool
 loading pays at session start from 90,579 to 86,217 characters.
 
 Calling a retired name no longer fails with a bare "not found": the server
-answers with the replacement call, so a stale `[internal record]` is a one-line fix
+answers with the replacement call, so a stale `CLAUDE.md` is a one-line fix
 rather than a dead end.
 
 ### Policy: consolidations retire the old name, they don't alias it forever

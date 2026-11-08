@@ -1,7 +1,7 @@
 /**
  * Retired-tool hints (TRA-412).
  *
- * v2.0.0 removed seven deprecated aliases. An agent whose [internal record], saved
+ * v2.0.0 removed seven deprecated aliases. An agent whose CLAUDE.md, saved
  * workflow, or habit still names one gets the SDK's bare `Tool X not found`,
  * which is a dead end — the user reads it as flakiness and stops using the
  * tool. Re-registering the names as tombstones would undo the schema saving

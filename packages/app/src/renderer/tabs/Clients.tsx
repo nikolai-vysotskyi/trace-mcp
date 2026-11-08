@@ -1792,7 +1792,7 @@ export function Clients() {
                 ) : prompts ? (
                   <>
                     <PromptRow
-                      label="[internal record]"
+                      label="CLAUDE.md"
                       value={
                         !prompts.claudeMdExists
                           ? t('valueAbsent')

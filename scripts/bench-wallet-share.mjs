@@ -18,7 +18,7 @@
 //
 // Two things are easy to get wrong, both inflate the residual by an order of
 // magnitude: one API request is logged as several records (dedupe by requestId),
-// and injected context (skill listings, tool-list deltas, [internal record], hook output)
+// and injected context (skill listings, tool-list deltas, CLAUDE.md, hook output)
 // lives in `attachment` records, not in message.content.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';

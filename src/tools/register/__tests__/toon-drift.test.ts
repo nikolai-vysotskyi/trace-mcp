@@ -136,7 +136,7 @@ describe('TOON output_format drift guardrail', () => {
         `TOON drift detected — schema and description disagree on TOON support:\n${lines.join('\n')}\n\n` +
           'Fix either by:\n' +
           '  (a) Adding `output_format: OutputFormatSchema` to the schema AND appending the TOON marketing sentence to the description, OR\n' +
-          '  (b) Removing both. Keep the keeper list in [internal record] aligned.',
+          '  (b) Removing both. Keep the keeper list in CLAUDE.md aligned.',
       );
     }
   });

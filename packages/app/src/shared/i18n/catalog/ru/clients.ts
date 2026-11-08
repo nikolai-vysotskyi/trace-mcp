@@ -65,11 +65,11 @@ export const clients = {
 
   enforcementLevel: 'Уровень контроля',
   levelBase: 'Базовый',
-  levelBaseHint: 'Только [internal record] — мягкие правила выбора инструментов',
+  levelBaseHint: 'Только CLAUDE.md — мягкие правила выбора инструментов',
   levelStandard: 'Обычный',
-  levelStandardHint: '[internal record] и хуки',
+  levelStandardHint: 'CLAUDE.md и хуки',
   levelMax: 'Максимум',
-  levelMaxHint: '[internal record], хуки и tweakcc — рекомендуем',
+  levelMaxHint: 'CLAUDE.md, хуки и tweakcc — рекомендуем',
   hookActive: 'Хук активен',
   hookActiveHint: 'PreToolUse-редирект включён — чтения файлов идут через trace-mcp',
   hookMissing: 'Нет редирект-хука',
@@ -88,7 +88,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

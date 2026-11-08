@@ -13,7 +13,7 @@ export const insights = {
   errorUnrecognizedShape:
     'El informe se ejecutó, pero su respuesta no coincidió con la forma esperada — esto parece un error, no un proyecto vacío.',
 
-  reportDriftTitle: 'Desvío de [internal record]',
+  reportDriftTitle: 'Desvío de CLAUDE.md',
   reportDriftDescription:
     'Rutas obsoletas y referencias a símbolos muertos en los archivos de configuración de agentes.',
   reportPagerankTitle: 'Archivos más centrales',
@@ -48,7 +48,7 @@ export const insights = {
   startupSourceRow: '{{source}}: {{tokens}} tokens',
   startupSourceDetail: 'medido en {{sessions}} sesiones',
   startupResidualDetail:
-    'Sin desglosar: el prompt del sistema, los esquemas de herramientas y [internal record] nunca llegan al registro de sesión',
+    'Sin desglosar: el prompt del sistema, los esquemas de herramientas y CLAUDE.md nunca llegan al registro de sesión',
   startupRebuildRow: 'Caché reconstruida: {{cause}} — {{events}} veces',
   startupRebuildDetail: '{{usd}} además de leer esos mismos tokens de la caché',
   startupServerRow: '{{server}}: en {{sessions}} bloques de arranque',

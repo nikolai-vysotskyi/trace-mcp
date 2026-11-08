@@ -204,12 +204,12 @@ describe('applyStartupRecommendations — duplicateInstructions', () => {
 
   function writeInstructionFiles(project: string) {
     fs.writeFileSync(
-      path.join(home, '.claude', '[internal record]'),
+      path.join(home, '.claude', 'CLAUDE.md'),
       `# Global\n\n${SHARED_LINE}\n\nOther global-only content.\n`,
       'utf8',
     );
     fs.mkdirSync(project, { recursive: true });
-    const projectFile = path.join(project, '[internal record]');
+    const projectFile = path.join(project, 'CLAUDE.md');
     fs.writeFileSync(
       projectFile,
       `# Project\n\n${SHARED_LINE}\n\nUnique project-only content that must survive.\n`,
@@ -240,7 +240,7 @@ describe('applyStartupRecommendations — duplicateInstructions', () => {
   it('removes only the duplicated line, keeps unique content, and rolls back byte-identically', () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-apply-project-'));
     const projectFile = writeInstructionFiles(project);
-    const globalFile = path.join(home, '.claude', '[internal record]');
+    const globalFile = path.join(home, '.claude', 'CLAUDE.md');
     const globalBefore = fs.readFileSync(globalFile, 'utf8');
     const before = fs.readFileSync(projectFile, 'utf8');
 
@@ -266,8 +266,8 @@ describe('applyStartupRecommendations — duplicateInstructions', () => {
 
   it('skips when nothing is actually shared on re-check', () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-apply-project-'));
-    fs.writeFileSync(path.join(home, '.claude', '[internal record]'), '# Global only\n', 'utf8');
-    const projectFile = path.join(project, '[internal record]');
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), '# Global only\n', 'utf8');
+    const projectFile = path.join(project, 'CLAUDE.md');
     fs.mkdirSync(project, { recursive: true });
     fs.writeFileSync(projectFile, '# Project only, nothing shared here\n', 'utf8');
 
@@ -447,7 +447,7 @@ describe('untrusted target and backup_id', () => {
   });
 
   it('refuses to edit the global instruction file as its own duplicate', () => {
-    const globalFile = path.join(home, '.claude', '[internal record]');
+    const globalFile = path.join(home, '.claude', 'CLAUDE.md');
     const body = `${'a line long enough to count as duplicated text '.repeat(2)}\nsecond such line, also long enough to be counted here\n`;
     fs.writeFileSync(globalFile, body, 'utf8');
 

@@ -45,7 +45,7 @@ function isPathSegment(name: string): boolean {
 }
 
 /** Instruction files the audit can name — mirrors the pairing in startup-context.ts. */
-const INSTRUCTION_BASENAMES = ['[internal record]', 'AGENTS.md'];
+const INSTRUCTION_BASENAMES = ['CLAUDE.md', 'AGENTS.md'];
 /** Context lines around a hunk in the emitted diff — matches startup-text.ts. */
 const DIFF_CONTEXT = 2;
 

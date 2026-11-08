@@ -45,7 +45,7 @@ shares are a lower bound. Chars-per-token is calibrated per class against
 | `Bash` output | 7.1% | 6.5% |
 | `Read` output | 5.0% | 4.5% |
 | injected hook output | 2.6% | 2.3% |
-| injected files + [internal record] | 2.6% | 2.3% |
+| injected files + CLAUDE.md | 2.6% | 2.3% |
 | user text | 1.9% | 1.7% |
 | other MCP servers' output | 1.7% | 1.5% |
 | **trace-mcp tool output** | **1.6%** | **1.4%** |

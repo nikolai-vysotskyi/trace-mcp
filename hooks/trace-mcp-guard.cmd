@@ -249,7 +249,7 @@ goto :cleanup
 :check_agent
 REM --- Agent ---
 REM Block Agent(Explore) and exploration-style Agent(general-purpose).
-REM Each Agent subprocess costs ~50K tokens overhead (system prompt + [internal record] + memory).
+REM Each Agent subprocess costs ~50K tokens overhead (system prompt + CLAUDE.md + memory).
 if /i not "%TOOL_NAME%"=="Agent" goto :check_bash
 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.subagent_type } catch { 'general-purpose' }"`) do set "SUBAGENT_TYPE=%%i"

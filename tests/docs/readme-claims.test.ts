@@ -238,8 +238,8 @@ describe('docs site numeric claims (TRA-174)', () => {
   // so a whole-file scan would false-positive on numbers that aren't about
   // trace-mcp. It gets its own targeted, column-scoped check below instead.
   //
-  // TRA-243: the site surfaces were guarded, but [internal record] and the shipped
-  // skills were not — and both had drifted badly ([internal record] still claimed
+  // TRA-243: the site surfaces were guarded, but CLAUDE.md and the shipped
+  // skills were not — and both had drifted badly (CLAUDE.md still claimed
   // "48+ frameworks across 68 languages"; the skills claimed "120+ tools").
   // `skipLine` exempts lines that legitimately state a *subset* count
   // (preset sizes, the TOON allowlist) rather than the total.
@@ -254,7 +254,7 @@ describe('docs site numeric claims (TRA-174)', () => {
     // TRA-1086: architecture.md was unguarded and its project tree said
     // "170 MCP tool implementations" while counts.yml said 181.
     { path: 'docs/architecture.md' },
-    { path: '[internal record]', skipLine: /output_format|preset/ },
+    { path: 'CLAUDE.md', skipLine: /output_format|preset/ },
     { path: 'AGENTS.md', skipLine: /output_format|preset/ },
     { path: 'skills/README.md' },
     { path: 'skills/trace-mcp/SKILL.md', skipLine: /output_format|preset/ },

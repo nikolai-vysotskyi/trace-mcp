@@ -6,7 +6,7 @@ Reproduce with `pnpm run build && npx tsx scripts/bench-name-tokens.ts`.
 Tool counts and schemas come from a **real `initialize` + `tools/list` round-trip** against the
 built server (one spawn per preset, `client_profile: "off"`, a bare TypeScript project so no
 framework-gated tools register) — not from a hand-written list. The routing-block corpus is the
-`TRACE_MCP_ROUTING_BLOCK` constant the [internal record] / AGENTS.md generators write, imported directly.
+`TRACE_MCP_ROUTING_BLOCK` constant the CLAUDE.md / AGENTS.md generators write, imported directly.
 
 Tokenizers: `gpt-tokenizer` for `o200k_base` (GPT-4o) and `cl100k_base` (GPT-4);
 `@anthropic-ai/tokenizer` for Claude; `@lenml/tokenizer-gemini` for Gemini. The last two are
@@ -97,10 +97,10 @@ serves 27 / 54 / 164 tools against these 28 / 55 / 166 — too small to move the
 |---|---:|---|---:|---:|---:|---:|
 | `initialize` instructions (verbosity=full) | 2 | GPT-4o | 930 | 926 | 4 | 0.43% |
 | `initialize` instructions (verbosity=full) | 2 | Claude | 1051 | 1045 | 6 | 0.57% |
-| [internal record] / AGENTS.md routing block | 5 | GPT-4o | 411 | 401 | 10 | 2.43% |
-| [internal record] / AGENTS.md routing block | 5 | Claude | 480 | 465 | 15 | 3.13% |
-| repo [internal record] | 12 | GPT-4o | 4429 | 4405 | 24 | 0.54% |
-| repo [internal record] | 12 | Claude | 4911 | 4875 | 36 | 0.73% |
+| CLAUDE.md / AGENTS.md routing block | 5 | GPT-4o | 411 | 401 | 10 | 2.43% |
+| CLAUDE.md / AGENTS.md routing block | 5 | Claude | 480 | 465 | 15 | 3.13% |
+| repo CLAUDE.md | 12 | GPT-4o | 4429 | 4405 | 24 | 0.54% |
+| repo CLAUDE.md | 12 | Claude | 4911 | 4875 | 36 | 0.73% |
 | repo AGENTS.md | 5 | GPT-4o | 492 | 482 | 10 | 2.03% |
 | repo AGENTS.md | 5 | Claude | 574 | 559 | 15 | 2.61% |
 
@@ -115,7 +115,7 @@ Full four-tokenizer tables: run the script.
 
 ## Over a session
 
-Tool definitions and the [internal record] routing block live in the system prompt, so a client re-bills
+Tool definitions and the CLAUDE.md routing block live in the system prompt, so a client re-bills
 them on every turn — as a *cache read* where prompt caching is on, at full price where it is not.
 
 | preset | tokenizer | per turn | 10 turns | 30 turns | 50 turns |

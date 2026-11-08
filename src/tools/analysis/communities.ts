@@ -452,7 +452,7 @@ export async function detectCommunities(
   const assignments = await leidenDetect(graph, resolution, 20, seed);
   // Two-phase pass: split low-cohesion megaclusters created by doc-hub /
   // god-file glue. graphify v0.6.9 found that without this step a single
-  // [internal record] or barrel file could merge unrelated subsystems into one
+  // CLAUDE.md or barrel file could merge unrelated subsystems into one
   // useless community. Same bug pattern applies here.
   await refineLowCohesionCommunities(graph, assignments, resolution, seed);
   const _numCommunities = minMax(assignments).max + 1;

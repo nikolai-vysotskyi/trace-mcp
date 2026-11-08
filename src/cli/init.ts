@@ -1,6 +1,6 @@
 /**
  * `trace-mcp init` command.
- * One-time global setup: configure MCP clients, install hooks, set up [internal record].
+ * One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md.
  * Does NOT add projects — use `trace-mcp add` for that.
  */
 
@@ -64,11 +64,11 @@ import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 import { runPreflight } from './preflight.js';
 
 export const initCommand = new Command('init')
-  .description('One-time global setup: configure MCP clients, install hooks, set up [internal record]')
+  .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
   .option('--yes', 'Skip prompts, use recommended defaults')
   .option('--skip-hooks', 'Do not install guard hooks')
   .option('--skip-mcp-client', 'Do not configure MCP client')
-  .option('--skip-claude-md', 'Do not add [internal record] block')
+  .option('--skip-claude-md', 'Do not add CLAUDE.md block')
   .option('--skip-app', 'Do not install or update the menu bar app')
   .option(
     '--mcp-client <name>',
@@ -217,17 +217,17 @@ export const initCommand = new Command('init')
             options: [
               {
                 value: 'base' as const,
-                label: 'Base — [internal record] only',
+                label: 'Base — CLAUDE.md only',
                 hint: 'soft routing rules in project instructions',
               },
               {
                 value: 'standard' as const,
-                label: 'Standard — [internal record] + hooks',
+                label: 'Standard — CLAUDE.md + hooks',
                 hint: 'guard hooks intercept tool calls at runtime',
               },
               {
                 value: 'max' as const,
-                label: 'Max — [internal record] + hooks + tweakcc',
+                label: 'Max — CLAUDE.md + hooks + tweakcc',
                 hint: tweakccState.installed
                   ? "patches Claude's system prompts (recommended)"
                   : `downloads and runs ${TWEAKCC_SPEC} via npx (recommended)`,
@@ -245,7 +245,7 @@ export const initCommand = new Command('init')
           installTweakcc = levelResult === 'max';
           agentBehavior = levelResult === 'max' ? 'strict' : 'off';
         } else {
-          // Non-CC clients: always install [internal record], no hooks/tweakcc
+          // Non-CC clients: always install CLAUDE.md, no hooks/tweakcc
           claudeMdScope = opts.skipClaudeMd ? 'skip' : 'global';
           installHooks = false;
           installTweakcc = false;
@@ -714,7 +714,7 @@ function executeSteps(
   // must not be nested inside the `if (opts.installHooks)` block above.
   steps.push(...migrateLegacyToolPrefix({ dryRun: opts.dryRun }));
 
-  // 4. [internal record] (global)
+  // 4. CLAUDE.md (global)
   if (opts.claudeMdScope === 'global') {
     const mdResult = updateClaudeMd(process.cwd(), {
       dryRun: opts.dryRun,

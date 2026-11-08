@@ -10,7 +10,7 @@
  *      against the REAL `tools/list` payload of the built server (one spawn per
  *      preset), not a hand-written list.
  *   2. Prose mentions. The string `trace-mcp` in the `initialize` instructions
- *      block and in the [internal record] / AGENTS.md routing block, both of which are
+ *      block and in the CLAUDE.md / AGENTS.md routing block, both of which are
  *      re-sent every session. The routing block is imported from the module the
  *      generators write, not scraped out of its source text.
  *
@@ -222,12 +222,12 @@ for (const { preset, tools } of surfaces) {
 
 // Prose corpora: everything re-sent on every session that names the server.
 // The routing block is the exported constant the generators write into
-// [internal record] / AGENTS.md — not a substring scraped out of md-block.ts.
-const ROUTING_BLOCK = '[internal record] / AGENTS.md routing block';
+// CLAUDE.md / AGENTS.md — not a substring scraped out of md-block.ts.
+const ROUTING_BLOCK = 'CLAUDE.md / AGENTS.md routing block';
 const corpora: Array<[string, string]> = [
   ['initialize instructions (verbosity=full)', buildInstructions('none', 'full')],
   [ROUTING_BLOCK, TRACE_MCP_ROUTING_BLOCK],
-  ['repo [internal record]', readFileSync(join(REPO, '[internal record]'), 'utf8')],
+  ['repo CLAUDE.md', readFileSync(join(REPO, 'CLAUDE.md'), 'utf8')],
   ['repo AGENTS.md', readFileSync(join(REPO, 'AGENTS.md'), 'utf8')],
 ];
 
@@ -250,7 +250,7 @@ for (const [name, text] of corpora) {
 
 // The tool surface and the routing block both live in the system prompt, so a
 // client re-bills them (as a cache read, if caching is on) on every turn.
-md.push('\n## Input tokens saved over a session (tool surface + [internal record] routing block)\n');
+md.push('\n## Input tokens saved over a session (tool surface + CLAUDE.md routing block)\n');
 md.push('| preset | tokenizer | per turn | 10 turns | 30 turns | 50 turns |');
 md.push('|---|---|---:|---:|---:|---:|');
 for (const { preset } of surfaces) {

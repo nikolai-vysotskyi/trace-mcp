@@ -1,5 +1,5 @@
 /**
- * Conflict detector: finds competing MCP servers, hooks, [internal record] injections,
+ * Conflict detector: finds competing MCP servers, hooks, CLAUDE.md injections,
  * IDE rule files, and other artifacts that may interfere with trace-mcp.
  *
  * Known competitors: jcodemunch-mcp, aider, cline, repomix, code-index,
@@ -22,7 +22,7 @@ type ConflictCategory =
   | 'mcp_server' // Competing MCP server registered in client config
   | 'hook' // Competing PreToolUse / PostToolUse hooks
   | 'hook_script' // Physical hook script files on disk
-  | 'claude_md' // Competing [internal record] blocks / instructions
+  | 'claude_md' // Competing CLAUDE.md blocks / instructions
   | 'ide_rules' // .cursorrules, .windsurfrules, .clinerules with competing directives
   | 'config_file' // .jcodemunch.jsonc, .code-index/, etc.
   | 'global_artifact'; // ~/.code-index/ and similar global state
@@ -103,7 +103,7 @@ const COMPETING_HOOK_PATTERNS: { pattern: RegExp; competitor: string }[] = [
   { pattern: /repo[_-]?map/i, competitor: 'repo-map' },
 ];
 
-/** [internal record] content patterns that indicate competing tool injections. */
+/** CLAUDE.md content patterns that indicate competing tool injections. */
 const COMPETING_CLAUDE_MD_PATTERNS: { pattern: RegExp; competitor: string; marker?: string }[] = [
   // jcodemunch — marker blocks
   {
@@ -117,7 +117,7 @@ const COMPETING_CLAUDE_MD_PATTERNS: { pattern: RegExp; competitor: string; marke
   // Only names jcodemunch does NOT share with trace-mcp belong here. get_context_bundle,
   // embed_repo, get_session_stats and suggest_queries are trace-mcp's own tools, so
   // matching them flagged every file that documents trace-mcp itself — including this
-  // repo's [internal record] (TRA-746).
+  // repo's CLAUDE.md (TRA-746).
   { pattern: /jcodemunch|jCodeMunch/i, competitor: 'jcodemunch-mcp' },
   {
     pattern: /get_file_outline|get_symbol_source|get_ranked_context|get_blast_radius/i,
@@ -191,7 +191,7 @@ export function detectConflicts(projectRoot?: string): ConflictReport {
   // 3. Competing hook script files on disk
   conflicts.push(...scanHookScriptFiles());
 
-  // 4. [internal record] injections (global + project)
+  // 4. CLAUDE.md injections (global + project)
   conflicts.push(...scanClaudeMdFiles(projectRoot));
 
   // 5. IDE rules with competing directives
@@ -494,22 +494,22 @@ function scanHookScriptFiles(): Conflict[] {
 }
 
 // ---------------------------------------------------------------------------
-// 4. [internal record] injections
+// 4. CLAUDE.md injections
 // ---------------------------------------------------------------------------
 
 function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   const conflicts: Conflict[] = [];
   const home = getHomeDir();
-  const files = [path.join(home, '.claude', '[internal record]'), path.join(home, '.claude', 'AGENTS.md')];
+  const files = [path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.claude', 'AGENTS.md')];
 
-  // Project-scoped [internal record] files in ~/.claude/projects/*/
+  // Project-scoped CLAUDE.md files in ~/.claude/projects/*/
   const projectsDir = path.join(home, '.claude', 'projects');
   if (fs.existsSync(projectsDir)) {
     try {
       for (const entry of fs.readdirSync(projectsDir)) {
         const projDir = path.join(projectsDir, entry);
         if (!fs.statSync(projDir).isDirectory()) continue;
-        files.push(path.join(projDir, '[internal record]'));
+        files.push(path.join(projDir, 'CLAUDE.md'));
         files.push(path.join(projDir, 'AGENTS.md'));
         // Memory files
         const memDir = path.join(projDir, 'memory');
@@ -531,7 +531,7 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   }
 
   if (projectRoot) {
-    files.push(path.join(projectRoot, '[internal record]'), path.join(projectRoot, 'AGENTS.md'));
+    files.push(path.join(projectRoot, 'CLAUDE.md'), path.join(projectRoot, 'AGENTS.md'));
   }
 
   for (const filePath of files) {

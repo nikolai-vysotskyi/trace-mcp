@@ -10,7 +10,7 @@
  * ─────────────────────────────────
  * The issue asked what to rewrite with — a local model, rules, or both. The
  * measurement decided it. On real instruction files the compressible mass is
- * not verbose prose; it is restatement across sources: a [internal record] section
+ * not verbose prose; it is restatement across sources: a CLAUDE.md section
  * that repeats, in the author's own words, a rule an MCP server already sends
  * in its instructions. Paraphrasing that text saves a little and risks a lot;
  * dropping the second copy saves the same tokens with the instruction still
@@ -45,7 +45,7 @@
  *
  * What this module will and will not touch
  * ────────────────────────────────────────
- * It proposes edits ONLY to files the user owns: [internal record], AGENTS.md, and a
+ * It proposes edits ONLY to files the user owns: CLAUDE.md, AGENTS.md, and a
  * project's MEMORY.md. The rest of the startup block — a third party's skill
  * descriptions, another server's instruction text, a plugin hook's output — is
  * the reference corpus: read to prove duplication, never rewritten, because we
@@ -337,7 +337,7 @@ export interface StartupCorpus {
  *
  * One session, not a union of many. Unioning sources across sessions was a
  * review finding and a real defect: a server that was configured last month
- * and removed since would still "prove" that today's [internal record] repeats it,
+ * and removed since would still "prove" that today's CLAUDE.md repeats it,
  * and the user would delete a rule nothing delivers any more. A single startup
  * block is the only thing that can honestly stand behind "another source in
  * the same startup block still says this".
@@ -614,11 +614,11 @@ function unifiedDiff(filePath: string, lines: string[], removed: Set<number>): s
 function editableFiles(projectRoot?: string): string[] {
   const home = claudeHome();
   const candidates = [
-    path.join(home, '[internal record]'),
+    path.join(home, 'CLAUDE.md'),
     path.join(home, 'AGENTS.md'),
     ...(projectRoot
       ? [
-          path.join(projectRoot, '[internal record]'),
+          path.join(projectRoot, 'CLAUDE.md'),
           path.join(projectRoot, 'AGENTS.md'),
           // The memory index is re-read into every session. `encodeDirName` is
           // the harness's own encoder, reused rather than reimplemented — a

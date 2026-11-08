@@ -68,7 +68,7 @@ which excludes the framework-specific rows.
 | `apply_startup_recommendations` | Apply or preview a get_startup_context_audit recommendation: disable an unused MCP server, move an unused skill aside, or delete duplicated instruction lines. | always |
 | `approve_decision` | Approve a decision currently in the memoir-style review queue (review_status="pending"). | always |
 | `assess_change_risk` | Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. | always |
-| `audit_config` | Scan AI agent config files ([internal record], AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
+| `audit_config` | Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
 | `batch` | Execute multiple trace-mcp tools in a single MCP request. | always |
 | `benchmark_project` | Synthetic token efficiency benchmark: compare raw file reads vs trace-mcp compact responses across symbol lookup, file exploration, search, and impact analys… | always |
 | `build_corpus` | Pack a slice of project context into a persistent corpus on disk so future query_corpus calls can prime an LLM with the same snapshot without re-running the… | always |
@@ -76,7 +76,7 @@ which excludes the framework-specific rows.
 | `call_project_tool` | Relay a trace-mcp tool call to a DIFFERENT registered project than this session's own (cross-project dispatch). | always |
 | `change_signature` | Change a function/method signature (add/remove/rename/reorder parameters) and update all call sites. | always |
 | `check_architecture` | Check architectural layer rules: detect forbidden imports between layers (e.g. | always |
-| `check_claudemd_drift` | Detect drift between AI agent config files ([internal record], AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to… | always |
+| `check_claudemd_drift` | Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to… | always |
 | `check_duplication` | Check if a function/class name already exists before creating it. | always |
 | `check_edit_safe` | Edit-safety preflight: before modifying a symbol or file, get one verdict for "is this safe to edit and what must I preserve". | always |
 | `check_embedding_drift` | Pin and re-check a 16-string canary against the active embedding provider. | always |

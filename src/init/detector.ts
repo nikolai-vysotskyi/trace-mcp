@@ -64,7 +64,7 @@ export function detectProject(dir: string): DetectionResult {
   // --- Existing state ---
   const existingConfig = detectExistingConfig(projectRoot);
   const existingDb = detectExistingDb(projectRoot);
-  const claudeMdPath = path.join(projectRoot, '[internal record]');
+  const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
   const claudeMdContent = readIfExists(claudeMdPath);
   const hasClaudeMd = claudeMdContent !== null;
   const claudeMdHasTraceMcpBlock =

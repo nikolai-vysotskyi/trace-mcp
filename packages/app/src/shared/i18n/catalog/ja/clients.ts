@@ -64,11 +64,11 @@ export const clients = {
 
   enforcementLevel: '適用レベル',
   levelBase: 'ベース',
-  levelBaseHint: '[internal record] のみ — 緩やかなルーティング規則',
+  levelBaseHint: 'CLAUDE.md のみ — 緩やかなルーティング規則',
   levelStandard: '標準',
-  levelStandardHint: '[internal record] とフック',
+  levelStandardHint: 'CLAUDE.md とフック',
   levelMax: '最大',
-  levelMaxHint: '[internal record]、フック、tweakcc — 推奨',
+  levelMaxHint: 'CLAUDE.md、フック、tweakcc — 推奨',
   hookActive: 'フック有効',
   hookActiveHint: 'PreToolUseリダイレクトが有効 — ファイル読み取りはtrace-mcp経由になります',
   hookMissing: 'リダイレクトフックなし',
@@ -87,7 +87,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

@@ -300,7 +300,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Audit Config ---
   server.tool(
     'audit_config',
-    'Scan AI agent config files ([internal record], AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift between agent rules and the live MCP tool / skill / command surface. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], total }.',
+    'Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift between agent rules and the live MCP tool / skill / command surface. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], total }.',
     {
       config_files: z
         .array(z.string().max(512))
@@ -311,7 +311,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .boolean()
         .optional()
         .describe(
-          'Add [internal record] drift detection (dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section). Default false for back-compat.',
+          'Add CLAUDE.md drift detection (dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section). Default false for back-compat.',
         ),
       drift_only: z
         .boolean()
@@ -333,19 +333,19 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     },
   );
 
-  // --- [internal record] drift detector alias ---
+  // --- CLAUDE.md drift detector alias ---
   // Thin wrapper that calls auditConfig with driftOnly=true so users can
   // surface "what is broken in my agent-config" without sifting through
   // bloat/redundancy noise.
   server.tool(
     'check_claudemd_drift',
-    'Detect drift between AI agent config files ([internal record], AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to non-existent MCP tools, references to missing skills/commands, oversized sections. Convenience alias for `audit_config { drift_only: true }`. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], files_scanned, total_tokens, summary }.',
+    'Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to non-existent MCP tools, references to missing skills/commands, oversized sections. Convenience alias for `audit_config { drift_only: true }`. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], files_scanned, total_tokens, summary }.',
     {
       config_files: z
         .array(z.string().max(512))
         .optional()
         .describe(
-          'Specific config files to scan (default: auto-detect [internal record] / AGENTS.md / .cursorrules / .windsurfrules etc.)',
+          'Specific config files to scan (default: auto-detect CLAUDE.md / AGENTS.md / .cursorrules / .windsurfrules etc.)',
         ),
       fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)'),
     },

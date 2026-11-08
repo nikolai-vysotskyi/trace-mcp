@@ -237,7 +237,7 @@ describe('normalizeServerName', () => {
 
 /* Regression (review of PR #843): the instruction-file list is sorted by size
    and can hold TWO global files, so "the biggest one, then any other" paired
-   ~/.claude/AGENTS.md against ~/.claude/[internal record] and never looked at the
+   ~/.claude/AGENTS.md against ~/.claude/CLAUDE.md and never looked at the
    project at all. The pair has to be named: same basename, one inside
    ~/.claude and one outside it. */
 describe('duplicate instruction files', () => {
@@ -254,8 +254,8 @@ describe('duplicate instruction files', () => {
       path.join(home, '.claude', 'AGENTS.md'),
       `${'padding line here\n'.repeat(80)}`,
     );
-    fs.writeFileSync(path.join(home, '.claude', '[internal record]'), `${SHARED}\nglobal-only line\n`);
-    fs.writeFileSync(path.join(project, '[internal record]'), `${SHARED}\nproject-only line\n`);
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), `${SHARED}\nglobal-only line\n`);
+    fs.writeFileSync(path.join(project, 'CLAUDE.md'), `${SHARED}\nproject-only line\n`);
     vi.spyOn(os, 'homedir').mockReturnValue(home);
   });
 
@@ -279,8 +279,8 @@ describe('duplicate instruction files', () => {
     });
     const dup = audit.recommendations.filter((r) => r.kind === 'duplicateInstructions');
     expect(dup).toHaveLength(1);
-    expect(dup[0].target).toBe(path.join(project, '[internal record]'));
-    expect(dup[0].evidence).toContain(path.join(home, '.claude', '[internal record]'));
+    expect(dup[0].target).toBe(path.join(project, 'CLAUDE.md'));
+    expect(dup[0].evidence).toContain(path.join(home, '.claude', 'CLAUDE.md'));
     // Priced against this project's sessions, not every session on the machine.
     expect(dup[0].sessionsObserved).toBe(25);
   });

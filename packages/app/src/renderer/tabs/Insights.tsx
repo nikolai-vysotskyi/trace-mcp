@@ -2,7 +2,7 @@
  * Insights tab.
  *
  * Surfaces three high-value reports for a project:
- *   - [internal record] drift (stale paths / dead symbols in agent config)
+ *   - CLAUDE.md drift (stale paths / dead symbols in agent config)
  *   - Top PageRank-central files (architectural importance)
  *   - Risk hotspots (high complexity × high git churn)
  *

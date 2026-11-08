@@ -96,7 +96,7 @@ Activate this skill whenever you need to:
 
 ## Health Checks (Once Per Session)
 
-- `audit_config` — stale references in [internal record] / settings
+- `audit_config` — stale references in CLAUDE.md / settings
 - `self_audit` — dead exports, untested code, hotspots
 - `get_tech_debt` — per-module tech-debt grades
 - `get_optimization_report` — detects repeated reads, Bash grep usage, missed trace-mcp opportunities

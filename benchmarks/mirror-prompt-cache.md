@@ -83,7 +83,7 @@ smaller suffix is written once at write price and re-read on every later turn at
 read price. Both terms shrink together.
 
 (A third mirror run is excluded: the model declined the task, citing this repo's
-own [internal record] rule against navigating source with `Read`. Arm-blind, but it
+own CLAUDE.md rule against navigating source with `Read`. Arm-blind, but it
 produced no reads to measure.)
 
 ## Break-even

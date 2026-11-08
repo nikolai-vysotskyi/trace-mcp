@@ -64,11 +64,11 @@ export const clients = {
 
   enforcementLevel: '적용 수준',
   levelBase: '기본',
-  levelBaseHint: '[internal record]만 — 느슨한 라우팅 규칙',
+  levelBaseHint: 'CLAUDE.md만 — 느슨한 라우팅 규칙',
   levelStandard: '표준',
-  levelStandardHint: '[internal record]와 훅',
+  levelStandardHint: 'CLAUDE.md와 훅',
   levelMax: '최대',
-  levelMaxHint: '[internal record], 훅, tweakcc — 권장',
+  levelMaxHint: 'CLAUDE.md, 훅, tweakcc — 권장',
   hookActive: '후크 활성',
   hookActiveHint: 'PreToolUse 리디렉션이 켜져 있음 — 파일 읽기가 trace-mcp를 경유합니다',
   hookMissing: '리디렉션 후크 없음',
@@ -87,7 +87,7 @@ export const clients = {
   scopeGlobal: 'Global',
   scopeProject: 'Project',
   globalOnlyNote: 'Global config only — no project layer for this client',
-  /* TRA-1933 Phase B: read-only project card ([internal record] block, project hook,
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
      tweakcc). File names stay inline in the component; only prose is keyed. */
   projectPrompts: 'Project setup',
   promptsHook: 'Project hook',

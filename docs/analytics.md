@@ -77,7 +77,7 @@ Session logs (JSONL)                   Project manifests
 
 | Client | Session log location | Config files |
 |--------|---------------------|--------------|
-| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `[internal record]`, `.claude/settings.json` |
+| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `CLAUDE.md`, `.claude/settings.json` |
 | **Claw Code** | `<project>/.claw/sessions/<session-id>.jsonl` | `.claw.json`, `.claw/settings.json` |
 
 Both formats are auto-detected during sync. No configuration needed.
@@ -164,7 +164,7 @@ Returns: the block's size distribution across fresh sessions, a decomposition by
 
 Every recommendation rests on **evidence of non-use over a stated observation window**, never on size: an MCP server whose instructions loaded into N startups and whose tools were never called, a skill listed at every start and never invoked, text duplicated between the global and project instruction files. A tool that is missing from the startup block is a tool the agent will not call, so a suggestion made because something is *big* can cost its reader far more than it saves. SessionStart hooks are deliberately excluded from suggestions for the same reason — nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on. They stay in the decomposition, where the reader sees the cost and decides.
 
-Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and [internal record] are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
 
 #### `textCompression` — where the block says the same thing twice
 
@@ -172,7 +172,7 @@ The audit answers "what does the block cost and what in it went unused". The `te
 
 It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
 
-It compares your own `[internal record]`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
 
 **Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
 
@@ -180,7 +180,7 @@ It compares your own `[internal record]`, `AGENTS.md` and `MEMORY.md` against th
 
 The word doing the work is *every*. An earlier version removed a line once 60% of its characters were matched and validated that with a "some sentence matched" check — which deletes the other 40%, text nothing else says. Two independent reviews reproduced it. Any threshold below "every unit" reintroduces it, so the rule is universal and the report proposes less rather than guessing.
 
-That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `[internal record]` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
+That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
 
 Matching is on sentences and word overlap, with three guards:
 
@@ -255,7 +255,7 @@ get_session_stats()
 
 ### `audit_config`
 
-Audit AI agent config files ([internal record], .cursorrules, .claw.json, etc.) for stale references, dead paths, token bloat, scope leaks, and redundancy.
+Audit AI agent config files (CLAUDE.md, .cursorrules, .claw.json, etc.) for stale references, dead paths, token bloat, scope leaks, and redundancy.
 
 ```
 audit_config()
