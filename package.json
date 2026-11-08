@@ -49,8 +49,7 @@
     "docs:language-matrix": "tsx scripts/language-matrix.ts",
     "docs:tools-index": "tsx scripts/tools-index.ts",
     "docs:config-index": "tsx scripts/config-index.ts",
-    "gen:tz-country": "node scripts/gen-tz-country.mjs",
-    "geo:battery": "node [internal record]"
+    "gen:tz-country": "node scripts/gen-tz-country.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
