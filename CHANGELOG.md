@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.43.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.43.0...v3.43.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **bb:** stabilize Dependabot dependency updates ([#1885](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1885)) ([2981ee7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2981ee7bab48a241b759b56ce011c8ac6d4e60ec))
+* **daemon:** safely sweep orphaned session DBs and handle rollback recovery (TRA-2993) ([#1892](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1892)) ([dd4bdd7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dd4bdd7da585705729767f5364f9ee8b3d5c2c18))
+* **doctor:** ignore declared multi-root children in nested repo scan ([#1895](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1895)) ([3f48cfa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f48cfa61823ee3cb6f5997f8b97fb332a519a90))
+* **launcher:** migrate disposable cache configs (TRA-2991) ([#1891](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1891)) ([93068f4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/93068f47ddccf17c72cdb65795be71d6e699b8f3))
+* **watcher:** drop out-of-include events before reindex telemetry (TRA-2984) ([#1883](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1883)) ([9241ee4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9241ee463c2d9368163f92e4d811bd1207bf0d81))
+
+
+### Documentation
+
+* refresh sitemap.xml and lastmod after docs commits on master ([#1881](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1881)) ([c6691a9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6691a9199cac3b6c74177db228aa356d9854e7b))
+
 ## [3.43.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.42.11...v3.43.0) (2026-11-08)
 
 
