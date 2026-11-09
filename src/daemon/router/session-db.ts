@@ -62,29 +62,43 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+function extractPidFromDb(db: Database.Database): number | null {
+  const row = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as
+    | { value?: string }
+    | undefined;
+  if (!row?.value) return null;
+  const pid = Number.parseInt(row.value, 10);
+  return Number.isInteger(pid) ? pid : null;
+}
+
 /** Read the owning PID a backend stamped into server_state, or null. */
 function readOwnerPid(dbPath: string): number | null {
   let db: Database.Database | null = null;
   try {
     try {
       db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      return extractPidFromDb(db);
     } catch (roErr) {
-      // If readonly open failed because WAL rollback/recovery is needed after an
-      // ungraceful exit (SQLITE_READONLY_ROLLBACK), retry read-write.
+      // If readonly access failed because rollback/recovery is needed after an
+      // ungraceful exit (SQLITE_READONLY_ROLLBACK / SQLITE_READONLY*), retry read-write.
       // If held by a live writer, timeout: 0 throws SQLITE_BUSY.
       const code = (roErr as { code?: string })?.code;
-      if (code === 'SQLITE_READONLY_ROLLBACK' || code === 'SQLITE_READONLY') {
+      if (
+        code === 'SQLITE_READONLY_ROLLBACK' ||
+        code === 'SQLITE_READONLY' ||
+        code === 'SQLITE_READONLY_RECOVERY' ||
+        code === 'SQLITE_READONLY_CANTLOCK'
+      ) {
+        try {
+          db?.close();
+        } catch {
+          /* ignored */
+        }
         db = new Database(dbPath, { fileMustExist: true, timeout: 0 });
-      } else {
-        throw roErr;
+        return extractPidFromDb(db);
       }
+      throw roErr;
     }
-    const row = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as
-      | { value?: string }
-      | undefined;
-    if (!row?.value) return null;
-    const pid = Number.parseInt(row.value, 10);
-    return Number.isInteger(pid) ? pid : null;
   } catch {
     return null;
   } finally {

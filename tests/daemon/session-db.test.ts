@@ -175,8 +175,28 @@ describe('sweepOrphanedSessionDbs', () => {
     db.exec(`CREATE TABLE server_state (key TEXT PRIMARY KEY, value TEXT)`);
     db.prepare(`INSERT INTO server_state (key, value) VALUES ('pid', ?)`).run(String(DEAD_PID));
     db.close();
-    fs.writeFileSync(`${deadWal}-journal`, '');
+
+    // Simulate an unclean crash leaving a hot journal behind (non-zero first byte triggers hasHotJournal in SQLite)
+    const hotJournal = Buffer.alloc(512);
+    hotJournal[0] = 0xd9;
+    fs.writeFileSync(`${deadWal}-journal`, hotJournal);
     fs.writeFileSync(`${deadWal}.watcher-snapshot`, 'snapshot');
+
+    // Verify that a read-only open actually throws SQLITE_READONLY_ROLLBACK before recovery
+    let threwReadonlyRollback = false;
+    try {
+      const ro = new Database(deadWal, { readonly: true, fileMustExist: true });
+      try {
+        ro.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get();
+      } finally {
+        ro.close();
+      }
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === 'SQLITE_READONLY_ROLLBACK') {
+        threwReadonlyRollback = true;
+      }
+    }
+    expect(threwReadonlyRollback).toBe(true);
 
     const { scanned, removed } = sweepOrphanedSessionDbs(dir);
     expect(scanned).toBe(1);
