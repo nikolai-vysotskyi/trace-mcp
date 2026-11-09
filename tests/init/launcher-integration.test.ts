@@ -1512,7 +1512,7 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
 
     const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
     expect(status).toBe(0);
-    expect(stdout.trim()).toBe(`NODE_ARGS:${cacheCli} serve`);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${fs.realpathSync(cacheCli)} serve`);
     expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).not.toContain(cacheCli);
   });
 
