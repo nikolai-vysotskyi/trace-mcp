@@ -964,7 +964,7 @@ export interface UnregisteredNestedRepo {
  */
 export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRepo[] {
   const parents = listProjects();
-  const registeredRoots = new Set(parents.map((e) => e.root));
+  const registeredRoots = new Set(parents.flatMap((e) => [e.root, ...(e.children ?? [])]));
   const results: UnregisteredNestedRepo[] = [];
 
   const walk = (dir: string, depth: number, parent: RegistryEntry) => {
