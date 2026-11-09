@@ -4646,6 +4646,20 @@ program
               `Dropped topology rows for ${droppedTopology.length} one-shot workdir(s)`,
             );
           }
+          // TRA-2993: sweep session DBs orphaned by SIGKILLed stdio sessions.
+          // Startup runs it once via setImmediate, but a long-running daemon
+          // needs hourly passes so leaked session DBs do not pile up.
+          try {
+            const sessionSweep = sweepOrphanedSessionDbs(INDEX_DIR);
+            if (sessionSweep.removed > 0) {
+              logger.info(
+                { removedSessionDbs: sessionSweep.removed, scanned: sessionSweep.scanned },
+                `Deleted ${sessionSweep.removed} orphaned session DB(s)`,
+              );
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepOrphanedSessionDbs failed (non-fatal)');
+          }
         };
         await ephemeralSweep();
         const ephemeralTimer = setInterval(() => void ephemeralSweep(), 60 * 60_000);

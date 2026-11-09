@@ -152,6 +152,40 @@ describe('sweepOrphanedSessionDbs', () => {
     expect(fs.existsSync(noPid)).toBe(true);
   });
 
+  it('reclaims stale 0-byte session DBs and keeps fresh 0-byte session DBs', () => {
+    const fresh = path.join(dir, 'proj-1111-session-aaaaaaaa.db');
+    fs.writeFileSync(fresh, '');
+
+    const old = path.join(dir, 'proj-2222-session-bbbbbbbb.db');
+    fs.writeFileSync(old, '');
+    const tenMinAgo = (Date.now() - 10 * 60 * 1000) / 1000;
+    fs.utimesSync(old, tenMinAgo, tenMinAgo);
+
+    const { scanned, removed } = sweepOrphanedSessionDbs(dir);
+    expect(scanned).toBe(2);
+    expect(removed).toBe(1);
+    expect(fs.existsSync(fresh)).toBe(true);
+    expect(fs.existsSync(old)).toBe(false);
+  });
+
+  it('reclaims dead-PID session DBs that require WAL rollback recovery', () => {
+    const deadWal = path.join(dir, 'proj-3333-session-cccccccc.db');
+    const db = new Database(deadWal);
+    db.pragma('journal_mode = WAL');
+    db.exec(`CREATE TABLE server_state (key TEXT PRIMARY KEY, value TEXT)`);
+    db.prepare(`INSERT INTO server_state (key, value) VALUES ('pid', ?)`).run(String(DEAD_PID));
+    db.close();
+    fs.writeFileSync(`${deadWal}-journal`, '');
+    fs.writeFileSync(`${deadWal}.watcher-snapshot`, 'snapshot');
+
+    const { scanned, removed } = sweepOrphanedSessionDbs(dir);
+    expect(scanned).toBe(1);
+    expect(removed).toBe(1);
+    expect(fs.existsSync(deadWal)).toBe(false);
+    expect(fs.existsSync(`${deadWal}-journal`)).toBe(false);
+    expect(fs.existsSync(`${deadWal}.watcher-snapshot`)).toBe(false);
+  });
+
   it('returns zeros for a missing directory', () => {
     expect(sweepOrphanedSessionDbs(path.join(dir, 'nope'))).toEqual({
       scanned: 0,
