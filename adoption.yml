@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-08T06:26:15.704Z"
+updated: "2026-11-09T06:36:55.596Z"
 active_users:
-  day: 51
-  week: 138
-  month: 372
+  day: 53
+  week: 136
+  month: 368
   first_ping_date: "2026-08-29"
-  days_observed: 72
+  days_observed: 73
   month_window_full: true
-events_28d: 2718
+events_28d: 2703
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 2718
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 202569519
-  tokens_saved_raw: 233403242
-  usd_saved: 202.57
+  tokens_saved: 204095343
+  tokens_saved_raw: 235134365
+  usd_saved: 204.1
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 64
+  days: 65
   capped_days: 2
   raw_ratio: 1.15
   inflation_suspected: false
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 259
+  new_installs_28d: 255
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: 14
@@ -155,19 +155,19 @@ usage:
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
 # site carries no analytics, and the largest external referrer cannot be read
-# from a run at all (`[internal record]`, private repo). Cross-check these names
-# against `ops/arrivals.md` in private project repository before adding another directory.
+# from a run at all (`the internal user signal ledger`, private repo). Cross-check these names
+# against `the internal arrivals ledger` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: null
   error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1582
-  "upgrade": 788
-  "new": 259
-  "downgrade": 52
-  "(not set)": 34
+  "active": 1586
+  "upgrade": 778
+  "new": 255
+  "downgrade": 46
+  "(not set)": 37
 by_version:
   "3.38.0": 168
   "3.42.7": 74
@@ -176,24 +176,24 @@ by_version:
   "3.37.0": 43
   "3.41.0": 42
   "3.42.1": 38
-  "3.42.10": 36
+  "3.42.10": 38
   "3.42.4": 35
   "3.37.6": 34
-  "3.40.0": 33
+  "3.40.0": 34
   "3.42.9": 32
   "3.37.7": 31
   "3.37.4": 28
   "3.39.0": 28
   "3.42.0": 28
-  "3.36.6": 25
   "3.37.9": 25
-  "3.34.6": 21
-  "3.36.5": 21
+  "3.36.6": 23
+  "3.42.11": 23
   "3.42.6": 21
-  "3.36.3": 20
+  "3.34.6": 19
   "3.37.3": 16
-  "3.34.8": 10
-  "3.36.0": 10
+  "3.36.5": 12
+  "3.42.8": 11
+  "3.36.3": 8
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -211,7 +211,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 923
+  at_or_above: 915
   below: 0
   unknown: 0
   pct: 100
@@ -258,43 +258,43 @@ daemon:
   active_users_28d: 0
 by_country:
   "(not set)": 135
-  "United Arab Emirates": 64
+  "United Arab Emirates": 60
   "United States": 26
   "Russia": 19
   "China": 13
   "Thailand": 11
   "Brazil": 9
-  "France": 6
   "Germany": 6
   "Australia": 5
   "Chile": 5
+  "France": 5
   "Indonesia": 5
   "Italy": 5
   "Poland": 5
   "Türkiye": 5
   "Canada": 4
   "South Korea": 4
+  "Austria": 3
   "Netherlands": 3
   "Pakistan": 3
   "Sweden": 3
-  "Austria": 2
   "Egypt": 2
   "Iran": 2
   "Morocco": 2
 by_client:
-  "unknown": 235
-  "claude-code": 97
-  "codex-mcp-client": 43
+  "unknown": 231
+  "claude-code": 96
+  "codex-mcp-client": 44
   "antigravity-client": 20
-  "opencode": 18
+  "opencode": 17
   "mcp": 9
-  "cursor-vscode": 5
   "rmcp": 5
   "claude-ai": 4
   "copilot-cli": 4
   "Cursor": 3
   "Trae": 3
   "Visual Studio Code": 3
+  "cursor-vscode": 3
   "grok-shell-trace": 3
   "grok-shell-trace-mcp": 3
   "Cline": 2
