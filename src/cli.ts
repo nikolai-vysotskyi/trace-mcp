@@ -4724,6 +4724,12 @@ program
 
     const pipeline = new IndexingPipeline(store, registry, config, resolvedDir);
     const result = await pipeline.indexAll(opts.force ?? false);
+    if (result.truncated) {
+      logger.warn(
+        { found: result.truncated.found, limit: result.truncated.limit },
+        `Index is partial: capped at ${result.truncated.limit} of ${result.truncated.found} files on disk. Increase security.max_files in config to index more.`,
+      );
+    }
     logger.info(result, 'Indexing completed');
     const skippedDirs = pipeline.getSkippedTopLevelDirs();
     if (skippedDirs.length > 0) {
