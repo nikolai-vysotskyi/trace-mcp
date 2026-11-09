@@ -822,7 +822,7 @@ heal_config() {
   # Never pin the config to a swap-window backup: that directory is about to
   # be deleted, so the "fast path" it buys would be a dangling one.
   case "$cli" in
-    *trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
+    */pnpm/dlx/*|*/_npx/*|*trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
   esac
   # Never heal an app bundle over an existing npm-configured launcher.env (TRA-2687).
   # Serving an app bundle when npm is unavailable is an emergency fallback
@@ -1020,6 +1020,28 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
     fi
     NODE_PATH=""
   fi
+fi
+
+# Older postinstall versions could pin a disposable pnpm dlx or npx extract
+# into launcher.env. Its file may still exist today, so the normal fast path
+# would keep using it until a cache cleanup kills a future client start.
+# Prefer a durable global install when one is available, while retaining the
+# working cache as an emergency fallback when there is no replacement yet.
+if [ "$USING_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -n "$CLI_PATH" ]; then
+  case "$CLI_PATH" in
+    */pnpm/dlx/*|*/_npx/*)
+      DURABLE_CLI=$(probe_cli "$(pkg_roots "$NODE_PATH")") || DURABLE_CLI=""
+      case "$DURABLE_CLI" in
+        ""|*/pnpm/dlx/*|*/_npx/*|*trace-mcp.tmcp-bak-*|*/.trace-mcp-*) ;;
+        *)
+          log "replacing disposable cached cli=$CLI_PATH with durable cli=$DURABLE_CLI"
+          CLI_PATH="$DURABLE_CLI"
+          heal_config "$NODE_PATH" "$CLI_PATH"
+          CONFIG_VERSION=""
+          ;;
+      esac
+      ;;
+  esac
 fi
 
 if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && is_usable_script "$CLI_PATH"; then
