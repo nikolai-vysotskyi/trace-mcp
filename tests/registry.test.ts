@@ -297,6 +297,19 @@ describe('findUnregisteredNestedRepos', () => {
     expect(findUnregisteredNestedRepos()).toEqual([]);
   });
 
+  it('does not flag a declared multi-root child but still flags undeclared repos', () => {
+    const parent = makeTmpRepo();
+    const declared = path.join(parent, 'assetfeed-frontend');
+    const undeclared = path.join(parent, 'other-repo');
+    fs.mkdirSync(path.join(declared, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(undeclared, '.git'), { recursive: true });
+    registerProject(parent, { type: 'multi-root', children: [declared] });
+
+    expect(findUnregisteredNestedRepos()).toEqual([
+      { parentName: path.basename(parent), parentRoot: parent, nestedRepoRoot: undeclared },
+    ]);
+  });
+
   it('does not descend past a nested repo boundary (no nested-in-nested duplicates)', () => {
     const parent = makeTmpRepo();
     const sibling = path.join(parent, 'assetfeed-frontend');
