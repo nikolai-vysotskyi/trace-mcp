@@ -1403,6 +1403,119 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     );
   });
 
+  it('replaces a still-present pnpm dlx CLI with a durable global package', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const durableCli = plantNvmPackage(home);
+    const dlxCli = path.join(
+      home,
+      'Library',
+      'Caches',
+      'pnpm',
+      'dlx',
+      'one-shot',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    fs.mkdirSync(path.dirname(dlxCli), { recursive: true });
+    fs.writeFileSync(dlxCli, '// disposable cache\n');
+    writeConfig(traceHome, node, dlxCli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${durableCli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(durableCli);
+  });
+
+  it('replaces a still-present npx CLI with a durable global package', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const durableCli = plantNvmPackage(home);
+    const npxCli = path.join(
+      home,
+      '.npm',
+      '_npx',
+      'one-shot',
+      'node_modules',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    fs.mkdirSync(path.dirname(npxCli), { recursive: true });
+    fs.writeFileSync(npxCli, '// disposable cache\n');
+    writeConfig(traceHome, node, npxCli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${durableCli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(durableCli);
+  });
+
+  it('keeps a working cached CLI when no durable package exists', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const dlxCli = path.join(
+      home,
+      'Library',
+      'Caches',
+      'pnpm',
+      'dlx',
+      'one-shot',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    fs.mkdirSync(path.dirname(dlxCli), { recursive: true });
+    fs.writeFileSync(dlxCli, '// only available copy\n');
+    writeConfig(traceHome, node, dlxCli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${dlxCli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(dlxCli);
+  });
+
+  it('does not migrate to another disposable cache listed in pkg-roots', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const currentCli = path.join(
+      home,
+      'Library',
+      'Caches',
+      'pnpm',
+      'dlx',
+      'current',
+      'trace-mcp',
+      'dist',
+      'cli.js',
+    );
+    const otherRoot = path.join(home, 'Library', 'Caches', 'pnpm', 'dlx', 'other', 'node_modules');
+    const otherCli = path.join(otherRoot, 'trace-mcp', 'dist', 'cli.js');
+    for (const cli of [currentCli, otherCli]) {
+      fs.mkdirSync(path.dirname(cli), { recursive: true });
+      fs.writeFileSync(cli, '// disposable cache\n');
+    }
+    fs.writeFileSync(path.join(traceHome, 'pkg-roots'), `${otherRoot}\n`);
+    writeConfig(traceHome, node, currentCli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${currentCli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(currentCli);
+  });
+
+  it('serves a cache found by probing without pinning it to launcher.env', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const cacheRoot = path.join(home, 'Library', 'Caches', 'pnpm', 'dlx', 'only', 'node_modules');
+    const cacheCli = path.join(cacheRoot, 'trace-mcp', 'dist', 'cli.js');
+    fs.mkdirSync(path.dirname(cacheCli), { recursive: true });
+    fs.writeFileSync(cacheCli, '// disposable cache\n');
+    fs.writeFileSync(path.join(traceHome, 'pkg-roots'), `${cacheRoot}\n`);
+    writeConfig(traceHome, node, path.join(home, 'missing', 'cli.js'));
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cacheCli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).not.toContain(cacheCli);
+  });
+
   // TRA-707: launcher.log takes a line on every MCP start and nothing else
   // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
   // daemon's own rotation cannot reach a file written from bash.
