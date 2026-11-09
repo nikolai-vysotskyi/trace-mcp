@@ -1099,8 +1099,7 @@ export class ProjectManager {
               } else {
                 // Keep successful changes visible at info; empty watcher
                 // outcomes remain in /api/stats without flooding daemon.log.
-                const log = indexed > 0 ? logger.info : logger.debug;
-                log(
+                logger[indexed > 0 ? 'info' : 'debug'](
                   {
                     event: 'reindex-file',
                     project: projectRoot,

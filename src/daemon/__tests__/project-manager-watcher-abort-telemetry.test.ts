@@ -119,6 +119,12 @@ describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
     const { getReindexStats } = await import('../reindex-stats.js');
     const before = getReindexStats().summarize();
     vi.clearAllMocks();
+    loggerMocks.debug.mockImplementationOnce(function (this: unknown) {
+      expect(this).toBe(loggerMocks);
+    });
+    loggerMocks.info.mockImplementationOnce(function (this: unknown) {
+      expect(this).toBe(loggerMocks);
+    });
 
     mode.current = 'empty';
     for (let i = 0; i < 10; i++) await captured.cb!([files[0]]);
