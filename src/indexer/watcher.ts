@@ -519,10 +519,24 @@ export class FileWatcher {
                   // TRA-2438: debug level, not warn — project-manager already logs
                   // reindex telemetry for the batch (or aggregates it on shutdown);
                   // logging warn here duplicated every abort into two L40 lines.
-                  logger.debug({ error: e }, 'File change handler aborted');
+                  logger.debug({ error: e, rootPath }, 'File change handler aborted');
                   return;
                 }
-                logger.error({ error: e }, 'File change handler failed');
+                const toSafeRel = (p: string) => {
+                  const rel = path.isAbsolute(p) ? path.relative(rootPath, p) : p;
+                  return path.sep === '\\' ? rel.split('\\').join('/') : rel;
+                };
+                const safePaths = paths.slice(0, 20).map(toSafeRel);
+                logger.error(
+                  {
+                    error: e,
+                    rootPath,
+                    fileCount: paths.length,
+                    paths: safePaths,
+                    ...(paths.length > 20 ? { truncated: true } : {}),
+                  },
+                  'File change handler failed',
+                );
               }
             })(),
           );

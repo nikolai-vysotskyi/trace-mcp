@@ -144,7 +144,12 @@ describe('FileWatcher.stop() with an in-flight change handler', () => {
 
       expect(warnSpy).not.toHaveBeenCalledWith(expect.anything(), 'File change handler aborted');
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ error: failure }),
+        expect.objectContaining({
+          error: failure,
+          rootPath: root,
+          fileCount: 1,
+          paths: ['a.ts'],
+        }),
         'File change handler failed',
       );
     } finally {
