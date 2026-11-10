@@ -44,6 +44,8 @@ export interface MinimalContext {
     fileCount: number;
     symbolCount: number;
     frameworks: string[];
+    /** Present when the index hit security.max_files and was truncated (TRA-1664, TRA-3000). */
+    truncated?: { found: number; limit: number };
   };
   health: {
     top_hotspots: Array<{ file: string; score: number }>;
@@ -281,6 +283,13 @@ export function getMinimalContext(
   // task-aware suggestions below.
   let next_steps: MinimalContext['next_steps'] = [...SUGGESTIONS_BY_TASK[taskKey]];
 
+  if (summary.truncated) {
+    next_steps.push({
+      tool: 'get_index_health',
+      hint: `Index is partial: capped at ${summary.truncated.limit} of ${summary.truncated.found} files on disk. Increase security.max_files in config to index more.`,
+    });
+  }
+
   // 4b. Task-aware bias. When the caller passes a free-text `task`, prepend
   //     a verbatim `get_task_context` call so the next_steps actually reflect
   //     the user's wording instead of being a generic intent template. If any
@@ -312,6 +321,7 @@ export function getMinimalContext(
       fileCount: summaryCounts.fileCount ?? 0,
       symbolCount: summaryCounts.symbolCount ?? 0,
       frameworks,
+      ...(summary.truncated ? { truncated: summary.truncated } : {}),
     },
     health: {
       top_hotspots: topHotspots,

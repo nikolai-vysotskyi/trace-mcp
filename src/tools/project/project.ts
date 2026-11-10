@@ -278,22 +278,30 @@ export function getIndexHealth(
   };
 }
 
-interface ProjectMapResult {
+export interface ProjectMapResult {
   frameworks: string[];
   stats: IndexStats;
   languages: { language: string; count: number }[];
   detectedVersions?: DetectedVersion[];
   dependencySummary?: { total: number; dev: number; byEcosystem: Record<string, number> };
   diagnostics?: string[];
+  /**
+   * Present when the last full index hit `security.max_files` (TRA-1664, TRA-3000).
+   */
+  truncated?: { found: number; limit: number };
 }
 
-interface ProjectMapSummary {
+export interface ProjectMapSummary {
   frameworks: string[];
   fileCount: number;
   symbolCount: number;
   languages: string[];
   detectedVersions?: DetectedVersion[];
   diagnostics?: string[];
+  /**
+   * Present when the last full index hit `security.max_files` (TRA-1664, TRA-3000).
+   */
+  truncated?: { found: number; limit: number };
 }
 
 function getArtifactDiagnostics(store: Store, frameworks: string[]): string[] | undefined {
@@ -348,7 +356,16 @@ export function getProjectMap(
   }
 
   const detectedVersions = projectContext?.detectedVersions;
-  const diagnostics = getArtifactDiagnostics(store, frameworks);
+  const baseDiagnostics = getArtifactDiagnostics(store, frameworks);
+  const truncation = readIndexTruncation(store);
+  const diagnostics: string[] = baseDiagnostics ? [...baseDiagnostics] : [];
+  if (truncation) {
+    diagnostics.push(
+      `File count exceeds security.max_files limit (${truncation.found} found, capped at ${truncation.limit}). ` +
+        `The index is partial; some subtrees/files are omitted. Increase security.max_files in config to index more.`,
+    );
+  }
+  const finalDiagnostics = diagnostics.length > 0 ? diagnostics : undefined;
 
   if (summaryOnly) {
     const languageRows = store.db
@@ -362,7 +379,8 @@ export function getProjectMap(
       symbolCount: stats.totalSymbols,
       languages: languageRows.map((r) => r.language),
       detectedVersions: detectedVersions?.length ? detectedVersions : undefined,
-      diagnostics,
+      diagnostics: finalDiagnostics,
+      ...(truncation ? { truncated: truncation } : {}),
     };
   }
 
@@ -373,7 +391,7 @@ export function getProjectMap(
     .all() as { language: string; count: number }[];
 
   let dependencySummary: ProjectMapResult['dependencySummary'];
-  if (projectContext?.allDependencies.length) {
+  if (projectContext?.allDependencies?.length) {
     const deps = projectContext.allDependencies;
     const byEcosystem: Record<string, number> = {};
     for (const d of deps) {
@@ -404,6 +422,7 @@ export function getProjectMap(
     languages: languageRows,
     detectedVersions: detectedVersions?.length ? detectedVersions : undefined,
     dependencySummary,
-    diagnostics,
+    diagnostics: finalDiagnostics,
+    ...(truncation ? { truncated: truncation } : {}),
   };
 }
