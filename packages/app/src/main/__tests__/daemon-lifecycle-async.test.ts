@@ -12,7 +12,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { restartDaemon, stopDaemon } from '../daemon-lifecycle';
+import {
+  resetDaemonCommandTimeoutForTests,
+  restartDaemon,
+  setDaemonCommandTimeoutForTests,
+  stopDaemon,
+} from '../daemon-lifecycle';
 
 // Force the TRACE_MCP_BIN branch: with a launcher.env on the machine,
 // resolveCliInvocation would otherwise point at the real installed CLI.
@@ -30,6 +35,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  resetDaemonCommandTimeoutForTests();
   if (previousBin === undefined) delete process.env.TRACE_MCP_BIN;
   else process.env.TRACE_MCP_BIN = previousBin;
   fs.rmSync(dir, { recursive: true, force: true });
@@ -55,5 +61,26 @@ describe('daemon commands do not block the main process', () => {
     const second = stopDaemon().then(() => order.push('second'));
     await Promise.all([first, second]);
     expect(order).toEqual(['first', 'second']);
+  });
+
+  it.skipIf(process.platform === 'win32')('releases the queue when a CLI command hangs', async () => {
+    fs.writeFileSync(
+      slowBin,
+      '#!/bin/sh\nif [ "$2" = restart ]; then exec sleep 2; fi\n',
+      { mode: 0o755 },
+    );
+    setDaemonCommandTimeoutForTests(500);
+    try {
+      const first = restartDaemon();
+      const second = stopDaemon();
+      expect(await first).toEqual({
+        ok: false,
+        error: 'daemon restart timed out after 500ms',
+      });
+      expect(await second).toEqual({ ok: true });
+    } finally {
+      resetDaemonCommandTimeoutForTests();
+      fs.writeFileSync(slowBin, '#!/bin/sh\nsleep 0.4\n', { mode: 0o755 });
+    }
   });
 });
