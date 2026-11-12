@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  isDaemonCommandTimeoutError,
   resetDaemonCommandTimeoutForTests,
   restartDaemon,
   setDaemonCommandTimeoutForTests,
@@ -66,7 +67,7 @@ describe('daemon commands do not block the main process', () => {
   it.skipIf(process.platform === 'win32')('releases the queue when a CLI command hangs', async () => {
     fs.writeFileSync(
       slowBin,
-      '#!/bin/sh\nif [ "$2" = restart ]; then exec sleep 2; fi\n',
+      '#!/bin/sh\nif [ "$2" = restart ]; then exec sleep 5; fi\n',
       { mode: 0o755 },
     );
     setDaemonCommandTimeoutForTests(500);
@@ -82,5 +83,12 @@ describe('daemon commands do not block the main process', () => {
       resetDaemonCommandTimeoutForTests();
       fs.writeFileSync(slowBin, '#!/bin/sh\nsleep 0.4\n', { mode: 0o755 });
     }
+  });
+
+  it('recognizes a Windows timeout error with no POSIX signal', () => {
+    const timedOut = { killed: true, code: 1, signal: null };
+    const exited = { killed: false, code: 1, signal: null };
+    expect(isDaemonCommandTimeoutError(timedOut)).toBe(true);
+    expect(isDaemonCommandTimeoutError(exited)).toBe(false);
   });
 });

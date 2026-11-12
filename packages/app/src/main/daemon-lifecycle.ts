@@ -100,6 +100,11 @@ export function resetDaemonCommandTimeoutForTests(): void {
   daemonCommandTimeoutMs = DAEMON_COMMAND_TIMEOUT_MS;
 }
 
+/** Node sets killed for its timeout kill on every platform; Windows reports signal=null. */
+export function isDaemonCommandTimeoutError(error: { killed?: boolean }): boolean {
+  return error.killed === true;
+}
+
 /* One daemon command at a time. Until TRA-806 this file used execFileSync, which
    serialized these calls by freezing the process; the async version must keep the
    serialization without the freeze — the tray poll, the update flow and the
@@ -161,9 +166,8 @@ async function runDaemonCommandNow(subcommand: 'start' | 'stop' | 'restart'): Pr
       stdout?: Buffer | string;
       status?: number | null;
       killed?: boolean;
-      signal?: NodeJS.Signals | null;
     };
-    if (e.killed && e.signal === 'SIGTERM') {
+    if (isDaemonCommandTimeoutError(e)) {
       return { ok: false, error: `daemon ${subcommand} timed out after ${daemonCommandTimeoutMs}ms` };
     }
     const stderr = e.stderr ? e.stderr.toString().trim() : '';
