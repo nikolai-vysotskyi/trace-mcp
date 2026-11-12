@@ -88,6 +88,23 @@ function resolveTraceMcpBinary(): string {
 
 const execFileAsync = promisify(execFile);
 
+/** Keep a stuck CLI child from holding every later daemon action in the queue. */
+const DAEMON_COMMAND_TIMEOUT_MS = 120_000;
+let daemonCommandTimeoutMs = DAEMON_COMMAND_TIMEOUT_MS;
+
+export function setDaemonCommandTimeoutForTests(ms: number): void {
+  daemonCommandTimeoutMs = ms;
+}
+
+export function resetDaemonCommandTimeoutForTests(): void {
+  daemonCommandTimeoutMs = DAEMON_COMMAND_TIMEOUT_MS;
+}
+
+/** Node sets killed for its timeout kill on every platform; Windows reports signal=null. */
+export function isDaemonCommandTimeoutError(error: { killed?: boolean }): boolean {
+  return error.killed === true;
+}
+
 /* One daemon command at a time. Until TRA-806 this file used execFileSync, which
    serialized these calls by freezing the process; the async version must keep the
    serialization without the freeze — the tray poll, the update flow and the
@@ -135,6 +152,7 @@ async function runDaemonCommandNow(subcommand: 'start' | 'stop' | 'restart'): Pr
       shell: isWin && inv.prefixArgs.length === 0,
       env: inv.env ? { ...process.env, ...inv.env } : process.env,
       encoding: 'utf-8',
+      timeout: daemonCommandTimeoutMs,
     });
     return { ok: true };
   } catch (err) {
@@ -147,7 +165,11 @@ async function runDaemonCommandNow(subcommand: 'start' | 'stop' | 'restart'): Pr
       stderr?: Buffer | string;
       stdout?: Buffer | string;
       status?: number | null;
+      killed?: boolean;
     };
+    if (isDaemonCommandTimeoutError(e)) {
+      return { ok: false, error: `daemon ${subcommand} timed out after ${daemonCommandTimeoutMs}ms` };
+    }
     const stderr = e.stderr ? e.stderr.toString().trim() : '';
     const stdout = e.stdout ? e.stdout.toString().trim() : '';
     const detail = stderr || stdout || e.message;
