@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.43.1...v3.44.0) (2026-11-10)
+
+
+### Features
+
+* **project:** surface truncation state and diagnostics in orientation tools (TRA-3000) ([#1896](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1896)) ([d39aac8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d39aac8835505fa826023aae7c5af72121952c2c))
+
+
+### Bug Fixes
+
+* preserve logger receiver in watcher telemetry ([#1897](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1897)) ([1dbcafe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1dbcafe98d0bab1b54523ebff534bc72c120bd77))
+* replace raw NUL bytes in TypeScript sources ([#1900](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1900)) ([2a5bad7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a5bad79590eed905b1bdcb12fa128188f9386dd))
+* **watcher:** include safe project and file context on change handler failure (TRA-3008) ([#1899](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1899)) ([2deab02](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2deab02846c93bb65af8599dcc2b5a7b276962b9))
+
 ## [3.43.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.43.0...v3.43.1) (2026-11-09)
 
 
