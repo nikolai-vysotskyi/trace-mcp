@@ -1061,6 +1061,12 @@ if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && is_usable
     done < "$(dirname "$CLI_PATH")/../package.json" 2>/dev/null || true
     if [ -n "$pkg_ver" ] && [ "$pkg_ver" != "$CONFIG_VERSION" ]; then
       log "WARN: version divergence: config TRACE_MCP_VERSION=$CONFIG_VERSION but $CLI_PATH has version $pkg_ver"
+      # The package may have changed in place after postinstall last wrote
+      # launcher.env. Repair the metadata now so every later client start does
+      # not repeat the stale-version warning. Debug overrides stay ephemeral.
+      if [ "$USING_OVERRIDE" = 0 ]; then
+        heal_config "$NODE_PATH" "$CLI_PATH"
+      fi
     fi
   fi
 
