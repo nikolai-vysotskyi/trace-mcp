@@ -157,6 +157,29 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     expect(stderr).toBe('');
   });
 
+  it('heals a stale configured version after the package is updated', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const pkg = path.join(home, 'package');
+    const cli = path.join(pkg, 'dist', 'cli.js');
+    fs.mkdirSync(path.dirname(cli), { recursive: true });
+    fs.writeFileSync(cli, '// updated cli\n');
+    fs.writeFileSync(path.join(pkg, 'package.json'), '{"version":"3.44.0"}\n');
+    writeConfig(traceHome, node, cli);
+
+    const first = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(first.status).toBe(0);
+    expect(first.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+      'TRACE_MCP_VERSION="3.44.0"',
+    );
+
+    const second = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    expect(second.status).toBe(0);
+    expect(
+      fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8').match(/version divergence/g),
+    ).toHaveLength(1);
+  });
+
   it('env override wins over config', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     // config points at non-existent paths — override rescues it
