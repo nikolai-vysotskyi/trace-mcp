@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.0...v3.44.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **app:** time out stuck daemon CLI commands (TRA-3042) ([#1902](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1902)) ([a7837e5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7837e5e2aecbf211c5f65b3b5a6ec577df9f467))
+* **launcher:** heal stale version metadata after package update ([#1906](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1906)) ([c2e801f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2e801fd43a4ff16b01d3cb40b561f75d99426cb))
+
 ## [3.44.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.43.1...v3.44.0) (2026-11-10)
 
 
