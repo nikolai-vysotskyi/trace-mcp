@@ -125,6 +125,44 @@ export function read(pid: number, other: string): string {
     expect(scan(['path_traversal']).findings).toHaveLength(1);
   });
 
+  test('downgrades Python open() reading /proc/{os.getpid()} off the default report', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_status():
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    expect(scan(['path_traversal']).findings).toHaveLength(0);
+
+    const withLow = scan(['path_traversal'], { includeLow: true }).findings;
+    expect(withLow).toHaveLength(1);
+    expect(withLow[0].severity).toBe('low');
+    expect(withLow[0].confidence).toBe('low');
+  });
+
+  test('still detects Python open() reading /proc/{pid} when the pid is attacker-controlled', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(user_pid):
+    with open(f'/proc/{user_pid}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
   // -------------------------------------------------------------------
   // 2. Escaper recognition across a full concatenation
   // -------------------------------------------------------------------

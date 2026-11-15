@@ -828,6 +828,14 @@ const PATH_ROOT_ANCHORS = new Set<string>([
 ]);
 
 /**
+ * `os.getpid()` / `os.getppid()` — the running process's own PID, sourced
+ * from the kernel, never from request/user input. An f-string whose only
+ * interpolations resolve to this call cannot carry attacker-controlled path
+ * segments, no matter what literal text surrounds it (e.g. `/proc/{os.getpid()}/status`).
+ */
+const PY_SELF_PID_EXPR_RE = /^os\.(?:getpid|getppid)\(\)$/;
+
+/**
  * Identifier names commonly used to hold a hardcoded `http://localhost:N` /
  * `http://127.0.0.1:N` URL base. SSRF findings whose interpolated base resolves
  * to such a literal are downgraded.
@@ -1162,6 +1170,19 @@ function classifyPathResolve(line: string): { drop: true } | { drop: false; down
   if (!m) return { drop: false, downgrade: false };
   if (PATH_ROOT_ANCHORS.has(m[1])) return { drop: false, downgrade: true };
   return { drop: false, downgrade: false };
+}
+
+/**
+ * True when every `{...}` placeholder in a Python f-string passed to `open()`
+ * resolves to `os.getpid()` / `os.getppid()` — the process's own PID, which
+ * is never attacker-controlled. Used to downgrade `open(f'/proc/{os.getpid()}/...')`
+ * off `high`/`critical` without losing the finding for real path traversal
+ * (user input reaching `open()` through an f-string).
+ */
+function isPythonProcSelfPidOpen(line: string): boolean {
+  if (!/open\s*\(\s*f["']/.test(line)) return false;
+  const exprs = extractPythonFStringExprs(line);
+  return exprs.length > 0 && exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim()));
 }
 
 /**
@@ -1740,6 +1761,17 @@ export function scanSecurity(
                 confidence = 'low';
                 evidence = evidence ?? 'path.resolve anchored to known root directory';
               }
+            }
+
+            if (
+              rule.key === 'path_traversal' &&
+              file.language === 'python' &&
+              isPythonProcSelfPidOpen(line)
+            ) {
+              severity = 'low';
+              confidence = 'low';
+              evidence =
+                evidence ?? 'path built from os.getpid()/os.getppid(), not attacker-controlled';
             }
 
             if (rule.key === 'ssrf' && usesTemplate) {
