@@ -111,9 +111,9 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/picomatch": "^4.0.3",
-    "@types/vscode": "^1.140.0",
+    "@types/vscode": "^1.145.0",
     "typescript": "^7.0.2",
-    "vite": "8.3.5",
-    "vitest": "^5.0.5"
+    "vite": "8.3.6",
+    "vitest": "^5.1.0"
   }
 }
