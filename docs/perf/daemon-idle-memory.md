@@ -700,3 +700,30 @@ two samples and establishes recovery, but does not identify the blocking
 operation or measure `/health` latency during either delay. TRA-2603 owns
 attribution of real event-loop stalls; the much longer October incident in
 that issue remains a separate observation.
+
+---
+
+## 2026-11-15 — heap pressure recovery and a new v3.44.1 field sample
+
+Read-only review of the installed daemon's JSON log and `/debug/memory`; the
+live daemon was not restarted. The preceding process (PID 14390) ended after
+logging `Heap pressure over restart threshold`, followed by `Daemon shutdown
+complete` and a synchronous exit breadcrumb. Its last vitals reported 4,844
+MiB RSS and 3,671 MiB heap used with five projects loaded. This confirms the
+graceful heap-pressure restart path ran for that process; it does not identify
+the object retaining the heap.
+
+Its v3.44.1 successor (PID 17920) answered `/health` after 46 minutes. The
+first minute's vitals reported 157 MiB RSS, 60 MiB heap used and no loaded
+projects. At minute 47, vitals reported 2,338 MiB RSS and 851 MiB heap used
+with four loaded projects; a subsequent `/debug/memory` sample reported
+approximately 2,552 MiB RSS and 1,055 MiB heap used. The cache breakdown
+included 147 session transports, four session-journal entries with zero
+compact bytes and approximately 7.6 MiB of tree cache. Six five-minute
+session sweeps in that process reaped 317 inactive sessions in total, so the
+transport count alone is not evidence of unbounded retention.
+
+The loaded-project count changed throughout this window, and indexing and
+watcher traffic continued. These two endpoints therefore cannot establish an
+idle leak rate or an isolated memory ceiling. TRA-2061 remains the owner of
+heap attribution; TRA-3054 separately tracks the client-record lifecycle.
