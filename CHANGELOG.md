@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.2...v3.44.3) (2026-11-16)
+
+
+### Tests
+
+* **daemon:** tolerate macOS runner jitter in proxy handshake ([#1916](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1916)) ([3901cfd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3901cfdb8dc5f0e97aad06a393a82a7ee91327e2))
+
 ## [3.44.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.1...v3.44.2) (2026-11-16)
 
 
