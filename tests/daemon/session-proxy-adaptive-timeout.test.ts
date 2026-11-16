@@ -213,7 +213,9 @@ describe('StdioSession adaptive proxy timeout (TRA-1605)', () => {
     expect(JSON.parse(JSON.stringify(responsesFor(frames, 1)[0]))).toMatchObject({ id: 1 });
     expect(kind).toBe('proxy');
     expect(localStarts).toBe(0);
-    expect(ms).toBeLessThan(1_000);
+    // The proxy/local assertions enforce the base watchdog. Allow scheduler
+    // jitter on loaded CI runners (TRA-3094: 1040 ms on macOS).
+    expect(ms).toBeLessThan(2_000);
   });
 
   it('warming daemon that answers late: waits past the base budget instead of falling back', async () => {
