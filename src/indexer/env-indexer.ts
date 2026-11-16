@@ -9,6 +9,7 @@ import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
+import { IndexAbortedError, throwIfIndexAborted } from './index-abort.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { initContentHasher } from '../util/hash.js';
 import { parseEnvFile } from '../utils/env-parser.js';
@@ -58,10 +59,16 @@ export class EnvIndexer {
       (config.ignore?.gitignore === false ? undefined : new GitignoreMatcher(rootPath));
   }
 
-  async indexEnvFiles(force: boolean): Promise<void> {
+  async indexEnvFiles(force: boolean, signal?: AbortSignal): Promise<void> {
     try {
-      await this.indexEnvFilesUnsafe(force);
+      await this.indexEnvFilesUnsafe(force, signal);
     } catch (err) {
+      // TRA-3061: propagate a project-stop abort instead of swallowing it —
+      // the caller's IndexAbortedError handling classifies it as a clean,
+      // non-fatal stop. Swallowing it here hid that this phase never
+      // reached `pruneStaleEnvFiles()` and left it looking like a real
+      // indexing failure.
+      if (err instanceof IndexAbortedError) throw err;
       logger.warn({ err }, 'Env indexing failed — skipping');
     }
   }
@@ -162,7 +169,7 @@ export class EnvIndexer {
     return ids.length;
   }
 
-  private async indexEnvFilesUnsafe(force: boolean): Promise<void> {
+  private async indexEnvFilesUnsafe(force: boolean, signal?: AbortSignal): Promise<void> {
     await initContentHasher();
     // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
     // the code index. EnvIndexer only records keys + inferred types/formats (no values),
@@ -189,6 +196,14 @@ export class EnvIndexer {
       suppressErrors: true,
     });
 
+    // TRA-3061 (Reviewer F): `fg()` is the only await before this point, and
+    // a project stop can land in it — `pruneStaleEnvFiles()` below still
+    // queries the store (silently, via its own best-effort catch) even once
+    // the DB has closed. Check right after the await returns, same as every
+    // other post-await point in this method, so an abort here is surfaced
+    // as `IndexAbortedError` instead of a quiet closed-DB no-op.
+    throwIfIndexAborted(signal, this.rootPath);
+
     // TRA-2067: prune even when the walk found nothing — an ignore rule
     // that hides every .env file must still retire the rows the previous
     // run wrote, otherwise the early return below re-leaks them forever.
@@ -207,6 +222,11 @@ export class EnvIndexer {
       : undefined;
 
     for (const relPath of envPaths) {
+      // TRA-3061: this loop has no natural await boundary between files, so
+      // a project stop firing mid-scan would otherwise ride it out to
+      // completion and race stopProject()'s db.close(). Check per iteration,
+      // same as every other phase boundary in runPipeline.
+      throwIfIndexAborted(signal, this.rootPath);
       if (this.traceignore.isIgnored(relPath)) {
         logger.debug({ file: relPath }, '.env file skipped by .traceignore');
         continue;
@@ -247,40 +267,60 @@ export class EnvIndexer {
       }
 
       const hash = hashContent(Buffer.from(content));
-      const existing = this.store.getFile(relPath);
+      // TRA-3061: the loop-top abort check above only bounds the gap
+      // *between* files — this file's own sequence of store calls has no
+      // boundary of its own. Reclassify a closed-DB failure anywhere in it
+      // as an abort, same as `_storeRawEdgesInternal` in edge-resolver.ts,
+      // instead of letting the raw TypeError reach the catch-all below.
+      try {
+        const existing = this.store.getFile(relPath);
 
-      if (!force && existing && existing.content_hash === hash) {
-        if (fileMtimeMs != null && existing.mtime_ms !== fileMtimeMs) {
-          this.store.updateFileMtime(existing.id, fileMtimeMs);
+        if (!force && existing && existing.content_hash === hash) {
+          if (fileMtimeMs != null && existing.mtime_ms !== fileMtimeMs) {
+            this.store.updateFileMtime(existing.id, fileMtimeMs);
+          }
+          continue;
         }
-        continue;
+
+        const entries = parseEnvFile(content);
+
+        let fileId: number;
+        if (existing) {
+          fileId = existing.id;
+          this.store.deleteEnvVarsByFile(fileId);
+          this.store.updateFileHash(fileId, hash, content.length, fileMtimeMs);
+        } else {
+          fileId = this.store.insertFile(relPath, 'env', hash, content.length, null, fileMtimeMs);
+          this.store.updateFileStatus(fileId, 'ok', 'config');
+        }
+
+        for (const entry of entries) {
+          this.store.insertEnvVar(fileId, {
+            key: entry.key,
+            valueType: entry.valueType,
+            valueFormat: entry.valueFormat,
+            comment: entry.comment,
+            quoted: entry.quoted,
+            line: entry.line,
+          });
+        }
+
+        logger.debug({ file: relPath, keys: entries.length }, '.env file indexed');
+      } catch (err) {
+        if (
+          !this.store.db.open ||
+          (err instanceof TypeError && err.message.includes('database connection is not open'))
+        ) {
+          throw new IndexAbortedError(this.rootPath);
+        }
+        throw err;
       }
-
-      const entries = parseEnvFile(content);
-
-      let fileId: number;
-      if (existing) {
-        fileId = existing.id;
-        this.store.deleteEnvVarsByFile(fileId);
-        this.store.updateFileHash(fileId, hash, content.length, fileMtimeMs);
-      } else {
-        fileId = this.store.insertFile(relPath, 'env', hash, content.length, null, fileMtimeMs);
-        this.store.updateFileStatus(fileId, 'ok', 'config');
-      }
-
-      for (const entry of entries) {
-        this.store.insertEnvVar(fileId, {
-          key: entry.key,
-          valueType: entry.valueType,
-          valueFormat: entry.valueFormat,
-          comment: entry.comment,
-          quoted: entry.quoted,
-          line: entry.line,
-        });
-      }
-
-      logger.debug({ file: relPath, keys: entries.length }, '.env file indexed');
     }
+
+    // TRA-3061 (Reviewer F): the main loop's per-iteration check only fires
+    // between files — a stop landing after the last file (or a scan with
+    // nothing to skip) would otherwise reach this prune with a closing DB.
+    throwIfIndexAborted(signal, this.rootPath);
 
     // TRA-2067: retire rows the gates above now skip (newly ignored) or that
     // vanished from disk. Runs on every env pass so the incremental-discovery

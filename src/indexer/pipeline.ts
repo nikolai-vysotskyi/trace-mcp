@@ -2281,7 +2281,13 @@ export class IndexingPipeline {
           // (scip_resolved > lsp_resolved) wins last and is not downgraded by
           // the LSP edge-upgrade UPDATE. Opt-in, no-op when scip.enabled=false.
           await this.runScipIngestion();
-          await this.indexEnvFiles(force);
+          throwIfIndexAborted(signal, this.rootPath);
+          // TRA-3061: thread the signal into the env phase too — unlike the
+          // boundary checks above, this one actually needs to interrupt a
+          // phase in progress. Env indexing's per-file loop has no natural
+          // await boundary, so a project stop firing mid-loop rode it out to
+          // completion and then raced stopProject()'s db.close().
+          await this.indexEnvFiles(force, signal);
         }
       }
     } finally {
@@ -2904,9 +2910,9 @@ export class IndexingPipeline {
   }
 
   /** Pass 4: index .env files for environment variable tracking. */
-  private async indexEnvFiles(force: boolean): Promise<void> {
+  private async indexEnvFiles(force: boolean, signal?: AbortSignal): Promise<void> {
     const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath, this._traceignore);
-    await envIndexer.indexEnvFiles(force);
+    await envIndexer.indexEnvFiles(force, signal);
   }
 
   private buildProjectContext(): ProjectContext {
