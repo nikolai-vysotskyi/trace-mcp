@@ -196,6 +196,14 @@ export class EnvIndexer {
       suppressErrors: true,
     });
 
+    // TRA-3061 (Reviewer F): `fg()` is the only await before this point, and
+    // a project stop can land in it — `pruneStaleEnvFiles()` below still
+    // queries the store (silently, via its own best-effort catch) even once
+    // the DB has closed. Check right after the await returns, same as every
+    // other post-await point in this method, so an abort here is surfaced
+    // as `IndexAbortedError` instead of a quiet closed-DB no-op.
+    throwIfIndexAborted(signal, this.rootPath);
+
     // TRA-2067: prune even when the walk found nothing — an ignore rule
     // that hides every .env file must still retire the rows the previous
     // run wrote, otherwise the early return below re-leaks them forever.
@@ -308,6 +316,11 @@ export class EnvIndexer {
         throw err;
       }
     }
+
+    // TRA-3061 (Reviewer F): the main loop's per-iteration check only fires
+    // between files — a stop landing after the last file (or a scan with
+    // nothing to skip) would otherwise reach this prune with a closing DB.
+    throwIfIndexAborted(signal, this.rootPath);
 
     // TRA-2067: retire rows the gates above now skip (newly ignored) or that
     // vanished from disk. Runs on every env pass so the incremental-discovery
