@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.1...v3.44.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* **indexer:** bound env-file indexing to the pipeline's abort signal (TRA-3061) ([#1908](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1908)) ([11ade33](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11ade3342e6fd60717938f061cbaf16bf6f648bd))
+
+
+### Documentation
+
+* record v3.44.1 daemon pressure recovery sample ([#1909](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1909)) ([5d50afb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5d50afb586a6d7908c54f0eb6d8e4efdb42b8c66))
+
 ## [3.44.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.0...v3.44.1) (2026-11-14)
 
 
