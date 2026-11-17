@@ -260,6 +260,14 @@ const STAT_BATCH = 64;
 const SWEEP_INTERVAL_MS = 60_000;
 const GC_INTERVAL_MS = 30 * 60_000;
 const GC_FIRST_DELAY_MS = 30_000;
+/**
+ * Re-check the embedding/summarization backlog on this cadence even without
+ * a file edit. Without it, recovery from a tripped embedding circuit breaker
+ * (see COOLDOWN_MS in embedding-pipeline.ts) depends entirely on the next
+ * edit landing after the cooldown elapses — an idle project with a provider
+ * that came back online stays FTS-only forever (TRA-3099).
+ */
+const AI_RETRY_INTERVAL_MS = 5 * 60_000;
 
 /** Stable per-worktree file prefix: GC and reuse recognise a copy by it. */
 export function snapshotPrefix(worktreeRoot: string): string {
@@ -628,8 +636,11 @@ export class BranchIndex {
         );
       });
     }, 5_000);
+    const retryTimer = setInterval(() => run(), AI_RETRY_INTERVAL_MS);
+    retryTimer.unref?.();
     this.aiRun = () => run();
     this.cancelAI = () => {
+      clearInterval(retryTimer);
       run.cancel();
       abort.abort();
     };
