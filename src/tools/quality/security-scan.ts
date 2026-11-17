@@ -1173,16 +1173,66 @@ function classifyPathResolve(line: string): { drop: true } | { drop: false; down
 }
 
 /**
+ * Extract the full `fn(...)` call text starting at `startIndex` by balancing
+ * parens. Scopes a per-call check to the call that actually matched, so it
+ * can't bleed into a second, unrelated call later on the same line.
+ */
+function extractCallText(line: string, startIndex: number): string {
+  const openIdx = line.indexOf('(', startIndex);
+  if (openIdx === -1) return line.slice(startIndex);
+  let depth = 0;
+  let i = openIdx;
+  for (; i < line.length; i++) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') {
+      depth--;
+      if (depth === 0) {
+        i++;
+        break;
+      }
+    }
+  }
+  return line.slice(startIndex, i);
+}
+
+/**
+ * True when `os` resolves to the stdlib module rather than a shadowing
+ * parameter or local assignment in the enclosing function. Walks backward
+ * from `fromLine` to the nearest enclosing block opener (same scope rules as
+ * resolveStringBindingInFile) and fails closed — returns false — when `os`
+ * is bound as a parameter/local or no enclosing scope is found in range.
+ */
+function isOsBoundToModule(lines: string[], fromLine: number): boolean {
+  const paramRe = /(?:\(|,)\s*os\s*(?:[,:=)]|$)/;
+  const assignRe = /^\s*os\s*=(?!=)/;
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine - 1; i >= stop; i--) {
+    const line = lines[i];
+    if (assignRe.test(line)) return false;
+    if (BLOCK_OPENER_RE.test(line)) {
+      return !paramRe.test(line);
+    }
+  }
+  return true;
+}
+
+/**
  * True when every `{...}` placeholder in a Python f-string passed to `open()`
  * resolves to `os.getpid()` / `os.getppid()` — the process's own PID, which
- * is never attacker-controlled. Used to downgrade `open(f'/proc/{os.getpid()}/...')`
- * off `high`/`critical` without losing the finding for real path traversal
- * (user input reaching `open()` through an f-string).
+ * is never attacker-controlled — AND `os` is provably the stdlib module in
+ * scope (not shadowed by a parameter/local, e.g. `def read(os): ...`). Used
+ * to downgrade `open(f'/proc/{os.getpid()}/...')` off `high`/`critical`
+ * without losing the finding for real path traversal (user input reaching
+ * `open()` through an f-string, or `os` shadowed by untrusted input).
  */
-function isPythonProcSelfPidOpen(line: string): boolean {
-  if (!/open\s*\(\s*f["']/.test(line)) return false;
-  const exprs = extractPythonFStringExprs(line);
-  return exprs.length > 0 && exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim()));
+function isPythonProcSelfPidOpen(callText: string, lines: string[], fromLine: number): boolean {
+  if (!/open\s*\(\s*f["']/.test(callText)) return false;
+  const exprs = extractPythonFStringExprs(callText);
+  return (
+    exprs.length > 0 &&
+    exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim())) &&
+    isOsBoundToModule(lines, fromLine)
+  );
 }
 
 /**
@@ -1766,7 +1816,7 @@ export function scanSecurity(
             if (
               rule.key === 'path_traversal' &&
               file.language === 'python' &&
-              isPythonProcSelfPidOpen(line)
+              isPythonProcSelfPidOpen(extractCallText(line, match.index), lines, lineIdx)
             ) {
               severity = 'low';
               confidence = 'low';

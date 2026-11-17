@@ -163,6 +163,41 @@ def read_status(user_pid):
     expect(findings[0].confidence).toBe('high');
   });
 
+  test('still detects os.getpid() reads when a parameter named `os` shadows the module', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(os):
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('a safe self-pid open() on a line does not downgrade an unsafe open() earlier on that line', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_both(request):
+    open(request.path); open(f'/proc/{os.getpid()}/status')
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
   // -------------------------------------------------------------------
   // 2. Escaper recognition across a full concatenation
   // -------------------------------------------------------------------
