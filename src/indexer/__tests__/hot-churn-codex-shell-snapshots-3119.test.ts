@@ -78,13 +78,23 @@ describe('TRA-3119: isHotChurnPath and ignore globs', () => {
   });
 
   it('includes shell_snapshots prefix in HOT_CHURN_NATIVE_IGNORE_GLOBS', () => {
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('shell_snapshots/**');
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/.codex/shell_snapshots/**');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('shell_snapshots/**/*.sh');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/.codex/shell_snapshots/**/*.sh');
 
     const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
     expect(isIgnored('shell_snapshots/abc.1795033480007626000.sh')).toBe(true);
     expect(isIgnored('.codex/shell_snapshots/abc.1795033480007626000.sh')).toBe(true);
     expect(isIgnored('app/shell_snapshots/handler.sh')).toBe(false);
+  });
+
+  it('does not drop legitimate non-script files in a root shell_snapshots/ directory natively', () => {
+    // A project-owned `shell_snapshots/README.md` or `manifest.json` must survive
+    // the native ignore glob the same way `isHotChurnPath` already preserves it —
+    // otherwise the live watcher silently stops seeing changes to real files.
+    const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
+    expect(isIgnored('shell_snapshots/README.md')).toBe(false);
+    expect(isIgnored('shell_snapshots/manifest.json')).toBe(false);
+    expect(isIgnored('.codex/shell_snapshots/README.md')).toBe(false);
   });
 });
 
@@ -116,6 +126,21 @@ describe('TRA-3119: collectFiles and walk filtering', () => {
 
     expect(result.files).toContain('src/index.ts');
     expect(result.files).not.toContain('shell_snapshots/abc.1795033480007626000.sh');
+  });
+
+  it('collectFiles preserves a legitimate non-script file in a root shell_snapshots/ directory', async () => {
+    mkdirSync(join(tmpDir, 'shell_snapshots'), { recursive: true });
+    writeFileSync(join(tmpDir, 'shell_snapshots', 'README.md'), '# shell snapshots\n');
+
+    const result = await collectFiles({
+      config: TraceMcpConfigSchema.parse({}),
+      rootPath: tmpDir,
+      workspaces: [],
+      traceignore: undefined,
+      maxFiles: 10_000,
+    });
+
+    expect(result.files).toContain('shell_snapshots/README.md');
   });
 });
 

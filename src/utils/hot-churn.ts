@@ -111,8 +111,11 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   'plugins/cache/**/plugin-install-*/**',
   '**/.codex/plugins/cache/**/plugin-install-*/**',
   // TRA-3119: Codex CLI shell state snapshots, pruned by Codex's own retention policy.
-  'shell_snapshots/**',
-  '**/.codex/shell_snapshots/**',
+  // Narrowed to the `.sh` extension (not the whole directory) so a legitimate
+  // `shell_snapshots/README.md` or `manifest.json` is never dropped natively
+  // before `isHotChurnPath`'s own `.sh`-only check ever runs.
+  'shell_snapshots/**/*.sh',
+  '**/.codex/shell_snapshots/**/*.sh',
 ] as const;
 
 /** Source directory segments that protect enclosed files from being treated as runtime churn. */
