@@ -474,6 +474,8 @@ interface RegistryEntryHealth {
   name: string;
   dbPath: string;
   status: RegistryEntryStatus;
+  /** Persisted result of the last full index walk; absent for older indexes. */
+  truncated?: { found: number; limit: number };
 }
 
 interface RegistryOverlapReport {
@@ -495,6 +497,7 @@ export interface RegistryHealthReport {
   registryCorrupt: boolean;
   entries: RegistryEntryHealth[];
   staleCount: number;
+  truncatedCount: number;
   /** Project pairs where one registered root contains another — double indexing/watching. */
   overlaps: RegistryOverlapReport[];
   /** Sibling repos (own `.git`) found under a registered root that were never registered — zero index coverage. */
@@ -504,17 +507,46 @@ export interface RegistryHealthReport {
 }
 
 /** Open a project DB read-only and run a trivial query to confirm it's intact. */
-function checkDbReadable(dbPath: string): boolean {
+function checkDbHealth(dbPath: string): {
+  readable: boolean;
+  truncated?: { found: number; limit: number };
+} {
   try {
     const db = new Database(dbPath, { readonly: true, fileMustExist: true });
     try {
       db.prepare('SELECT count(*) FROM sqlite_master').get();
-      return true;
+      // Older indexes have no truncation stamp. Keep the registry check cheap:
+      // the full filesystem walk belongs to indexing, not doctor.
+      if (
+        !db
+          .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'repo_metadata'")
+          .get()
+      ) {
+        return { readable: true };
+      }
+      const rows = db
+        .prepare(
+          "SELECT key, value FROM repo_metadata WHERE key IN ('index_truncated', 'index_truncated_found', 'index_truncated_limit')",
+        )
+        .all() as Array<{ key: string; value: string }>;
+      const metadata = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+      const found = Number(metadata.index_truncated_found);
+      const limit = Number(metadata.index_truncated_limit);
+      return {
+        readable: true,
+        ...(metadata.index_truncated === '1' &&
+        Number.isFinite(found) &&
+        Number.isFinite(limit) &&
+        found > limit &&
+        limit > 0
+          ? { truncated: { found, limit } }
+          : {}),
+      };
     } finally {
       db.close();
     }
   } catch {
-    return false;
+    return { readable: false };
   }
 }
 
@@ -522,14 +554,23 @@ export function diagnoseRegistry(): RegistryHealthReport {
   const inspection = inspectRegistry();
   const entries: RegistryEntryHealth[] = inspection.entries.map((e) => {
     let status: RegistryEntryStatus;
+    let truncated: RegistryEntryHealth['truncated'];
     if (!fs.existsSync(e.root)) {
       status = 'missing_root';
     } else if (!fs.existsSync(e.dbPath)) {
       status = 'db_missing';
     } else {
-      status = checkDbReadable(e.dbPath) ? 'ok' : 'db_unreadable';
+      const health = checkDbHealth(e.dbPath);
+      status = health.readable ? 'ok' : 'db_unreadable';
+      truncated = health.truncated;
     }
-    return { root: e.root, name: e.name, dbPath: e.dbPath, status };
+    return {
+      root: e.root,
+      name: e.name,
+      dbPath: e.dbPath,
+      status,
+      ...(truncated ? { truncated } : {}),
+    };
   });
   return {
     registryPath: REGISTRY_PATH,
@@ -537,6 +578,7 @@ export function diagnoseRegistry(): RegistryHealthReport {
     registryCorrupt: inspection.corrupt,
     entries,
     staleCount: entries.filter((e) => e.status !== 'ok').length,
+    truncatedCount: entries.filter((e) => e.truncated).length,
     overlaps: findOverlappingProjects().map((o) => ({
       ancestorName: o.ancestor.name,
       ancestorRoot: o.ancestor.root,
@@ -1059,12 +1101,22 @@ function printRegistryReport(r: RegistryHealthReport): void {
   }
   console.log(
     `Registry: ${r.entries.length} project${r.entries.length > 1 ? 's' : ''}` +
-      (r.staleCount > 0 ? `, ${r.staleCount} need attention` : ' — all healthy') +
+      (r.staleCount > 0 ? `, ${r.staleCount} stale` : '') +
+      (r.truncatedCount > 0 ? `, ${r.truncatedCount} truncated` : '') +
+      (r.staleCount === 0 && r.truncatedCount === 0 ? ' — all healthy' : '') +
       ` (${shortPath(r.registryPath)})`,
   );
   for (const e of r.entries) {
-    if (e.status === 'ok') continue;
-    console.log(`  [${REGISTRY_STATUS_LABEL[e.status]}] ${e.name}  ${shortPath(e.root)}`);
+    if (e.status !== 'ok') {
+      console.log(`  [${REGISTRY_STATUS_LABEL[e.status]}] ${e.name}  ${shortPath(e.root)}`);
+    }
+    if (e.truncated) {
+      console.log(
+        `  [WARNING (index truncated)] ${e.name}  ${shortPath(e.root)} — ` +
+          `${e.truncated.found} matching files, limit ${e.truncated.limit}. ` +
+          'Register nested repositories separately or increase security.max_files and reindex.',
+      );
+    }
   }
   if (r.staleCount > 0) {
     console.log('  Clean up stale registrations with `trace-mcp prune --apply`.');

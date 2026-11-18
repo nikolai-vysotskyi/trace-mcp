@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // TRA-50: `doctor --fix` already sweeps stale/overlapping registry entries
@@ -73,5 +74,26 @@ describe('fixRegistryIssuesInteractive (TRA-50)', () => {
     const result = await doctor.fixRegistryIssuesInteractive(health);
     expect(result.removedMissingRoots).toEqual([gone]);
     expect(registry.listProjects()).toEqual([]);
+  });
+
+  it('reports a truncated registered index without treating it as stale or fixable', () => {
+    const root = makeProjectDir('large');
+    const entry = registry.registerProject(root);
+    fs.mkdirSync(path.dirname(entry.dbPath), { recursive: true });
+    const db = new Database(entry.dbPath);
+    db.exec('CREATE TABLE repo_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    const insert = db.prepare('INSERT INTO repo_metadata (key, value) VALUES (?, ?)');
+    insert.run('index_truncated', '1');
+    insert.run('index_truncated_found', '35452');
+    insert.run('index_truncated_limit', '10000');
+    db.close();
+
+    const health = doctor.diagnoseRegistry();
+    expect(health.staleCount).toBe(0);
+    expect(health.truncatedCount).toBe(1);
+    expect(health.entries[0]).toMatchObject({
+      status: 'ok',
+      truncated: { found: 35452, limit: 10000 },
+    });
   });
 });
