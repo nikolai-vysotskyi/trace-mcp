@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.3...v3.44.4) (2026-11-19)
+
+
+### Bug Fixes
+
+* **ai:** retry the embedding backlog on a timer, not just on file edits (TRA-3099) ([#1918](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1918)) ([8fc1653](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8fc165373bfa8d4f7c5ce7a02befa4d14c41b2f2))
+* **doctor:** report truncated registered indexes ([#1920](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1920)) ([55cba92](https://github.com/nikolai-vysotskyi/trace-mcp/commit/55cba926cd17f0fa5a1fc47ec9045d09468d6a3d))
+* **indexer:** drop Codex shell snapshot churn before read (TRA-3119) ([#1919](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1919)) ([d2d49ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d2d49ab3ef1d0081daff6ed1f341930ad89105ab))
+* **navigation:** accept absolute worktree paths in get_outline ([#1922](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1922)) ([4c8c21e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4c8c21e0af30f137a74eaf5b86c32ebca5b2cc51))
+
 ## [3.44.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.2...v3.44.3) (2026-11-16)
 
 
