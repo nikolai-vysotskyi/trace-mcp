@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { embedBatch } = vi.hoisted(() => ({ embedBatch: vi.fn() }));
+const { embedBatch, generate } = vi.hoisted(() => ({ embedBatch: vi.fn(), generate: vi.fn() }));
 
 vi.mock('../../src/ai/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/ai/index.js')>();
@@ -28,9 +28,7 @@ vi.mock('../../src/ai/index.js', async (importOriginal) => {
       inference: () => {
         throw new Error('not used in this test');
       },
-      fastInference: () => {
-        throw new Error('not used in this test — summarize_on_index is false');
-      },
+      fastInference: () => ({ generate }),
     }),
   };
 });
@@ -65,6 +63,7 @@ describe('branch index embedding retry (TRA-3099)', () => {
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-wt-ai-retry-'));
     embedBatch.mockReset();
+    generate.mockReset();
     vi.useFakeTimers();
   });
 
@@ -147,6 +146,80 @@ describe('branch index embedding retry (TRA-3099)', () => {
     expect(embedBatch).toHaveBeenCalledTimes(2);
     expect(store.countUnembeddedSymbols()).toBe(0);
     expect(readEmbeddingBreakerState(db)).toBeNull();
+
+    (index as unknown as { cancelAI: (() => void) | null }).cancelAI?.();
+    db.close();
+  });
+
+  it('does not re-enter a still-running summarization batch on the periodic tick (review on #1918)', async () => {
+    const dbPath = path.join(tmp, 'y.db');
+    const db = initializeDatabase(dbPath);
+    const store = new Store(db);
+    const progress = new ProgressState(db);
+    const fileId = store.insertFile('src/b.ts', 'typescript', 'hash2', 30);
+    store.insertSymbol(fileId, {
+      symbolId: 'sum1',
+      name: 'sum1',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 5,
+    });
+    expect(store.countUnsummarizedSymbols(['function'])).toBe(1);
+
+    const owner = new WorktreeIndexManager({
+      settings: DEFAULT_WORKTREE_INDEX_SETTINGS,
+      getCanonical: () => undefined,
+      dir: tmp,
+    });
+    const meta: SnapshotMeta = {
+      schema: 1,
+      worktree_root: tmp,
+      canonical_root: tmp,
+      canonical_head: 'a'.repeat(40),
+      version: 'test',
+      created_at: 0,
+      last_used_at: 0,
+      applied: [],
+    };
+    const index = new BranchIndex(owner, { dbPath, metaPath: path.join(tmp, 'y.json'), meta }, 0);
+    index.markReady(0);
+
+    const config: TraceMcpConfig = TraceMcpConfigSchema.parse({
+      include: ['src/**/*.ts'],
+      exclude: [],
+      ai: { enabled: true, provider: 'onnx', summarize_on_index: true },
+    });
+
+    embedBatch.mockImplementation(async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3, 0.4]));
+    let releaseGenerate: ((value: string) => void) | null = null;
+    generate.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          releaseGenerate = resolve;
+        }),
+    );
+
+    (
+      index as unknown as {
+        setupAI: (config: TraceMcpConfig, store: Store, progress: ProgressState) => void;
+      }
+    ).setupAI(config, store, progress);
+
+    // Same trigger as a file edit before this fix: aiRun() starts a
+    // summarization batch that never returns (provider hung).
+    (index as unknown as { aiRun: (() => void) | null }).aiRun?.();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(generate).toHaveBeenCalledTimes(1);
+
+    // Two periodic ticks pass while that batch is still in flight. The
+    // periodic retry must stay embeddings-only and must not re-enter
+    // summarization — SummarizationPipeline has no in-flight guard.
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(generate).toHaveBeenCalledTimes(1);
+
+    releaseGenerate?.('a summary');
+    await vi.advanceTimersByTimeAsync(0);
 
     (index as unknown as { cancelAI: (() => void) | null }).cancelAI?.();
     db.close();
