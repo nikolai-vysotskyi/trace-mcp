@@ -330,6 +330,34 @@ describe('findUnregisteredNestedRepos', () => {
 
     expect(findUnregisteredNestedRepos()).toEqual([]);
   });
+
+  it('does not flag a git worktree checkout as an unregistered nested repo', () => {
+    const parent = makeTmpRepo();
+    const worktree = path.join(parent, '.worktrees', 'task-branch');
+    fs.mkdirSync(worktree, { recursive: true });
+    fs.writeFileSync(
+      path.join(worktree, '.git'),
+      `gitdir: ${path.join(parent, '.git', 'worktrees', 'task-branch')}\n`,
+    );
+    registerProject(parent);
+
+    expect(findUnregisteredNestedRepos()).toEqual([]);
+  });
+
+  it('still flags a submodule gitdir pointer as an unregistered nested repo', () => {
+    const parent = makeTmpRepo();
+    const submodule = path.join(parent, 'vendor-lib');
+    fs.mkdirSync(submodule, { recursive: true });
+    fs.writeFileSync(
+      path.join(submodule, '.git'),
+      `gitdir: ${path.join(parent, '.git', 'modules', 'vendor-lib')}\n`,
+    );
+    registerProject(parent);
+
+    const found = findUnregisteredNestedRepos();
+    expect(found).toHaveLength(1);
+    expect(found[0].nestedRepoRoot).toBe(submodule);
+  });
 });
 
 describe('findOverlapForNewRoot', () => {
