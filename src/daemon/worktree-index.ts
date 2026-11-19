@@ -260,6 +260,16 @@ const STAT_BATCH = 64;
 const SWEEP_INTERVAL_MS = 60_000;
 const GC_INTERVAL_MS = 30 * 60_000;
 const GC_FIRST_DELAY_MS = 30_000;
+/**
+ * Re-check the embedding backlog on this cadence even without a file edit.
+ * Without it, recovery from a tripped embedding circuit breaker (see
+ * COOLDOWN_MS in embedding-pipeline.ts) depends entirely on the next edit
+ * landing after the cooldown elapses — an idle project with a provider that
+ * came back online stays FTS-only forever (TRA-3099). Embedding-only, not
+ * summarization: EmbeddingPipeline self-guards re-entry (`inFlight`),
+ * SummarizationPipeline does not.
+ */
+const AI_RETRY_INTERVAL_MS = 5 * 60_000;
 
 /** Stable per-worktree file prefix: GC and reuse recognise a copy by it. */
 export function snapshotPrefix(worktreeRoot: string): string {
@@ -613,6 +623,15 @@ export class BranchIndex {
             progress,
             vectorStore,
           );
+    const retryEmbedding = () => {
+      if (this.state !== 'ready') return;
+      embedding.indexUnembedded(undefined, abort.signal).catch((err) => {
+        logger.warn(
+          { error: serializeError(err), root: this.worktreeRoot },
+          'Branch index embedding failed',
+        );
+      });
+    };
     const run = trailingDebounce(() => {
       if (this.state !== 'ready') return;
       summarization?.summarizeUnsummarized(abort.signal).catch((err) => {
@@ -621,15 +640,17 @@ export class BranchIndex {
           'Branch index summarization failed',
         );
       });
-      embedding.indexUnembedded(undefined, abort.signal).catch((err) => {
-        logger.warn(
-          { error: serializeError(err), root: this.worktreeRoot },
-          'Branch index embedding failed',
-        );
-      });
+      retryEmbedding();
     }, 5_000);
+    // Embedding-only: SummarizationPipeline.summarizeUnsummarized() has no
+    // in-flight guard (unlike EmbeddingPipeline), so routing this through the
+    // combined `run()` could re-enter a still-running summarization batch
+    // every tick once it outlives AI_RETRY_INTERVAL_MS (review on #1918).
+    const retryTimer = setInterval(retryEmbedding, AI_RETRY_INTERVAL_MS);
+    retryTimer.unref?.();
     this.aiRun = () => run();
     this.cancelAI = () => {
+      clearInterval(retryTimer);
       run.cancel();
       abort.abort();
     };
