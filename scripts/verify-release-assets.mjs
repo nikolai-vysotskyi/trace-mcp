@@ -176,6 +176,22 @@ export function auditReleaseAssets(version, assets, manifestContents = {}) {
   return problems;
 }
 
+/** Draft release browser URLs return 404 until publication; the asset API is readable with GH_TOKEN. */
+export async function fetchManifestAsset(asset, token = process.env.GH_TOKEN, fetchFn = fetch) {
+  const url = asset.apiUrl || asset.browser_download_url || asset.url;
+  if (!url) throw new Error('no download URL in asset record');
+  if (asset.apiUrl && !token) throw new Error('GH_TOKEN is required to read draft release assets');
+  const res = await fetchFn(url, {
+    headers: {
+      'User-Agent': 'trace-mcp',
+      Accept: 'application/octet-stream',
+      ...(asset.apiUrl ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  return res.text();
+}
+
 async function main() {
   const version = process.argv[2];
   if (!version) {
@@ -193,21 +209,10 @@ async function main() {
   for (const manifestName of ['latest.yml', 'latest-mac.yml']) {
     const asset = Array.isArray(assets) ? assets.find((a) => a.name === manifestName) : null;
     if (!asset) continue; // Will be reported as missing by auditReleaseAssets
-    const url = asset.browser_download_url || asset.url;
-    if (!url) {
-      fetchErrors.push(`cannot download ${manifestName}: no download URL in asset record`);
-      continue;
-    }
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'trace-mcp' } });
-      if (!res.ok) {
-        fetchErrors.push(
-          `failed to download ${manifestName} (${url}): HTTP ${res.status} ${res.statusText}`,
-        );
-      } else {
-        manifestContents[manifestName] = await res.text();
-      }
+      manifestContents[manifestName] = await fetchManifestAsset(asset);
     } catch (err) {
+      const url = asset.apiUrl || asset.browser_download_url || asset.url || 'unknown URL';
       fetchErrors.push(
         `failed to download ${manifestName} (${url}): ${err instanceof Error ? err.message : String(err)}`,
       );
