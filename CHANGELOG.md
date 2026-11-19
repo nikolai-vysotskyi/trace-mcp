@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.5...v3.44.6) (2026-11-19)
+
+
+### Bug Fixes
+
+* **release:** run npm publish after verified dispatch ([#1927](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1927)) ([47cf177](https://github.com/nikolai-vysotskyi/trace-mcp/commit/47cf1776a94943cbb428442b358533e320037502))
+* **release:** verify draft manifests through authenticated asset API ([#1925](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1925)) ([e5492a7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e5492a7df0c3c98a2267c92121e44901cb71c627))
+
 ## [3.44.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.4...v3.44.5) (2026-11-19)
 
 
