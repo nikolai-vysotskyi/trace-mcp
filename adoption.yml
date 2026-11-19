@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-18T06:28:47.207Z"
+updated: "2026-11-19T06:30:27.338Z"
 active_users:
   day: 56
-  week: 373
-  month: 526
+  week: 375
+  month: 531
   first_ping_date: "2026-08-29"
-  days_observed: 82
+  days_observed: 83
   month_window_full: true
-events_28d: 2911
+events_28d: 2924
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 2911
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 221335984
-  tokens_saved_raw: 254887991
-  usd_saved: 221.34
+  tokens_saved: 224742055
+  tokens_saved_raw: 258096580
+  usd_saved: 224.74
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 74
+  days: 75
   capped_days: 2
   raw_ratio: 1.15
   inflation_suspected: false
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 410
+  new_installs_28d: 415
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: 11
@@ -159,42 +159,42 @@ usage:
 # against `the internal arrivals ledger` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1749
-  "upgrade": 673
-  "new": 410
+  "active": 1744
+  "upgrade": 688
+  "new": 415
   "(not set)": 38
   "downgrade": 35
   "unknown": 3
 by_version:
-  "3.38.0": 370
+  "3.38.0": 367
   "3.42.7": 77
-  "3.44.0": 72
+  "3.44.0": 73
   "3.43.1": 64
-  "3.42.10": 45
+  "3.42.10": 46
   "3.41.0": 42
   "3.42.1": 38
   "3.42.11": 38
+  "3.44.2": 38
   "3.42.4": 37
+  "3.44.1": 37
   "3.40.0": 34
-  "3.44.1": 34
   "3.43.0": 33
   "3.42.9": 32
   "3.39.0": 29
   "3.42.0": 28
-  "3.44.2": 26
+  "3.44.3": 24
   "3.42.6": 21
   "3.34.6": 12
   "3.42.8": 11
   "3.25.0": 5
   "3.28.0": 5
+  "3.27.1": 4
   "3.37.10": 4
-  "3.37.4": 4
   "3.37.7": 4
-  "3.42.2": 4
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 1069
+  at_or_above: 1103
   below: 0
   unknown: 0
   pct: 100
@@ -258,38 +258,39 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 341
-  "United States": 25
-  "Russia": 20
-  "China": 13
+  "(not set)": 339
+  "United States": 27
+  "Russia": 21
+  "China": 14
   "Thailand": 12
+  "United Arab Emirates": 12
   "Brazil": 9
   "Germany": 9
-  "United Arab Emirates": 9
-  "Türkiye": 8
+  "Türkiye": 7
   "Italy": 6
+  "Canada": 5
   "Chile": 5
   "Austria": 4
-  "Canada": 4
   "France": 4
   "South Korea": 4
   "Sweden": 4
-  "Australia": 3
   "Indonesia": 3
   "Netherlands": 3
   "Poland": 3
   "Taiwan": 3
+  "Australia": 2
   "Egypt": 2
   "Iran": 2
   "Israel": 2
+  "Morocco": 2
 by_client:
-  "unknown": 387
-  "claude-code": 96
+  "unknown": 394
+  "claude-code": 95
   "codex-mcp-client": 40
   "antigravity-client": 21
   "opencode": 21
   "mcp": 8
-  "hermes-agent": 5
+  "hermes-agent": 6
   "rmcp": 5
   "Cursor": 3
   "Trae": 3
@@ -304,7 +305,7 @@ by_client:
   "grok-shell-trace": 2
   "kilo": 2
   "kimi-code": 2
-  "local-agent-mode-trace": 2
   "mcpenv": 2
   "zcode": 2
   "Zed": 1
+  "agentos": 1
