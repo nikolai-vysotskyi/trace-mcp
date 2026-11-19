@@ -80,9 +80,9 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}${RECOVERY}"
 
-  # Gate between the app builds and npm, and the one place that can take a
-  # release back out of `latest`. The release exists the moment the tag is cut,
-  # but the zips land 2-5 minutes later from the matrix jobs below.
+  # Gate between the app builds and npm. release-please creates a draft and
+  # force-creates its tag, so an incomplete release cannot become `latest`
+  # while the macOS/Windows installers are still being built and notarized.
   # scripts/postinstall-app.mjs resolves the
   # update from /releases/latest and returns silently when the arch zip or its
   # .sha256 is not there yet — so every `npm install -g trace-mcp` inside that
@@ -119,6 +119,8 @@ jobs:
       # A red CI run does not help a user whose updater is pointed at it.
       #
       # So take the release back out of `latest` when its assets do not verify.
+      # Newly cut releases are drafts; this also covers republish of an older
+      # stable release whose assets have gone missing.
       # `prerelease` is the flag that does this — /releases/latest is documented
       # and observed to skip prereleases and fall back to the previous stable
       # release. It is also honest: a release missing half its installers IS a
@@ -157,20 +159,19 @@ jobs:
           echo "::error::$TAG is incomplete and could NOT be demoted — users are still being offered a broken release"
           exit 1
 
-      # The un-stick path. Re-running this workflow with `publish_tag` after the
-      # assets are fixed re-verifies them and returns the release to stable.
-      # A no-op on the normal path, where the release is already stable.
-      - name: Return a now-complete release to stable
+      # The first publication and the un-stick path both pass this gate.
+      # Draft releases become visible only after all updater assets verify.
+      - name: Publish the verified release as stable
         run: |
           ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
-          if [ "$(gh api "repos/${{ github.repository }}/releases/$ID" --jq .prerelease)" != "true" ]; then
+          if [ "$(gh api "repos/${{ github.repository }}/releases/$ID" --jq '.draft or .prerelease')" != "true" ]; then
             exit 0
           fi
           for i in 1 2 3; do
-            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F prerelease=false --silent && exit 0
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F draft=false -F prerelease=false --silent && exit 0
             sleep 5
           done
-          echo "::error::$TAG verified but could not be returned to stable — users will not be offered it"
+          echo "::error::$TAG verified but could not be published as stable — users will not be offered it"
           exit 1
 
   # An SPDX SBOM is the first artifact an enterprise evaluator asks for, and
