@@ -1,25 +1,29 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_PATH = path.join(__dirname, '..', '..', 'scripts', 'verify-release-assets.mjs');
 
-const { auditReleaseAssets, auditChannelManifest, expectedAssets } = (await import(
-  MODULE_PATH
-)) as {
-  auditReleaseAssets: (
-    version: string,
-    assets: { name: string; size?: number }[],
-    manifestContents?: Record<string, string>,
-  ) => string[];
-  auditChannelManifest: (
-    manifestName: string,
-    manifestContent: string,
-    bySize: Map<string, number>,
-  ) => string[];
-  expectedAssets: (version: string) => string[];
-};
+const { auditReleaseAssets, auditChannelManifest, expectedAssets, fetchManifestAsset } =
+  (await import(MODULE_PATH)) as {
+    auditReleaseAssets: (
+      version: string,
+      assets: { name: string; size?: number }[],
+      manifestContents?: Record<string, string>,
+    ) => string[];
+    auditChannelManifest: (
+      manifestName: string,
+      manifestContent: string,
+      bySize: Map<string, number>,
+    ) => string[];
+    expectedAssets: (version: string) => string[];
+    fetchManifestAsset: (
+      asset: { apiUrl: string; url: string },
+      token: string,
+      fetchFn: typeof fetch,
+    ) => Promise<string>;
+  };
 
 /** The shape `gh release view <tag> --json assets -q '.assets'` emits. */
 function completeRelease(version: string) {
@@ -30,6 +34,27 @@ function completeRelease(version: string) {
 }
 
 describe('verify-release-assets', () => {
+  it('reads a draft manifest through the authenticated asset API while its public URL is 404', async () => {
+    const fetchFn = vi.fn(async (url: string, options: RequestInit) => {
+      expect(url).toBe('https://api.github.com/repos/example/project/releases/assets/123');
+      expect(options.headers).toMatchObject({
+        Accept: 'application/octet-stream',
+        Authorization: 'Bearer test-token',
+      });
+      return new Response('version: 3.44.5\n', { status: 200 });
+    });
+    const content = await fetchManifestAsset(
+      {
+        apiUrl: 'https://api.github.com/repos/example/project/releases/assets/123',
+        url: 'https://github.com/example/project/releases/download/untagged-abc/latest.yml',
+      },
+      'test-token',
+      fetchFn as typeof fetch,
+    );
+    expect(content).toBe('version: 3.44.5\n');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts a release carrying every artifact and checksum', () => {
     expect(auditReleaseAssets('3.1.1', completeRelease('3.1.1'))).toEqual([]);
   });
