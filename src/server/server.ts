@@ -822,6 +822,7 @@ export function createServer(
     sessionId: deps?.sessionId,
     getWorktreeDelta: loadWorktreeDelta,
     worktreeIndex: deps?.worktreeIndex,
+    worktreeRoot: worktreeLink?.worktreeRoot,
     isSessionLocalTool,
     worktreeIndexInfo: deps?.worktreeIndexInfo,
   };

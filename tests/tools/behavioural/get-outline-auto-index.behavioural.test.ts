@@ -17,6 +17,7 @@ import { PluginRegistry } from '../../../src/plugin-api/registry.js';
 import { registerProject, unregisterProject } from '../../../src/registry.js';
 import type { ServerContext } from '../../../src/server/types.js';
 import { registerLookupTools } from '../../../src/tools/register/navigation/lookup-tools.js';
+import { validatePath } from '../../../src/utils/security.js';
 import { createTestStore } from '../../test-utils.js';
 
 type Handler = (
@@ -72,6 +73,44 @@ it('records a consultation when the empty-index fallback returns symbols (TRA-24
     store.db.close();
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
+
+it('accepts an absolute path in the verified worktree but rejects a sibling (GH #1901)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-outline-worktree-'));
+  const canonical = path.join(root, 'canonical');
+  const worktree = path.join(root, 'worktree');
+  const sibling = path.join(root, 'sibling');
+  for (const dir of [canonical, worktree, sibling]) fs.mkdirSync(dir);
+  for (const dir of [canonical, worktree, sibling]) {
+    fs.writeFileSync(path.join(dir, 'fixture.ts'), 'export function fixture() { return 1; }\n');
+  }
+  const store = createTestStore();
+  const ctx = {
+    store,
+    projectRoot: canonical,
+    worktreeRoot: worktree,
+    guardPath: (filePath: string) =>
+      validatePath(filePath, canonical).isErr()
+        ? { content: [{ type: 'text', text: 'SECURITY_VIOLATION' }], isError: true }
+        : null,
+    j: (v: unknown) => JSON.stringify(v),
+    jh: (_tool: string, v: unknown) => JSON.stringify(v),
+  } as unknown as ServerContext;
+  const { server, captured } = makeCapturingServer();
+  registerLookupTools(server as never, ctx);
+  const outline = captured.find((t) => t.name === 'get_outline')!.handler;
+  try {
+    const relative = await outline({ path: 'fixture.ts' });
+    const absolute = await outline({ path: path.join(worktree, 'fixture.ts') });
+    expect(absolute.isError).toBeFalsy();
+    expect(JSON.parse(absolute.content[0].text).symbols).toEqual(
+      JSON.parse(relative.content[0].text).symbols,
+    );
+    expect((await outline({ path: path.join(sibling, 'fixture.ts') })).isError).toBe(true);
+  } finally {
+    store.db.close();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

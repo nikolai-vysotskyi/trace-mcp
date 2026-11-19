@@ -359,7 +359,13 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       // TRA-1660: agents pass absolute paths — fold to the indexed relative
       // spelling up front so auto-index, fallback extraction, and explored
       // tracking all operate on one canonical form.
-      const normalizedPath = normalizeToProjectRelative(filePath, projectRoot);
+      // The daemon binds a linked worktree session to its canonical index.
+      // Only the verified worktree hint may provide an alternate absolute root.
+      const worktreePath =
+        path.isAbsolute(filePath) && ctx.worktreeRoot
+          ? normalizeToProjectRelative(filePath, ctx.worktreeRoot)
+          : filePath;
+      const normalizedPath = normalizeToProjectRelative(worktreePath, projectRoot);
       const blocked = guardPath(normalizedPath);
       if (blocked) return blocked;
 
