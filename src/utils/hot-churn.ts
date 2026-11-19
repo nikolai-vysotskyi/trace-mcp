@@ -30,6 +30,11 @@
  * TRA-2479: `.pt.tmp` and `.pth.tmp` checkpoint swaps also occur under
  * `runs`, `train`, and `ocr_train`; drop them before the read attempt.
  *
+ * TRA-3119: Codex CLI writes a shell state snapshot per session to
+ * `shell_snapshots/<uuid>.<ts>.sh` and prunes old ones per its own retention
+ * policy, racing the indexer the same way (137 `Cannot read file` ENOENT on
+ * a live daemon). Dropped the same way: whole `shell_snapshots` segment.
+ *
  * They are engine scratch, never source — the same argument TRA-1943
  * applies to SQLite sidecars — so every indexing entry point drops them
  * before any stat/read/lock, mirroring `isSqliteSidecarPath`:
@@ -105,6 +110,16 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   // TRA-2581, TRA-2718: Codex plugin installation scratch trees.
   'plugins/cache/**/plugin-install-*/**',
   '**/.codex/plugins/cache/**/plugin-install-*/**',
+  // TRA-3119: Codex CLI shell state snapshots, pruned by Codex's own retention policy.
+  // Narrowed to the `.sh` extension (not the whole directory) so a legitimate
+  // `shell_snapshots/README.md` or `manifest.json` is never dropped natively
+  // before `isHotChurnPath`'s own `.sh`-only check ever runs. The `.codex/`
+  // variant is root-anchored (no leading `**/`): a `.codex` nested under a
+  // guarded source dir (`src/.codex/shell_snapshots/handler.sh`) must reach
+  // `isHotChurnPath`, which preserves it — an unanchored glob would drop its
+  // watcher events natively before that guard ever runs.
+  'shell_snapshots/**/*.sh',
+  '.codex/shell_snapshots/**/*.sh',
 ] as const;
 
 /** Source directory segments that protect enclosed files from being treated as runtime churn. */
@@ -300,6 +315,23 @@ export function isHotChurnPath(p: string): boolean {
       }
       const remainder = segments.slice(i + 2).map((s) => s.toLowerCase());
       if (remainder.some((s) => s.startsWith('plugin-install-'))) {
+        return true;
+      }
+    }
+  }
+
+  // TRA-3119: Codex CLI shell state snapshots (shell_snapshots/<uuid>.<ts>.sh).
+  // Written per session and pruned by Codex's own retention policy; volatile
+  // shell history, never source. Narrowed to the `.sh` extension so a project
+  // that happens to have its own `shell_snapshots` directory of non-script
+  // files is unaffected.
+  if (base.endsWith('.sh')) {
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (segments[i].toLowerCase() === 'shell_snapshots') {
+        const prefix = segments.slice(0, i).map((s) => s.toLowerCase());
+        if (prefix.some((s) => SOURCE_DIR_SEGMENTS.has(s))) {
+          break;
+        }
         return true;
       }
     }
