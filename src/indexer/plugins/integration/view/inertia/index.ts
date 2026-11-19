@@ -170,6 +170,7 @@ export class InertiaPlugin implements FrameworkPlugin {
     }
 
     for (const [index, file] of targetFiles.entries()) {
+      if (ctx.signal?.aborted) break;
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
 
       const source = ctx.readFile(file.path);

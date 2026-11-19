@@ -5,7 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TailwindPlugin } from '../../../src/indexer/plugins/integration/view/tailwind/index.js';
-import type { FileParseResult, ProjectContext } from '../../../src/plugin-api/types.js';
+import type {
+  FileParseResult,
+  ProjectContext,
+  ResolveContext,
+} from '../../../src/plugin-api/types.js';
 
 function makeCtx(deps: Record<string, string> = {}, rootPath = '/tmp/test'): ProjectContext {
   return {
@@ -776,6 +780,46 @@ describe('tailwind — schema', () => {
     expect(names).toContain('tailwind_cn_call');
     expect(names).toContain('tailwind_cva_call');
     expect(names).toContain('tailwind_config_used_by');
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  resolveEdges
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('tailwind — resolveEdges()', () => {
+  // TRA-3135: on huge repos the executor aborts the plugin's signal once the
+  // scaled timeout elapses. Without a cooperative check, the loop below kept
+  // running to completion ("zombie" execution), burning event-loop ticks
+  // that starved whatever framework resolver ran next.
+  it('stops scanning once ctx.signal is aborted', async () => {
+    const plugin = mkPlugin('^3.4.0');
+    const files = Array.from({ length: 10 }, (_, i) => ({
+      id: i,
+      path: `src/entry${i}.css`,
+      language: 'css',
+    }));
+    const controller = new AbortController();
+    let readCalls = 0;
+    const ctx: ResolveContext = {
+      rootPath: '/tmp/test',
+      getAllFiles: () => files,
+      getSymbolsByFile: () => [],
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: () => {
+        readCalls++;
+        controller.abort();
+        return '@tailwind base;';
+      },
+      signal: controller.signal,
+    };
+
+    const result = await plugin.resolveEdges(ctx);
+
+    expect(result.isOk()).toBe(true);
+    expect(readCalls).toBeLessThan(files.length);
   });
 });
 

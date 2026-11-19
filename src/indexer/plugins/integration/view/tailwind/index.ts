@@ -429,6 +429,7 @@ export class TailwindPlugin implements FrameworkPlugin {
       : 'tailwind.config.js';
 
     for (const [index, file] of targetFiles.entries()) {
+      if (ctx.signal?.aborted) break;
       if (index > 0 && index % 64 === 0) await yieldToEventLoopFair();
       // TRA-1602: language gate before the read — only CSS-like and
       // template-like files can yield a cssSource below, so reading anything

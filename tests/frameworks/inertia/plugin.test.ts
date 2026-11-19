@@ -5,7 +5,7 @@ import {
   InertiaPlugin,
   resolvePagePath,
 } from '../../../src/indexer/plugins/integration/view/inertia/index.js';
-import type { ProjectContext } from '../../../src/plugin-api/types.js';
+import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/inertia-laravel-vue');
 
@@ -117,6 +117,41 @@ describe('InertiaPlugin', () => {
 
     it('resolves single segment page', () => {
       expect(resolvePagePath('Dashboard')).toBe('resources/js/Pages/Dashboard.vue');
+    });
+  });
+
+  describe('resolveEdges()', () => {
+    // TRA-3135: on huge repos the executor aborts the plugin's signal once the
+    // scaled timeout elapses. Without a cooperative check, the loop below kept
+    // running to completion ("zombie" execution), burning event-loop ticks
+    // that starved whatever framework resolver ran next.
+    it('stops scanning once ctx.signal is aborted', async () => {
+      const files = Array.from({ length: 10 }, (_, i) => ({
+        id: i,
+        path: `Controllers/C${i}.php`,
+        language: 'php',
+      }));
+      const controller = new AbortController();
+      let readCalls = 0;
+      const ctx: ResolveContext = {
+        rootPath: '/tmp/test',
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [{ id: 1, symbolId: 'C', name: 'C', kind: 'class', fqn: 'C' }],
+        getSymbolByFqn: () => undefined,
+        getNodeId: () => undefined,
+        createNodeIfNeeded: () => 1,
+        readFile: () => {
+          readCalls++;
+          controller.abort();
+          return `Inertia::render('Dashboard');`;
+        },
+        signal: controller.signal,
+      };
+
+      const result = await plugin.resolveEdges(ctx);
+
+      expect(result.isOk()).toBe(true);
+      expect(readCalls).toBeLessThan(files.length);
     });
   });
 
