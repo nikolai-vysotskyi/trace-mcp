@@ -31,4 +31,14 @@ describe('release visibility gate', () => {
     expect(steps[publish].run).toContain('prerelease=false');
     expect(workflow.jobs.publish.needs).toContain('verify-release-assets');
   });
+
+  it('runs downstream publish jobs after a dispatch skips app builds', () => {
+    for (const jobName of ['publish', 'verify-win-update']) {
+      const job = workflow.jobs[jobName];
+      expect(job.needs).toContain('verify-release-assets');
+      expect(job.if).toContain('!cancelled()');
+      expect(job.if).toContain("needs.verify-release-assets.result == 'success'");
+      expect(job.if).toContain("github.event.inputs.publish_tag != ''");
+    }
+  });
 });

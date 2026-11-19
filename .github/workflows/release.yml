@@ -248,12 +248,15 @@ jobs:
   # a failure here does not make the npm package wrong.
   verify-win-update:
     needs: [release-please, verify-release-assets]
-    if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
+    # A publish_tag dispatch skips both app builds. They are transitive needs
+    # through verify-release-assets, so the implicit success() would skip this
+    # job even when asset verification itself succeeded.
+    if: "!cancelled() && needs.verify-release-assets.result == 'success' && (needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != '')"
     uses: ./.github/workflows/verify-win-update.yml
 
   publish:
     needs: [release-please, verify-release-assets]
-    if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
+    if: "!cancelled() && needs.verify-release-assets.result == 'success' && (needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != '')"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: npm
