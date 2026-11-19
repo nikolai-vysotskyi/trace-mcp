@@ -81,6 +81,8 @@ export interface ServerContext {
   registry: PluginRegistry;
   config: TraceMcpConfig;
   projectRoot: string;
+  /** Verified linked worktree for a daemon session bound to the canonical root. */
+  worktreeRoot?: string;
   savings: SessionTracker;
   journal: SessionJournal;
   aiProvider: AIProvider;
