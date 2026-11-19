@@ -1195,39 +1195,158 @@ function extractCallText(line: string, startIndex: number): string {
   return line.slice(startIndex, i);
 }
 
+/** Width of a source line's leading whitespace, used to track Python block nesting by indent. */
+function leadingIndent(line: string): number {
+  return /^[ \t]*/.exec(line)?.[0].length ?? 0;
+}
+
+/**
+ * Concatenate a `def foo(` line forward across its continuation lines until
+ * the parameter list's closing paren, so a multi-line signature's
+ * parameters are visible to a single regex test.
+ */
+function collectSignatureText(lines: string[], defLineIdx: number): string {
+  let depth = 0;
+  let started = false;
+  let text = '';
+  for (let i = defLineIdx; i < Math.min(lines.length, defLineIdx + 20); i++) {
+    const line = lines[i];
+    text += `${line}\n`;
+    for (const ch of line) {
+      if (ch === '(') {
+        depth++;
+        started = true;
+      } else if (ch === ')') {
+        depth--;
+      }
+    }
+    if (started && depth <= 0) break;
+  }
+  return text;
+}
+
 /**
  * True when `os` resolves to the stdlib module rather than a shadowing
- * parameter or local assignment in the enclosing function. Walks backward
- * from `fromLine` to the nearest enclosing block opener (same scope rules as
- * resolveStringBindingInFile) and fails closed — returns false — when `os`
- * is bound as a parameter/local or no enclosing scope is found in range.
+ * parameter or local assignment in ANY lexically enclosing function — not
+ * just the nearest one, so a nested `def inner(): open(f'...{os.getpid()}...')`
+ * still inherits a shadowed `os` from its outer function — climbing by
+ * indent level, same scope rules as resolveStringBindingInFile. Handles a
+ * multi-line `def` signature via collectSignatureText. Fails closed —
+ * returns false — when `os` is bound as a parameter/local anywhere in the
+ * enclosing chain.
  */
 function isOsBoundToModule(lines: string[], fromLine: number): boolean {
   const paramRe = /(?:\(|,)\s*os\s*(?:[,:=)]|$)/;
   const assignRe = /^\s*os\s*=(?!=)/;
   const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  let scopeIndent = Number.POSITIVE_INFINITY;
   for (let i = fromLine - 1; i >= stop; i--) {
     const line = lines[i];
+    if (line.trim() === '') continue;
+    const indent = leadingIndent(line);
+    if (indent >= scopeIndent) continue;
     if (assignRe.test(line)) return false;
     if (BLOCK_OPENER_RE.test(line)) {
-      return !paramRe.test(line);
+      if (paramRe.test(collectSignatureText(lines, i))) return false;
+      scopeIndent = indent;
     }
   }
   return true;
 }
 
 /**
+ * First top-level argument of a `fn(...)` call text — balances parens and
+ * skips commas/parens inside string literals — or null if the call has no
+ * arguments. Used to isolate `open()`'s path argument from a trailing
+ * second argument (e.g. the file mode).
+ */
+function extractFirstCallArg(callText: string): string | null {
+  const openIdx = callText.indexOf('(');
+  if (openIdx === -1) return null;
+  let depth = 0;
+  let quote: string | null = null;
+  const start = openIdx + 1;
+  for (let i = openIdx; i < callText.length; i++) {
+    const ch = callText[i];
+    if (quote) {
+      if (ch === '\\') {
+        i++;
+      } else if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      depth--;
+      if (depth === 0) return callText.slice(start, i).trim() || null;
+      continue;
+    }
+    if (ch === ',' && depth === 1) {
+      return callText.slice(start, i).trim() || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * True when `argText` is a single Python f-string literal with nothing
+ * concatenated before or after it (e.g. rejects `f'/proc/{os.getpid()}/' +
+ * request.path`, where the untrusted suffix sits outside the `{...}`
+ * placeholders extractPythonFStringExprs looks at).
+ */
+function isBareFString(argText: string): boolean {
+  const m = /^f(['"])/.exec(argText);
+  if (!m) return false;
+  const quote = m[1];
+  let i = 2;
+  while (i < argText.length) {
+    const ch = argText[i];
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ch === quote) {
+      i++;
+      break;
+    }
+    if (ch === '{') {
+      let depth = 1;
+      i++;
+      while (i < argText.length && depth > 0) {
+        if (argText[i] === '{') depth++;
+        else if (argText[i] === '}') depth--;
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return i === argText.length;
+}
+
+/**
  * True when every `{...}` placeholder in a Python f-string passed to `open()`
  * resolves to `os.getpid()` / `os.getppid()` — the process's own PID, which
- * is never attacker-controlled — AND `os` is provably the stdlib module in
- * scope (not shadowed by a parameter/local, e.g. `def read(os): ...`). Used
- * to downgrade `open(f'/proc/{os.getpid()}/...')` off `high`/`critical`
- * without losing the finding for real path traversal (user input reaching
- * `open()` through an f-string, or `os` shadowed by untrusted input).
+ * is never attacker-controlled — the f-string is the ENTIRE path argument
+ * (not concatenated with anything untrusted, e.g. `+ request.path`) — AND
+ * `os` is provably the stdlib module in scope (not shadowed by a
+ * parameter/local, e.g. `def read(os): ...`). Used to downgrade
+ * `open(f'/proc/{os.getpid()}/...')` off `high`/`critical` without losing
+ * the finding for real path traversal.
  */
 function isPythonProcSelfPidOpen(callText: string, lines: string[], fromLine: number): boolean {
   if (!/open\s*\(\s*f["']/.test(callText)) return false;
-  const exprs = extractPythonFStringExprs(callText);
+  const firstArg = extractFirstCallArg(callText);
+  if (!firstArg || !isBareFString(firstArg)) return false;
+  const exprs = extractPythonFStringExprs(firstArg);
   return (
     exprs.length > 0 &&
     exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim())) &&

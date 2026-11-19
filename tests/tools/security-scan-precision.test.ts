@@ -198,6 +198,63 @@ def read_both(request):
     expect(findings[0].confidence).toBe('high');
   });
 
+  test('still detects os.getpid() reads concatenated with an untrusted suffix', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_status(request):
+    with open(f'/proc/{os.getpid()}/' + request.path) as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects a shadowed `os` inherited by a nested function', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(os):
+    def inner():
+        with open(f'/proc/{os.getpid()}/status') as f:
+            return f.read()
+    return inner()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects a shadowed `os` declared in a multi-line function signature', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(
+    os,
+):
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
   // -------------------------------------------------------------------
   // 2. Escaper recognition across a full concatenation
   // -------------------------------------------------------------------
