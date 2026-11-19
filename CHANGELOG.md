@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.4...v3.44.5) (2026-11-19)
+
+
+### Bug Fixes
+
+* **release:** hide incomplete releases until assets verify ([#1923](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1923)) ([293c30a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/293c30a0a8f353b9333b74e96205fd2df5033a58))
+
 ## [3.44.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.3...v3.44.4) (2026-11-19)
 
 
