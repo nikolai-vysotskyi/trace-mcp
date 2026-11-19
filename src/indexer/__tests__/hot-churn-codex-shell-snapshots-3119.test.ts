@@ -79,7 +79,7 @@ describe('TRA-3119: isHotChurnPath and ignore globs', () => {
 
   it('includes shell_snapshots prefix in HOT_CHURN_NATIVE_IGNORE_GLOBS', () => {
     expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('shell_snapshots/**/*.sh');
-    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('**/.codex/shell_snapshots/**/*.sh');
+    expect(HOT_CHURN_NATIVE_IGNORE_GLOBS).toContain('.codex/shell_snapshots/**/*.sh');
 
     const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
     expect(isIgnored('shell_snapshots/abc.1795033480007626000.sh')).toBe(true);
@@ -95,6 +95,19 @@ describe('TRA-3119: isHotChurnPath and ignore globs', () => {
     expect(isIgnored('shell_snapshots/README.md')).toBe(false);
     expect(isIgnored('shell_snapshots/manifest.json')).toBe(false);
     expect(isIgnored('.codex/shell_snapshots/README.md')).toBe(false);
+  });
+
+  it('keeps the native ignore and isHotChurnPath in agreement for a .codex nested under a guarded source dir', () => {
+    // Reviewer F (TRA-3119 review round 2): an unanchored `**/.codex/shell_snapshots/**/*.sh`
+    // natively dropped `src/.codex/shell_snapshots/handler.sh`, while isHotChurnPath
+    // preserves it because `src` is a protected source segment — the watcher silently
+    // lost events for a file the JS filter considers real source. The native glob is now
+    // root-anchored (`.codex/shell_snapshots/**/*.sh`, no leading `**/`), so it defers
+    // every nested `.codex` to isHotChurnPath instead of racing ahead of it.
+    const path = 'src/.codex/shell_snapshots/handler.sh';
+    const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
+    expect(isIgnored(path)).toBe(false);
+    expect(isHotChurnPath(path)).toBe(false);
   });
 });
 

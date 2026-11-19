@@ -113,9 +113,13 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   // TRA-3119: Codex CLI shell state snapshots, pruned by Codex's own retention policy.
   // Narrowed to the `.sh` extension (not the whole directory) so a legitimate
   // `shell_snapshots/README.md` or `manifest.json` is never dropped natively
-  // before `isHotChurnPath`'s own `.sh`-only check ever runs.
+  // before `isHotChurnPath`'s own `.sh`-only check ever runs. The `.codex/`
+  // variant is root-anchored (no leading `**/`): a `.codex` nested under a
+  // guarded source dir (`src/.codex/shell_snapshots/handler.sh`) must reach
+  // `isHotChurnPath`, which preserves it — an unanchored glob would drop its
+  // watcher events natively before that guard ever runs.
   'shell_snapshots/**/*.sh',
-  '**/.codex/shell_snapshots/**/*.sh',
+  '.codex/shell_snapshots/**/*.sh',
 ] as const;
 
 /** Source directory segments that protect enclosed files from being treated as runtime churn. */
