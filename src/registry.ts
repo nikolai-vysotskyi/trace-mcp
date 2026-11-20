@@ -954,6 +954,13 @@ export interface UnregisteredNestedRepo {
  * alternate checkout of an already-known repo, not an independent project —
  * counting each one as "unregistered" buries the warnings that matter under
  * hundreds of ephemeral task-branch entries (TRA-3133).
+ *
+ * The pointer must END at `.git/worktrees/<id>` (optional trailing slash).
+ * A submodule *inside* a linked worktree points further, into
+ * `.git/worktrees/<id>/modules/<submodule>` — that extra `modules/<name>`
+ * segment is a real, independently unregistered repo, not the worktree
+ * itself, and matching a bare `worktrees/` prefix without anchoring the end
+ * would wrongly swallow it too (caught in review, PR #1928).
  */
 function isWorktreeGitFile(gitEntry: string): boolean {
   let stat: fs.Stats;
@@ -969,7 +976,7 @@ function isWorktreeGitFile(gitEntry: string): boolean {
   } catch {
     return false;
   }
-  return /^gitdir:.*\.git[\\/]worktrees[\\/]/m.test(content);
+  return /^gitdir:.*\.git[\\/]worktrees[\\/][^\\/\r\n]+[\\/]?\s*$/m.test(content);
 }
 
 /**

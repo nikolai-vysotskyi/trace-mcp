@@ -358,6 +358,32 @@ describe('findUnregisteredNestedRepos', () => {
     expect(found).toHaveLength(1);
     expect(found[0].nestedRepoRoot).toBe(submodule);
   });
+
+  it('still flags a submodule nested inside a registered linked worktree', () => {
+    // A submodule checked out inside a linked worktree points its gitdir past
+    // the worktree admin dir, into .../.git/worktrees/<id>/modules/<name> —
+    // that extra `modules/<name>` segment is itself an unregistered repo and
+    // must not be mistaken for the worktree pointer it lives under (NEEDS
+    // WORK on PR #1928, Reviewer F — reproduced with the worktree itself
+    // registered as a project root, so its children get scanned).
+    const mainRepo = makeTmpRepo();
+    const worktreeRoot = makeTmpRepo();
+    const submodule = path.join(worktreeRoot, 'vendor-lib');
+    fs.mkdirSync(submodule, { recursive: true });
+    fs.writeFileSync(
+      path.join(worktreeRoot, '.git'),
+      `gitdir: ${path.join(mainRepo, '.git', 'worktrees', 'task-branch')}\n`,
+    );
+    fs.writeFileSync(
+      path.join(submodule, '.git'),
+      `gitdir: ${path.join(mainRepo, '.git', 'worktrees', 'task-branch', 'modules', 'vendor-lib')}\n`,
+    );
+    registerProject(worktreeRoot);
+
+    const found = findUnregisteredNestedRepos();
+    expect(found).toHaveLength(1);
+    expect(found[0].nestedRepoRoot).toBe(submodule);
+  });
 });
 
 describe('findOverlapForNewRoot', () => {
