@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-19T06:30:27.338Z"
+updated: "2026-11-20T06:29:42.734Z"
 active_users:
-  day: 56
-  week: 375
-  month: 531
+  day: 81
+  week: 396
+  month: 550
   first_ping_date: "2026-08-29"
-  days_observed: 83
+  days_observed: 84
   month_window_full: true
-events_28d: 2924
+events_28d: 2973
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2924
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 224742055
-  tokens_saved_raw: 258096580
-  usd_saved: 224.74
+  tokens_saved: 240811127
+  tokens_saved_raw: 303910340
+  usd_saved: 240.81
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 75
-  capped_days: 2
-  raw_ratio: 1.15
+  days: 76
+  capped_days: 3
+  raw_ratio: 1.26
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 415
+  new_installs_28d: 432
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 11
+  retention_dau_mau_pct: 15
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,26 +159,27 @@ usage:
 # against `the internal arrivals ledger` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
   "active": 1744
-  "upgrade": 688
-  "new": 415
+  "upgrade": 719
+  "new": 432
   "(not set)": 38
   "downgrade": 35
   "unknown": 3
 by_version:
-  "3.38.0": 367
+  "3.38.0": 370
   "3.42.7": 77
-  "3.44.0": 73
+  "3.44.0": 74
   "3.43.1": 64
   "3.42.10": 46
+  "3.44.2": 46
   "3.41.0": 42
+  "3.44.3": 41
   "3.42.1": 38
   "3.42.11": 38
-  "3.44.2": 38
   "3.42.4": 37
   "3.44.1": 37
   "3.40.0": 34
@@ -186,14 +187,13 @@ by_version:
   "3.42.9": 32
   "3.39.0": 29
   "3.42.0": 28
-  "3.44.3": 24
   "3.42.6": 21
-  "3.34.6": 12
+  "3.34.6": 11
   "3.42.8": 11
+  "3.44.5": 11
   "3.25.0": 5
   "3.28.0": 5
   "3.27.1": 4
-  "3.37.10": 4
   "3.37.7": 4
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 1103
+  at_or_above: 1138
   below: 0
   unknown: 0
   pct: 100
@@ -258,45 +258,43 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 339
+  "(not set)": 336
   "United States": 27
-  "Russia": 21
+  "Russia": 23
+  "United Arab Emirates": 18
   "China": 14
   "Thailand": 12
-  "United Arab Emirates": 12
   "Brazil": 9
   "Germany": 9
   "Türkiye": 7
   "Italy": 6
   "Canada": 5
-  "Chile": 5
+  "France": 5
   "Austria": 4
-  "France": 4
+  "Chile": 4
   "South Korea": 4
   "Sweden": 4
+  "Australia": 3
   "Indonesia": 3
   "Netherlands": 3
   "Poland": 3
   "Taiwan": 3
-  "Australia": 2
   "Egypt": 2
   "Iran": 2
   "Israel": 2
-  "Morocco": 2
 by_client:
-  "unknown": 394
+  "unknown": 413
   "claude-code": 95
   "codex-mcp-client": 40
-  "antigravity-client": 21
+  "antigravity-client": 22
   "opencode": 21
   "mcp": 8
   "hermes-agent": 6
-  "rmcp": 5
+  "rmcp": 4
   "Cursor": 3
   "Trae": 3
   "copilot-cli": 3
   "Cline": 2
-  "Visual Studio Code": 2
   "bb-plugin-trace-mcp": 2
   "claude-ai": 2
   "cursor-vscode": 2
@@ -306,6 +304,7 @@ by_client:
   "kilo": 2
   "kimi-code": 2
   "mcpenv": 2
+  "pi": 2
   "zcode": 2
+  "Visual Studio Code": 1
   "Zed": 1
-  "agentos": 1
