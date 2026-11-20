@@ -948,6 +948,38 @@ export interface UnregisteredNestedRepo {
 }
 
 /**
+ * True when `gitEntry` is the `.git` *file* a git worktree leaves behind
+ * (`gitdir: <main-repo>/.git/worktrees/<name>`), as opposed to a real `.git`
+ * directory or a submodule's gitdir (`.git/modules/<name>`). A worktree is an
+ * alternate checkout of an already-known repo, not an independent project —
+ * counting each one as "unregistered" buries the warnings that matter under
+ * hundreds of ephemeral task-branch entries (TRA-3133).
+ *
+ * The pointer must END at `.git/worktrees/<id>` (optional trailing slash).
+ * A submodule *inside* a linked worktree points further, into
+ * `.git/worktrees/<id>/modules/<submodule>` — that extra `modules/<name>`
+ * segment is a real, independently unregistered repo, not the worktree
+ * itself, and matching a bare `worktrees/` prefix without anchoring the end
+ * would wrongly swallow it too (caught in review, PR #1928).
+ */
+function isWorktreeGitFile(gitEntry: string): boolean {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(gitEntry);
+  } catch {
+    return false;
+  }
+  if (!stat.isFile()) return false;
+  let content: string;
+  try {
+    content = fs.readFileSync(gitEntry, 'utf8');
+  } catch {
+    return false;
+  }
+  return /^gitdir:.*\.git[\\/]worktrees[\\/][^\\/\r\n]+[\\/]?\s*$/m.test(content);
+}
+
+/**
  * Find sibling repos (their own `.git`) living under a registered project's
  * tree that were never registered themselves — the "zero index coverage" gap
  * (TRA-86), distinct from findOverlappingProjects' "both registered, doubly
@@ -978,8 +1010,9 @@ export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRep
     for (const child of children) {
       if (!child.isDirectory() || NESTED_REPO_SCAN_SKIP_DIRS.has(child.name)) continue;
       const childPath = path.join(dir, child.name);
-      if (fs.existsSync(path.join(childPath, '.git'))) {
-        if (!registeredRoots.has(childPath)) {
+      const gitEntry = path.join(childPath, '.git');
+      if (fs.existsSync(gitEntry)) {
+        if (!registeredRoots.has(childPath) && !isWorktreeGitFile(gitEntry)) {
           results.push({
             parentName: parent.name,
             parentRoot: parent.root,
