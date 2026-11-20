@@ -2347,7 +2347,14 @@ export class IndexingPipeline {
       completedAt: Date.now(),
     });
 
-    logger.info(result, 'Indexing pipeline completed');
+    // The result still carries IDs for callers, but serializing tens of thousands
+    // of them into a single daemon log line can block the event loop and grow
+    // the log by megabytes during a large reconcile.
+    const { changedFileIds, ...logResult } = result;
+    logger.info(
+      { ...logResult, changedFileCount: changedFileIds?.length ?? 0 },
+      'Indexing pipeline completed',
+    );
     return result;
   }
 
@@ -2650,15 +2657,11 @@ export class IndexingPipeline {
           logger.info(
             {
               root: this.rootPath,
-              repairPaths,
+              repairPathCount: repairPaths.length,
               indexed: repairResult.indexed,
               skipped: repairResult.skipped,
               errors: repairResult.errors,
               pendingImports: this._pendingImports.size,
-              pendingImportEntries: [...this._pendingImports.entries()].map(([id, list]) => ({
-                fileId: id,
-                froms: list.map((e) => e.from),
-              })),
             },
             'TRA-1017 deferred repair extraction done',
           );
