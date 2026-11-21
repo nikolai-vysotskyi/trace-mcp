@@ -4730,7 +4730,11 @@ program
         `Index is partial: capped at ${result.truncated.limit} of ${result.truncated.found} files on disk. Increase security.max_files in config to index more.`,
       );
     }
-    logger.info(result, 'Indexing completed');
+    const { changedFileIds, ...logResult } = result;
+    logger.info(
+      { ...logResult, changedFileCount: changedFileIds?.length ?? 0 },
+      'Indexing completed',
+    );
     const skippedDirs = pipeline.getSkippedTopLevelDirs();
     if (skippedDirs.length > 0) {
       logger.info(
