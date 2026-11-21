@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TraceMcpConfigSchema } from '../../config.js';
+import { logger } from '../../logger.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
@@ -471,9 +472,29 @@ describe('indexAll with AbortSignal (TRA-1017)', () => {
         join(root, 'c.ts'),
         "import { foo } from './a';\nexport function keep() { return foo(); }\nexport function newName() { return 7; }\n",
       );
-      await p.indexFiles(['c.ts']);
-      expect(deferredStore.getRepoMetadata('postprocess_incomplete')).toBe('1');
-      await p.__flushEdgeReconcileForTests();
+      const infoSpy = vi.spyOn(logger, 'info');
+      try {
+        await p.indexFiles(['c.ts']);
+        const completed = infoSpy.mock.calls.find(
+          (call) => call[1] === 'Indexing pipeline completed',
+        );
+        expect(completed?.[0]).toMatchObject({ changedFileCount: expect.any(Number) });
+        expect((completed?.[0] as { changedFileCount: number }).changedFileCount).toBeGreaterThan(
+          0,
+        );
+        expect(completed?.[0]).not.toHaveProperty('changedFileIds');
+        expect(deferredStore.getRepoMetadata('postprocess_incomplete')).toBe('1');
+        await p.__flushEdgeReconcileForTests();
+        const repair = infoSpy.mock.calls.find(
+          (call) => call[1] === 'TRA-1017 deferred repair extraction done',
+        );
+        expect(repair?.[0]).toMatchObject({ repairPathCount: expect.any(Number) });
+        expect((repair?.[0] as { repairPathCount: number }).repairPathCount).toBeGreaterThan(0);
+        expect(repair?.[0]).not.toHaveProperty('repairPaths');
+        expect(repair?.[0]).not.toHaveProperty('pendingImportEntries');
+      } finally {
+        infoSpy.mockRestore();
+      }
       expect(deferredStore.getRepoMetadata('postprocess_incomplete')).toBeFalsy();
       expect(esmImportCount()).toBe(healthyImports);
     } finally {
