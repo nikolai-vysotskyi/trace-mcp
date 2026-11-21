@@ -43,7 +43,7 @@ describe('TRA-2530: resolveEdges timeout, cancellation, and event loop responsiv
   });
 
   describe('1. Timeout cancellation promptness and signal propagation', () => {
-    it('executeFrameworkResolveEdges aborts signal on timeout and returns ok([])', async () => {
+    it('executeFrameworkResolveEdges aborts signal on timeout and returns an error (TRA-3135)', async () => {
       let sawAbort = false;
       const slowPlugin: FrameworkPlugin = {
         manifest: {
@@ -75,8 +75,9 @@ describe('TRA-2530: resolveEdges timeout, cancellation, and event loop responsiv
       };
 
       const result = await executeFrameworkResolveEdges(slowPlugin, ctx, 50);
-      expect(result.isOk()).toBe(true);
-      expect(result.value).toEqual([]);
+      // TRA-3135: a timeout is a failed resolution, not a confirmed-empty one —
+      // the caller must not treat it as "this plugin found zero edges".
+      expect(result.isErr()).toBe(true);
       expect(sawAbort).toBe(true);
     });
 

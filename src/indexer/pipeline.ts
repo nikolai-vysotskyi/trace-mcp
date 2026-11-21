@@ -554,6 +554,16 @@ export class IndexingPipeline {
     number,
     { from: string; specifiers: string[]; relPath: string }[]
   >();
+  /**
+   * TRA-3135: set when the most recent runEdgeResolvers() call had a
+   * framework plugin fail/time out. FilePersister deletes a changed file's
+   * outgoing edges before this pass runs, trusting it to rebuild them — a
+   * failure here means that trust wasn't honored, so the TRA-1017
+   * postprocess-incomplete mark must not be cleared even though extraction
+   * itself reported no errors (see the clearPostprocessIncomplete() gate in
+   * runPipeline). Reset at the start of every run.
+   */
+  private _lastResolutionHadFrameworkFailures = false;
   private _gitignore: GitignoreMatcher | undefined;
   private _traceignore: TraceignoreMatcher | undefined;
   private _changedFileIds = new Set<number>();
@@ -2181,6 +2191,7 @@ export class IndexingPipeline {
     }
     this.registry.clearCaches();
     this._changedFileIds.clear();
+    this._lastResolutionHadFrameworkFailures = false;
     this._gitignore = new GitignoreMatcher(this.rootPath);
     // Note: `_scopeRowsRemoved` is deliberately NOT reset here — indexAll sets
     // it just before calling us and the postprocess gate below reads it. It is
@@ -2268,7 +2279,13 @@ export class IndexingPipeline {
           // survives for the next repair. Clean runs keep the pre-existing
           // error semantics (hash-gate retries), so the gate applies only
           // when there was something to repair.
-          if (!wasIncomplete || (!this._isIncremental && result.errors === 0)) {
+          // TRA-3135: a framework plugin that failed/timed out this pass
+          // means resolution did NOT actually complete for the files it
+          // covers, even though nothing threw — don't bless that state.
+          if (
+            (!wasIncomplete || (!this._isIncremental && result.errors === 0)) &&
+            !this._lastResolutionHadFrameworkFailures
+          ) {
             this.clearPostprocessIncomplete();
           }
         }
@@ -2482,6 +2499,9 @@ export class IndexingPipeline {
       scope,
       activeSignal,
     );
+    // TRA-3135: propagate to the pipeline so runPipeline's postprocess-
+    // incomplete clear-gate (and fireEdgeReconcile's own) can see it.
+    if (edgeResolver.hadFrameworkFailures) this._lastResolutionHadFrameworkFailures = true;
     // TRA-1764: the heaviest stages (esm-imports, the three call resolvers,
     // test_covers, file-projection) are async — they commit in chunks with a
     // fair yield between transactions so a full pass no longer holds the
@@ -2626,6 +2646,11 @@ export class IndexingPipeline {
       const needsRepair = this.isPostprocessIncomplete();
       const repairPaths = needsRepair ? this.partitionRepairPaths(this.readIncompleteFiles()) : [];
       let repairErrors = 0;
+      // TRA-3135: this reconcile's own resolveEdges() call is what decides
+      // whether the repair actually succeeded below — a stale `true` left
+      // over from the run that originally triggered this repair must not
+      // block clearing the mark after a clean repair.
+      this._lastResolutionHadFrameworkFailures = false;
       try {
         if (repairPaths.length > 0) {
           // The repair extract mutates, so it marks first: an abort inside it
@@ -2669,7 +2694,12 @@ export class IndexingPipeline {
         // and successful resolver completion must not be equated with
         // successful repair extraction. A scoped discovery/indexFiles run
         // that lands while dirty keeps the mark — only a full repair lifts it.
-        if (needsRepair && repairErrors === 0) this.clearPostprocessIncomplete();
+        // TRA-3135: a framework-plugin failure in THIS reconcile's own
+        // resolveEdges() call means the repair didn't actually restore
+        // everything either — keep the mark for the next attempt.
+        if (needsRepair && repairErrors === 0 && !this._lastResolutionHadFrameworkFailures) {
+          this.clearPostprocessIncomplete();
+        }
         invalidatePageRankCache();
         invalidateSearchCache(this.store.db);
         logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');

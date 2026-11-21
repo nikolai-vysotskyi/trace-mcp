@@ -48,7 +48,9 @@ describe('framework timeout across suspend', () => {
     const result = executeFrameworkResolveEdges(plugin, ctx, 30);
     active = 30;
     await vi.advanceTimersByTimeAsync(30);
-    expect((await result)._unsafeUnwrap()).toEqual([]);
+    // TRA-3135: a timeout is a failed resolution, not a confirmed-empty one —
+    // the caller must not treat it as "this plugin found zero edges".
+    expect((await result).isErr()).toBe(true);
   });
 
   it('scales timeout for large repositories when using default timeout (TRA-2434)', async () => {
