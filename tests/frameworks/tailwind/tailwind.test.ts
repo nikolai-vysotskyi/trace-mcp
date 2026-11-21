@@ -10,6 +10,7 @@ import type {
   ProjectContext,
   ResolveContext,
 } from '../../../src/plugin-api/types.js';
+import { _resetYieldCountForTests, getYieldCount } from '../../../src/utils/event-loop.js';
 
 function makeCtx(deps: Record<string, string> = {}, rootPath = '/tmp/test'): ProjectContext {
   return {
@@ -820,6 +821,49 @@ describe('tailwind — resolveEdges()', () => {
 
     expect(result.isOk()).toBe(true);
     expect(readCalls).toBeLessThan(files.length);
+  });
+
+  // TRA-3135 (Reviewer F follow-up): the abort check only stops a resolver
+  // that has ALREADY blown its budget — it does nothing about why a huge,
+  // mostly-irrelevant corpus burns through the budget in the first place.
+  // Root cause: the old loop iterated (and yielded every 64 files on) the
+  // WHOLE corpus, filtering to CSS/template files only inside the loop body.
+  // This proves the file list is now filtered BEFORE the loop, so the yield
+  // count scales with the relevant subset, not the total file count.
+  it('yields proportionally to the relevant subset, not the whole corpus', async () => {
+    const plugin = mkPlugin('^3.4.0');
+    const RELEVANT_COUNT = 10;
+    const files = [
+      ...Array.from({ length: 20_000 }, (_, i) => ({
+        id: i,
+        path: `src/module${i}.ts`,
+        language: 'typescript',
+      })),
+      ...Array.from({ length: RELEVANT_COUNT }, (_, i) => ({
+        id: 20_000 + i,
+        path: `src/entry${i}.css`,
+        language: 'css',
+      })),
+    ];
+    const ctx: ResolveContext = {
+      rootPath: '/tmp/test',
+      getAllFiles: () => files,
+      getSymbolsByFile: () => [],
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: (p) => (p.endsWith('.css') ? '@tailwind base;' : 'export const x = 1;'),
+    };
+
+    _resetYieldCountForTests();
+    const result = await plugin.resolveEdges(ctx);
+    const yields = getYieldCount();
+
+    expect(result.isOk()).toBe(true);
+    // 20,010 files / 64-per-yield would be ~312 yields on the old,
+    // whole-corpus loop. Filtered to the 10 relevant files, it's 0.
+    expect(yields).toBeLessThan(5);
+    expect(result.isOk() && result.value).toHaveLength(RELEVANT_COUNT);
   });
 });
 

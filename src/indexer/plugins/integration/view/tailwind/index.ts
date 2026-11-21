@@ -114,7 +114,12 @@ const V4_LAYER_THEME_RE = /@layer\s+theme\s*\{/g;
 
 // ─── Regex patterns: v1-v3 CSS directives ────────────────────
 
-const TAILWIND_DIRECTIVE_RE = /@tailwind\s+(base|components|utilities|preflight|screens)/g;
+// TRA-3135: no `g` flag — `resolveEdges()` below calls `.test()` directly on
+// this shared instance per file. A global flag would carry `lastIndex`
+// across those calls, so matching alternated true/false across files with
+// identical `@tailwind` boilerplate. The one caller that needs iteration
+// (extractClassicCss) already builds its own `g`-flagged copy from `.source`.
+const TAILWIND_DIRECTIVE_RE = /@tailwind\s+(base|components|utilities|preflight|screens)/;
 // @apply supports !important modifier on each class: @apply !text-red-500 hover:!bg-blue-500
 const APPLY_RE = /@apply\s+(!?[\w\s/:.![\]()'"-]+?);/g;
 const LAYER_RE = /@layer\s+(base|components|utilities)\s*\{/g;
@@ -414,12 +419,27 @@ export class TailwindPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
+    // TRA-3135: language/path gate BEFORE the loop, not inside it. The old
+    // per-iteration gate (TRA-1602) already skipped the disk read for
+    // non-CSS/template files, but the loop itself — and its `% 64` yield
+    // cadence — still ran once per file in the WHOLE corpus. On a repo where
+    // most files aren't CSS/template (the common case), that inflated the
+    // iteration and yieldToEventLoopFair() call count far beyond what the
+    // relevant file set needed, which is what the scaled executor timeout
+    // actually measures. isCssLike/isTemplateLike only look at language +
+    // path, so filtering up front costs nothing extra. Output-identical:
+    // filtered-out files always hit the same `continue` as before.
+    const relevantFiles = files.filter((f) => {
+      const lang = f.language ?? '';
+      return isCssLike(lang, f.path) || isTemplateLike(lang, f.path);
+    });
+
     // TRA-2505 / TRA-2434: Scope-aware: narrow to changed files during incremental runs.
     const scope = ctx.changeScope;
     const targetFiles =
       scope && scope.changedFileIds && scope.changedFileIds.size > 0
-        ? files.filter((f) => scope.changedFileIds.has(f.id))
-        : files;
+        ? relevantFiles.filter((f) => scope.changedFileIds.has(f.id))
+        : relevantFiles;
 
     if (targetFiles.length === 0) return ok([]);
 
@@ -431,13 +451,7 @@ export class TailwindPlugin implements FrameworkPlugin {
     for (const [index, file] of targetFiles.entries()) {
       if (ctx.signal?.aborted) break;
       if (index > 0 && index % 64 === 0) await yieldToEventLoopFair();
-      // TRA-1602: language gate before the read — only CSS-like and
-      // template-like files can yield a cssSource below, so reading anything
-      // else is pure waste (this loop runs over the whole corpus on every
-      // incremental pass). Output-identical: skipped files always `continue`.
-      const lang = file.language ?? '';
-      const cssLike = isCssLike(lang, file.path);
-      if (!cssLike && !isTemplateLike(lang, file.path)) continue;
+      const cssLike = isCssLike(file.language ?? '', file.path);
       const source = ctx.readFile(file.path);
       if (!source) continue;
 
