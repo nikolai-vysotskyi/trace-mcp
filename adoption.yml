@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-20T06:29:42.734Z"
+updated: "2026-11-21T06:27:23.129Z"
 active_users:
-  day: 81
-  week: 396
-  month: 550
+  day: 55
+  week: 323
+  month: 548
   first_ping_date: "2026-08-29"
-  days_observed: 84
+  days_observed: 85
   month_window_full: true
-events_28d: 2973
+events_28d: 2996
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2973
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 240811127
-  tokens_saved_raw: 303910340
-  usd_saved: 240.81
+  tokens_saved: 246196421
+  tokens_saved_raw: 307077292
+  usd_saved: 246.2
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 76
+  days: 77
   capped_days: 3
-  raw_ratio: 1.26
+  raw_ratio: 1.25
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 432
+  new_installs_28d: 429
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 15
+  retention_dau_mau_pct: 10
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,42 +159,42 @@ usage:
 # against `the internal arrivals ledger` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1744
-  "upgrade": 719
-  "new": 432
-  "(not set)": 38
-  "downgrade": 35
+  "active": 1737
+  "upgrade": 748
+  "new": 429
+  "(not set)": 40
+  "downgrade": 37
   "unknown": 3
 by_version:
-  "3.38.0": 370
+  "3.38.0": 353
   "3.42.7": 77
-  "3.44.0": 74
+  "3.44.0": 75
   "3.43.1": 64
   "3.42.10": 46
   "3.44.2": 46
+  "3.44.3": 45
   "3.41.0": 42
-  "3.44.3": 41
+  "3.42.11": 39
+  "3.44.1": 39
   "3.42.1": 38
-  "3.42.11": 38
   "3.42.4": 37
-  "3.44.1": 37
   "3.40.0": 34
   "3.43.0": 33
   "3.42.9": 32
   "3.39.0": 29
   "3.42.0": 28
+  "3.44.6": 24
   "3.42.6": 21
+  "3.44.5": 17
   "3.34.6": 11
   "3.42.8": 11
-  "3.44.5": 11
   "3.25.0": 5
   "3.28.0": 5
   "3.27.1": 4
-  "3.37.7": 4
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 1138
+  at_or_above: 1155
   below: 0
   unknown: 0
   pct: 100
@@ -258,10 +258,10 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 336
-  "United States": 27
+  "(not set)": 348
+  "United States": 26
   "Russia": 23
-  "United Arab Emirates": 18
+  "United Arab Emirates": 16
   "China": 14
   "Thailand": 12
   "Brazil": 9
@@ -276,28 +276,29 @@ by_country:
   "Sweden": 4
   "Australia": 3
   "Indonesia": 3
+  "Iran": 3
   "Netherlands": 3
   "Poland": 3
   "Taiwan": 3
   "Egypt": 2
-  "Iran": 2
   "Israel": 2
 by_client:
-  "unknown": 413
-  "claude-code": 95
-  "codex-mcp-client": 40
-  "antigravity-client": 22
+  "unknown": 409
+  "claude-code": 96
+  "codex-mcp-client": 39
+  "antigravity-client": 24
   "opencode": 21
-  "mcp": 8
+  "mcp": 7
   "hermes-agent": 6
-  "rmcp": 4
+  "rmcp": 5
   "Cursor": 3
   "Trae": 3
-  "copilot-cli": 3
+  "cursor-vscode": 3
+  "zcode": 3
   "Cline": 2
   "bb-plugin-trace-mcp": 2
   "claude-ai": 2
-  "cursor-vscode": 2
+  "copilot-cli": 2
   "dsh-mcp-client": 2
   "gemini-cli-mcp-client": 2
   "grok-shell-trace": 2
@@ -305,6 +306,5 @@ by_client:
   "kimi-code": 2
   "mcpenv": 2
   "pi": 2
-  "zcode": 2
   "Visual Studio Code": 1
   "Zed": 1
