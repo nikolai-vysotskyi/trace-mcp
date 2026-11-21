@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.6...v3.44.7) (2026-11-21)
+
+
+### Bug Fixes
+
+* bound daemon indexing log payloads ([#1932](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1932)) ([7f1b79f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f1b79f8c060c87d290bc6aa11666a6c5200c496))
+* **registry:** exclude git worktrees from unregistered-nested-repo scan ([#1928](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1928)) ([e2f37d1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e2f37d196b88d27dfb581e6d02cfe10570b48177))
+* **security-scan:** downgrade self-PID /proc reads off CWE-22 high (TRA-3077) ([#1907](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1907)) ([be9d361](https://github.com/nikolai-vysotskyi/trace-mcp/commit/be9d3617b735bfcbbbbb5c96622d9e12fb6b62f2))
+
 ## [3.44.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.5...v3.44.6) (2026-11-19)
 
 
