@@ -255,6 +255,42 @@ def read_status(
     expect(findings[0].confidence).toBe('high');
   });
 
+  test.each([
+    [
+      'an outer assignment beside a nested function',
+      `import os
+def read_status(request):
+    os = request
+    def inner():
+        return open(f'/proc/{os.getpid()}/status')
+    return inner()`,
+    ],
+    [
+      'an annotated assignment',
+      `import os
+def read_status(request):
+    os: object = request
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+    [
+      'an unrelated module imported as os',
+      `import custom_os as os
+def read_status():
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+    [
+      'a missing module import',
+      `def read_status():
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+  ])('keeps CWE-22 high for %s', (_name, source) => {
+    writeFile(store, 'src/memory_monitor.py', source, 'python');
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
   // -------------------------------------------------------------------
   // 2. Escaper recognition across a full concatenation
   // -------------------------------------------------------------------

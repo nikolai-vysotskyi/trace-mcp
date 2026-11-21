@@ -1195,63 +1195,20 @@ function extractCallText(line: string, startIndex: number): string {
   return line.slice(startIndex, i);
 }
 
-/** Width of a source line's leading whitespace, used to track Python block nesting by indent. */
-function leadingIndent(line: string): number {
-  return /^[ \t]*/.exec(line)?.[0].length ?? 0;
-}
-
 /**
- * Concatenate a `def foo(` line forward across its continuation lines until
- * the parameter list's closing paren, so a multi-line signature's
- * parameters are visible to a single regex test.
+ * Only treat `os` as the stdlib module when the whole file has a plain import
+ * and no other references to that name besides PID calls. Any other `os`
+ * token might be a binding (including an outer scope, annotated assignment,
+ * import alias, or loop target), so the finding keeps its original severity.
+ * Dynamic namespace writes and star imports also prevent the downgrade.
  */
-function collectSignatureText(lines: string[], defLineIdx: number): string {
-  let depth = 0;
-  let started = false;
-  let text = '';
-  for (let i = defLineIdx; i < Math.min(lines.length, defLineIdx + 20); i++) {
-    const line = lines[i];
-    text += `${line}\n`;
-    for (const ch of line) {
-      if (ch === '(') {
-        depth++;
-        started = true;
-      } else if (ch === ')') {
-        depth--;
-      }
-    }
-    if (started && depth <= 0) break;
-  }
-  return text;
-}
-
-/**
- * True when `os` resolves to the stdlib module rather than a shadowing
- * parameter or local assignment in ANY lexically enclosing function — not
- * just the nearest one, so a nested `def inner(): open(f'...{os.getpid()}...')`
- * still inherits a shadowed `os` from its outer function — climbing by
- * indent level, same scope rules as resolveStringBindingInFile. Handles a
- * multi-line `def` signature via collectSignatureText. Fails closed —
- * returns false — when `os` is bound as a parameter/local anywhere in the
- * enclosing chain.
- */
-function isOsBoundToModule(lines: string[], fromLine: number): boolean {
-  const paramRe = /(?:\(|,)\s*os\s*(?:[,:=)]|$)/;
-  const assignRe = /^\s*os\s*=(?!=)/;
-  const stop = Math.max(0, fromLine - GUARD_WINDOW);
-  let scopeIndent = Number.POSITIVE_INFINITY;
-  for (let i = fromLine - 1; i >= stop; i--) {
-    const line = lines[i];
-    if (line.trim() === '') continue;
-    const indent = leadingIndent(line);
-    if (indent >= scopeIndent) continue;
-    if (assignRe.test(line)) return false;
-    if (BLOCK_OPENER_RE.test(line)) {
-      if (paramRe.test(collectSignatureText(lines, i))) return false;
-      scopeIndent = indent;
-    }
-  }
-  return true;
+function isOsBoundToModule(lines: string[]): boolean {
+  const imports = lines.filter((line) => line === 'import os');
+  if (imports.length !== 1) return false;
+  const source = lines.filter((line) => line !== 'import os').join('\n');
+  if (/\b(?:exec|eval|globals|locals)\s*\(|\bimport\s+\*/.test(source)) return false;
+  const otherUses = source.replace(/\bos\.get(?:p)?pid\(\)/g, '');
+  return !/\bos\b/.test(otherUses);
 }
 
 /**
@@ -1342,7 +1299,7 @@ function isBareFString(argText: string): boolean {
  * `open(f'/proc/{os.getpid()}/...')` off `high`/`critical` without losing
  * the finding for real path traversal.
  */
-function isPythonProcSelfPidOpen(callText: string, lines: string[], fromLine: number): boolean {
+function isPythonProcSelfPidOpen(callText: string, lines: string[]): boolean {
   if (!/open\s*\(\s*f["']/.test(callText)) return false;
   const firstArg = extractFirstCallArg(callText);
   if (!firstArg || !isBareFString(firstArg)) return false;
@@ -1350,7 +1307,7 @@ function isPythonProcSelfPidOpen(callText: string, lines: string[], fromLine: nu
   return (
     exprs.length > 0 &&
     exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim())) &&
-    isOsBoundToModule(lines, fromLine)
+    isOsBoundToModule(lines)
   );
 }
 
@@ -1935,7 +1892,7 @@ export function scanSecurity(
             if (
               rule.key === 'path_traversal' &&
               file.language === 'python' &&
-              isPythonProcSelfPidOpen(extractCallText(line, match.index), lines, lineIdx)
+              isPythonProcSelfPidOpen(extractCallText(line, match.index), lines)
             ) {
               severity = 'low';
               confidence = 'low';
