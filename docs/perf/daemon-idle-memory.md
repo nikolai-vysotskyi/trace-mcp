@@ -727,3 +727,25 @@ The loaded-project count changed throughout this window, and indexing and
 watcher traffic continued. These two endpoints therefore cannot establish an
 idle leak rate or an isolated memory ceiling. TRA-2061 remains the owner of
 heap attribution; TRA-3054 separately tracks the client-record lifecycle.
+
+---
+
+## 2026-11-21 — RSS versus physical footprint during checkout churn
+
+Read-only sample of the installed v3.44.7 daemon (PID 27622) at about
+22:02 UTC, 49 minutes after startup. `/health` returned `ok`; `/debug/memory`
+reported approximately 2,347 MB RSS, 174 MB used JS heap, 41 MB external
+memory, two loaded projects, seven session transports, and about 253 KB of
+tree cache. `footprint -p 27622` reported a **353 MB physical footprint**
+(2,812 MB peak), while `ps` reported about 3,097 MB RSS. The footprint is a
+separate macOS accounting measure, not the same quantity as RSS; this sample
+does not support describing the RSS gap as private memory held by the daemon.
+
+The same process's one-minute vitals fluctuated from 2,143 to 2,979 MB RSS
+as the loaded-project count changed from two to three. The log also recorded
+13 FSEvents-drop warnings, four storm deferrals and three cooldown passes,
+and `ps` showed CPU above 200% at the time of the footprint sample. This was
+**not an idle measurement** and cannot validate the idle ceiling or establish
+a leak rate. TRA-2061 remains the owner of heap attribution; TRA-3068 and
+TRA-2603 cover the reconcile stalls. For future field samples, collect both
+`/debug/memory` and `footprint -p <pid>` before interpreting high RSS.
