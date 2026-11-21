@@ -125,6 +125,172 @@ export function read(pid: number, other: string): string {
     expect(scan(['path_traversal']).findings).toHaveLength(1);
   });
 
+  test('downgrades Python open() reading /proc/{os.getpid()} off the default report', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_status():
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    expect(scan(['path_traversal']).findings).toHaveLength(0);
+
+    const withLow = scan(['path_traversal'], { includeLow: true }).findings;
+    expect(withLow).toHaveLength(1);
+    expect(withLow[0].severity).toBe('low');
+    expect(withLow[0].confidence).toBe('low');
+  });
+
+  test('still detects Python open() reading /proc/{pid} when the pid is attacker-controlled', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(user_pid):
+    with open(f'/proc/{user_pid}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects os.getpid() reads when a parameter named `os` shadows the module', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(os):
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('a safe self-pid open() on a line does not downgrade an unsafe open() earlier on that line', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_both(request):
+    open(request.path); open(f'/proc/{os.getpid()}/status')
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects os.getpid() reads concatenated with an untrusted suffix', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+import os
+
+def read_status(request):
+    with open(f'/proc/{os.getpid()}/' + request.path) as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects a shadowed `os` inherited by a nested function', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(os):
+    def inner():
+        with open(f'/proc/{os.getpid()}/status') as f:
+            return f.read()
+    return inner()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('still detects a shadowed `os` declared in a multi-line function signature', () => {
+    writeFile(
+      store,
+      'src/memory_monitor.py',
+      `
+def read_status(
+    os,
+):
+    with open(f'/proc/{os.getpid()}/status') as f:
+        return f.read()
+`,
+      'python',
+    );
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test.each([
+    [
+      'an outer assignment beside a nested function',
+      `import os
+def read_status(request):
+    os = request
+    def inner():
+        return open(f'/proc/{os.getpid()}/status')
+    return inner()`,
+    ],
+    [
+      'an annotated assignment',
+      `import os
+def read_status(request):
+    os: object = request
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+    [
+      'an unrelated module imported as os',
+      `import custom_os as os
+def read_status():
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+    [
+      'a missing module import',
+      `def read_status():
+    return open(f'/proc/{os.getpid()}/status')`,
+    ],
+  ])('keeps CWE-22 high for %s', (_name, source) => {
+    writeFile(store, 'src/memory_monitor.py', source, 'python');
+    const findings = scan(['path_traversal']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].confidence).toBe('high');
+  });
+
   // -------------------------------------------------------------------
   // 2. Escaper recognition across a full concatenation
   // -------------------------------------------------------------------

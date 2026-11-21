@@ -828,6 +828,14 @@ const PATH_ROOT_ANCHORS = new Set<string>([
 ]);
 
 /**
+ * `os.getpid()` / `os.getppid()` — the running process's own PID, sourced
+ * from the kernel, never from request/user input. An f-string whose only
+ * interpolations resolve to this call cannot carry attacker-controlled path
+ * segments, no matter what literal text surrounds it (e.g. `/proc/{os.getpid()}/status`).
+ */
+const PY_SELF_PID_EXPR_RE = /^os\.(?:getpid|getppid)\(\)$/;
+
+/**
  * Identifier names commonly used to hold a hardcoded `http://localhost:N` /
  * `http://127.0.0.1:N` URL base. SSRF findings whose interpolated base resolves
  * to such a literal are downgraded.
@@ -1162,6 +1170,145 @@ function classifyPathResolve(line: string): { drop: true } | { drop: false; down
   if (!m) return { drop: false, downgrade: false };
   if (PATH_ROOT_ANCHORS.has(m[1])) return { drop: false, downgrade: true };
   return { drop: false, downgrade: false };
+}
+
+/**
+ * Extract the full `fn(...)` call text starting at `startIndex` by balancing
+ * parens. Scopes a per-call check to the call that actually matched, so it
+ * can't bleed into a second, unrelated call later on the same line.
+ */
+function extractCallText(line: string, startIndex: number): string {
+  const openIdx = line.indexOf('(', startIndex);
+  if (openIdx === -1) return line.slice(startIndex);
+  let depth = 0;
+  let i = openIdx;
+  for (; i < line.length; i++) {
+    if (line[i] === '(') depth++;
+    else if (line[i] === ')') {
+      depth--;
+      if (depth === 0) {
+        i++;
+        break;
+      }
+    }
+  }
+  return line.slice(startIndex, i);
+}
+
+/**
+ * Only treat `os` as the stdlib module when the whole file has a plain import
+ * and no other references to that name besides PID calls. Any other `os`
+ * token might be a binding (including an outer scope, annotated assignment,
+ * import alias, or loop target), so the finding keeps its original severity.
+ * Dynamic namespace writes and star imports also prevent the downgrade.
+ */
+function isOsBoundToModule(lines: string[]): boolean {
+  const imports = lines.filter((line) => line === 'import os');
+  if (imports.length !== 1) return false;
+  const source = lines.filter((line) => line !== 'import os').join('\n');
+  if (/\b(?:exec|eval|globals|locals)\s*\(|\bimport\s+\*/.test(source)) return false;
+  const otherUses = source.replace(/\bos\.get(?:p)?pid\(\)/g, '');
+  return !/\bos\b/.test(otherUses);
+}
+
+/**
+ * First top-level argument of a `fn(...)` call text — balances parens and
+ * skips commas/parens inside string literals — or null if the call has no
+ * arguments. Used to isolate `open()`'s path argument from a trailing
+ * second argument (e.g. the file mode).
+ */
+function extractFirstCallArg(callText: string): string | null {
+  const openIdx = callText.indexOf('(');
+  if (openIdx === -1) return null;
+  let depth = 0;
+  let quote: string | null = null;
+  const start = openIdx + 1;
+  for (let i = openIdx; i < callText.length; i++) {
+    const ch = callText[i];
+    if (quote) {
+      if (ch === '\\') {
+        i++;
+      } else if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      depth--;
+      if (depth === 0) return callText.slice(start, i).trim() || null;
+      continue;
+    }
+    if (ch === ',' && depth === 1) {
+      return callText.slice(start, i).trim() || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * True when `argText` is a single Python f-string literal with nothing
+ * concatenated before or after it (e.g. rejects `f'/proc/{os.getpid()}/' +
+ * request.path`, where the untrusted suffix sits outside the `{...}`
+ * placeholders extractPythonFStringExprs looks at).
+ */
+function isBareFString(argText: string): boolean {
+  const m = /^f(['"])/.exec(argText);
+  if (!m) return false;
+  const quote = m[1];
+  let i = 2;
+  while (i < argText.length) {
+    const ch = argText[i];
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ch === quote) {
+      i++;
+      break;
+    }
+    if (ch === '{') {
+      let depth = 1;
+      i++;
+      while (i < argText.length && depth > 0) {
+        if (argText[i] === '{') depth++;
+        else if (argText[i] === '}') depth--;
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return i === argText.length;
+}
+
+/**
+ * True when every `{...}` placeholder in a Python f-string passed to `open()`
+ * resolves to `os.getpid()` / `os.getppid()` — the process's own PID, which
+ * is never attacker-controlled — the f-string is the ENTIRE path argument
+ * (not concatenated with anything untrusted, e.g. `+ request.path`) — AND
+ * `os` is provably the stdlib module in scope (not shadowed by a
+ * parameter/local, e.g. `def read(os): ...`). Used to downgrade
+ * `open(f'/proc/{os.getpid()}/...')` off `high`/`critical` without losing
+ * the finding for real path traversal.
+ */
+function isPythonProcSelfPidOpen(callText: string, lines: string[]): boolean {
+  if (!/open\s*\(\s*f["']/.test(callText)) return false;
+  const firstArg = extractFirstCallArg(callText);
+  if (!firstArg || !isBareFString(firstArg)) return false;
+  const exprs = extractPythonFStringExprs(firstArg);
+  return (
+    exprs.length > 0 &&
+    exprs.every((e) => PY_SELF_PID_EXPR_RE.test(e.trim())) &&
+    isOsBoundToModule(lines)
+  );
 }
 
 /**
@@ -1740,6 +1887,17 @@ export function scanSecurity(
                 confidence = 'low';
                 evidence = evidence ?? 'path.resolve anchored to known root directory';
               }
+            }
+
+            if (
+              rule.key === 'path_traversal' &&
+              file.language === 'python' &&
+              isPythonProcSelfPidOpen(extractCallText(line, match.index), lines)
+            ) {
+              severity = 'low';
+              confidence = 'low';
+              evidence =
+                evidence ?? 'path built from os.getpid()/os.getppid(), not attacker-controlled';
             }
 
             if (rule.key === 'ssrf' && usesTemplate) {
