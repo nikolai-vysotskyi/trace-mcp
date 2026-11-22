@@ -53,11 +53,37 @@ export class FilePersister {
    * inserts the new symbols, so we can diff old vs new names per file.
    */
   private _pendingOldNames = new Map<number, Array<{ name: string; id: number }>>();
+  /**
+   * Memoized: edge type names a plugin has explicitly declared via
+   * resolveEdgesOwnedTypes (opt-in — see FrameworkPlugin.resolveEdgesOwnedTypes).
+   * Computed once per FilePersister instance — the registry's plugin set
+   * doesn't change mid-run.
+   */
+  private _resolveEdgesOwnedTypeNames: string[] | undefined;
 
   constructor(
     private state: PipelineState,
     private storeRawEdges: StoreRawEdgesFn,
   ) {}
+
+  /**
+   * TRA-3159: edge types a plugin has explicitly opted in as resolveEdges()-
+   * exclusive are excluded from the fast-path blanket delete below so that
+   * Pass 2 (EdgeResolver) can own deleting+replacing them atomically, only
+   * once it has a fresh result — a timeout/error there then leaves the
+   * previously persisted edges in place instead of losing them outright.
+   * Deliberately NOT every type a resolveEdges-capable plugin declares: a
+   * plugin may also emit some of its declared types from extractNodes
+   * (Pass 1) — only resolveEdgesOwnedTypes is a safe-to-defer signal.
+   */
+  private getResolveEdgesOwnedTypeNames(): string[] {
+    if (!this._resolveEdgesOwnedTypeNames) {
+      this._resolveEdgesOwnedTypeNames = this.state.registry
+        .getAllFrameworkPlugins()
+        .flatMap((p) => p.resolveEdgesOwnedTypes ?? []);
+    }
+    return this._resolveEdgesOwnedTypeNames;
+  }
 
   /**
    * Persist phase: write a batch of extractions to DB in chunked transactions.
@@ -203,7 +229,14 @@ export class FilePersister {
         // edits). This subsumes the old import-only cleanup (imports are a
         // subset of outgoing); pendingImports still drives re-resolution
         // when the file keeps imports.
-        store.deleteOutgoingEdgesForFileNodes(fileId);
+        // TRA-3159: except framework-resolveEdges-owned types — node ids are
+        // stable on this path, so EdgeResolver can safely defer deleting
+        // those until it actually has a fresh result (see
+        // getResolveEdgesOwnedTypeNames).
+        store.deleteOutgoingEdgesForFileNodesExcludingTypes(
+          fileId,
+          this.getResolveEdgesOwnedTypeNames(),
+        );
         // Reviewer C (PR #1318): the wipe above also drops persist-time
         // `otherEdges` (e.g. Python `py_inherits` / `py_uses_decorator`),
         // which no resolver re-emits. Re-save them from the current

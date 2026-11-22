@@ -43,7 +43,7 @@ describe('TRA-2530: resolveEdges timeout, cancellation, and event loop responsiv
   });
 
   describe('1. Timeout cancellation promptness and signal propagation', () => {
-    it('executeFrameworkResolveEdges aborts signal on timeout and returns ok([])', async () => {
+    it('executeFrameworkResolveEdges aborts signal on timeout and returns Err (TRA-3159)', async () => {
       let sawAbort = false;
       const slowPlugin: FrameworkPlugin = {
         manifest: {
@@ -75,8 +75,10 @@ describe('TRA-2530: resolveEdges timeout, cancellation, and event loop responsiv
       };
 
       const result = await executeFrameworkResolveEdges(slowPlugin, ctx, 50);
-      expect(result.isOk()).toBe(true);
-      expect(result.value).toEqual([]);
+      // TRA-3159: a timeout must be distinguishable from the plugin
+      // legitimately resolving to zero edges, so callers know NOT to treat
+      // previously persisted edges of this plugin's types as stale.
+      expect(result.isErr()).toBe(true);
       expect(sawAbort).toBe(true);
     });
 

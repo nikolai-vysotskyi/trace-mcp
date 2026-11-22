@@ -1,4 +1,4 @@
-import { ok, type TraceMcpResult } from '../errors.js';
+import { err, ok, pluginError, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 import type {
   ExtractSymbolsOptions,
@@ -249,7 +249,13 @@ export async function executeFrameworkResolveEdges(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logger.error({ plugin: plugin.manifest.name, error: msg }, 'Framework resolveEdges error');
-    return ok([]);
+    // TRA-3159: a timeout/exception is NOT the same as the plugin legitimately
+    // resolving to zero edges (that case returns ok([]) from the plugin itself,
+    // untouched above). Callers rely on this distinction to decide whether it's
+    // safe to replace previously stored edges of this plugin's types — an Err
+    // here means "resolution did not complete," so the caller must leave
+    // whatever is already persisted alone instead of wiping it.
+    return err(pluginError(plugin.manifest.name, msg));
   }
 }
 

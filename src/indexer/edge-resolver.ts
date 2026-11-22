@@ -237,9 +237,39 @@ export class EdgeResolver {
       if (signal?.aborted) throw new IndexAbortedError('resolvePluginEdges aborted');
       if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
       const result = await executeFrameworkResolveEdges(plugin, ctx);
+      // TRA-3159: an Err here means resolution did not complete (timeout or
+      // thrown exception) — leave whatever this plugin's edges already are
+      // (FilePersister deferred deleting them for exactly this reason) rather
+      // than replacing them with nothing.
       if (result.isErr()) return;
+      // Only plugins that explicitly opted in via resolveEdgesOwnedTypes had
+      // those specific types deferred by FilePersister — anything else keeps
+      // today's behavior (Pass 1 already wiped it; this is a pure insert).
+      if ((plugin.resolveEdgesOwnedTypes?.length ?? 0) > 0) {
+        this.replaceOwnedEdgeTypes(plugin, ctx);
+      }
       await this.storeRawEdgesAsync(result.value, signal);
     });
+  }
+
+  /**
+   * TRA-3159: delete this plugin's resolveEdgesOwnedTypes before inserting
+   * its fresh resolveEdges() result — scoped to the changed files on an
+   * incremental pass, unscoped (whole corpus) on a full run, mirroring what
+   * FilePersister used to do unconditionally before deferring these types to
+   * this pass. Only reached once resolveEdges() has actually succeeded.
+   */
+  private replaceOwnedEdgeTypes(plugin: FrameworkPlugin, ctx: ResolveContext): void {
+    const edgeTypeNames = plugin.resolveEdgesOwnedTypes ?? [];
+    if (edgeTypeNames.length === 0) return;
+    const changedFileIds = ctx.changeScope?.changedFileIds;
+    if (changedFileIds && changedFileIds.size > 0) {
+      for (const fileId of changedFileIds) {
+        this.state.store.deleteOutgoingEdgesForFileNodesByTypes(fileId, edgeTypeNames);
+      }
+    } else {
+      this.state.store.deleteEdgesByTypes(edgeTypeNames);
+    }
   }
 
   /**

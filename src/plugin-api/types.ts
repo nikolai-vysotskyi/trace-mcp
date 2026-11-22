@@ -278,6 +278,26 @@ export interface FrameworkPlugin {
     ctx: ResolveContext,
   ): TraceMcpResult<RawEdge[]> | Promise<TraceMcpResult<RawEdge[]>>;
   configure?(config: Record<string, unknown>): void;
+  /**
+   * TRA-3159: edge-type names from registerSchema().edgeTypes that this
+   * plugin's resolveEdges() exclusively produces — extractNodes() NEVER
+   * emits them for any file. Declaring a type here lets the pipeline defer
+   * deleting its old rows (on the fast symbol-update path, where node ids
+   * are stable) until resolveEdges() actually succeeds, instead of wiping
+   * them unconditionally before Pass 2 runs — so a resolver timeout/error
+   * leaves the prior edges in place rather than losing them with no
+   * replacement.
+   *
+   * Opt-in and additive: omitting this (the default for every existing
+   * plugin) keeps today's behavior exactly — Pass 1 still wipes all of this
+   * plugin's outgoing edges unconditionally, and Pass 2 only ever inserts.
+   * Do NOT list a type here if extractNodes() can ever emit it too (e.g. via
+   * `FileParseResult.edges` / `frameworkExtracts`) — Pass 2 will delete ALL
+   * existing rows of that type in scope before inserting resolveEdges()'
+   * result, which would silently drop extractNodes-sourced rows of the same
+   * type on every successful pass, not just on failure.
+   */
+  resolveEdgesOwnedTypes?: string[];
 }
 
 // --- Resolve context (Pass 2) ---
