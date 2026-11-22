@@ -47,4 +47,18 @@ describe('bounded mined-decision context', () => {
     expect(result.content).not.toContain('�');
     expect(result.content).not.toContain('\ud83d');
   });
+
+  it('does not strip a combining mark from an NFD word', () => {
+    const [result] = mine(`${decision}${' '.repeat(196)}cafe\u0301 more context follows`);
+    expect(result).toBeDefined();
+    expect(result.content).not.toMatch(/cafe$/);
+    expect(result.content).not.toContain('�');
+  });
+
+  it('does not cut a joined emoji sequence', () => {
+    const [result] = mine(`${decision}${' '.repeat(198)}👩‍💻 more context follows`);
+    expect(result).toBeDefined();
+    expect(result.content).not.toContain('👩');
+    expect(result.content).not.toContain('�');
+  });
 });

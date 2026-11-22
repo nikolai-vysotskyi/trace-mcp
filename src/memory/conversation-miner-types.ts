@@ -317,27 +317,27 @@ function inferTags(content: string): string[] {
   return tags;
 }
 
+const CONTEXT_GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
 /** Keep a bounded context window without manufacturing partial words. */
 function boundedDecisionContext(text: string, matchStart: number, matchEnd: number): string {
-  const splitsSurrogate = (index: number): boolean =>
-    index > 0 &&
-    index < text.length &&
-    text.charCodeAt(index - 1) >= 0xd800 &&
-    text.charCodeAt(index - 1) <= 0xdbff &&
-    text.charCodeAt(index) >= 0xdc00 &&
-    text.charCodeAt(index) <= 0xdfff;
+  const graphemes = CONTEXT_GRAPHEMES.segment(text);
   const isWordAt = (index: number): boolean => {
     if (index < 0 || index >= text.length) return false;
     const code = text.charCodeAt(index);
     const start = code >= 0xdc00 && code <= 0xdfff ? index - 1 : index;
-    return /[\p{L}\p{N}_]/u.test(String.fromCodePoint(text.codePointAt(start)!));
+    return /[\p{L}\p{M}\p{N}_]/u.test(String.fromCodePoint(text.codePointAt(start)!));
   };
 
   let start = Math.max(0, matchStart - 200);
   let end = Math.min(text.length, matchEnd + 200);
-  while (start < matchStart && (splitsSurrogate(start) || (isWordAt(start - 1) && isWordAt(start))))
-    start++;
-  while (end > matchEnd && (splitsSurrogate(end) || (isWordAt(end - 1) && isWordAt(end)))) end--;
+  const startCluster = graphemes.containing(start);
+  if (startCluster && startCluster.index < start)
+    start = startCluster.index + startCluster.segment.length;
+  const endCluster = graphemes.containing(end);
+  if (endCluster && endCluster.index < end) end = endCluster.index;
+  while (start < matchStart && isWordAt(start - 1) && isWordAt(start)) start++;
+  while (end > matchEnd && isWordAt(end - 1) && isWordAt(end)) end--;
   return text.slice(start, end).trim();
 }
 
