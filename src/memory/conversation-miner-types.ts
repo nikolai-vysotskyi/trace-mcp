@@ -317,6 +317,30 @@ function inferTags(content: string): string[] {
   return tags;
 }
 
+const CONTEXT_GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** Keep a bounded context window without manufacturing partial words. */
+function boundedDecisionContext(text: string, matchStart: number, matchEnd: number): string {
+  const graphemes = CONTEXT_GRAPHEMES.segment(text);
+  const isWordAt = (index: number): boolean => {
+    if (index < 0 || index >= text.length) return false;
+    const code = text.charCodeAt(index);
+    const start = code >= 0xdc00 && code <= 0xdfff ? index - 1 : index;
+    return /[\p{L}\p{M}\p{N}_]/u.test(String.fromCodePoint(text.codePointAt(start)!));
+  };
+
+  let start = Math.max(0, matchStart - 200);
+  let end = Math.min(text.length, matchEnd + 200);
+  const startCluster = graphemes.containing(start);
+  if (startCluster && startCluster.index < start)
+    start = startCluster.index + startCluster.segment.length;
+  const endCluster = graphemes.containing(end);
+  if (endCluster && endCluster.index < end) end = endCluster.index;
+  while (start < matchStart && isWordAt(start - 1) && isWordAt(start)) start++;
+  while (end > matchEnd && isWordAt(end - 1) && isWordAt(end)) end--;
+  return text.slice(start, end).trim();
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // DECISION EXTRACTION
 // ════════════════════════════════════════════════════════════════════════
@@ -353,10 +377,11 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
       while ((match = pattern.pattern.exec(turn.text)) !== null) {
         let title = pattern.titleExtractor(match, contextText);
 
-        // Extract surrounding context (±200 chars around match)
-        const start = Math.max(0, match.index - 200);
-        const end = Math.min(turn.text.length, match.index + match[0].length + 200);
-        const content = turn.text.slice(start, end).trim();
+        const content = boundedDecisionContext(
+          turn.text,
+          match.index,
+          match.index + match[0].length,
+        );
 
         // Quality gate (TRA-1056 Point 1):
         // The title of a mined decision must be a complete statement.
