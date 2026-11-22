@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.7...v3.44.8) (2026-11-22)
+
+
+### Bug Fixes
+
+* prevent watchdog kill after macOS wake (TRA-2622) ([#1709](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1709)) ([dc0b232](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dc0b232a4b5825ae3ab853048c050c97a4943f6c))
+
 ## [3.44.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.6...v3.44.7) (2026-11-21)
 
 
