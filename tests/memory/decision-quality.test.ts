@@ -385,6 +385,26 @@ describe('endsMidClause', () => {
   ])('does not flag a complete tail: %s', (s) => {
     expect(endsMidClause(s)).toBe(false);
   });
+
+  // TRA-3170: the trailing-quote-strip regex used to erase the apostrophe
+  // of a cut-off contraction before the dangling-tail check ever saw it, so
+  // "...the electron-builder step. I'" read as ending on the clean word "I".
+  it.each([
+    "...the electron-builder step. I'",
+    "TclOO: `constructor` not being found. Let's check isn'",
+    "the fix is clear. I'",
+  ])('flags a truncated contraction stem: %s', (s) => {
+    expect(endsMidClause(s)).toBe(true);
+  });
+
+  it.each([
+    "Call it 'done'", // balanced closing quote, not a cut contraction
+    "Respect the users' settings", // plural possessive, a real word
+    "Use 'I'", // balanced quote around a stem that's ALSO in the truncation set
+    "The final value is 'I'", // same overlap, mid-sentence
+  ])('does not flag a legitimate trailing quote: %s', (s) => {
+    expect(endsMidClause(s)).toBe(false);
+  });
 });
 
 describe('hasTableRemnant', () => {
@@ -507,10 +527,35 @@ describe('TRA-1056 — complete statements and quality helpers', () => {
       expect(['title_mid_clause', 'title_incomplete']).toContain(reason);
     });
 
+    // TRA-3170: real stored decision #162 — content was cut mid-contraction
+    // ("...the electron-builder step. I'"). The trailing-quote strip used to
+    // erase the apostrophe before the dangling-tail check ran, so this
+    // passed the gate and sat in the knowledge graph as an "active" decision.
+    it('rejects live #162 contraction-truncated content', () => {
+      const reason = minedDecisionRejectReason(
+        'electron-builder OOMs during its `node_modules` scan phase',
+        "The issue is clear. electron-builder OOMs during its `node_modules` scan phase. The default Node.js heap (~2GB) isn't enough for the monorepo's dependency tree. Both x64 and arm64 crash at ~2035 MB.\n\nThe fix is to increase the Node.js heap limit for the electron-builder step. I'",
+      );
+      expect(reason).toBe('content_truncated');
+    });
+
     it('accepts repaired #204 title', () => {
       const reason = minedDecisionRejectReason(
         'Left the issue in `in_progress` rather than `in_review`',
         'Left the issue in `in_progress` rather than `in_review` — no work exists to review yet; Builder owns it from here.',
+      );
+      expect(reason).toBeNull();
+    });
+
+    // TRA-3170 PR #1936 review (Reviewer F): the first version of the
+    // contraction-stem check flagged ANY stem wrapped in a balanced closing
+    // quote, even when the stem happens to collide with a truncation stem
+    // ("I"). A complete decision ending on a quoted "'I'" must not be
+    // rejected.
+    it('does not reject a complete decision ending on a balanced quoted "I"', () => {
+      const reason = minedDecisionRejectReason(
+        'Set the mode to enabled',
+        "We changed the configuration to use this mode. The final value is 'I'",
       );
       expect(reason).toBeNull();
     });

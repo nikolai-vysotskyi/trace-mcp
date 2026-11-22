@@ -225,6 +225,47 @@ const DANGLING_TAIL_TOKENS = new Set([
 ]);
 
 /**
+ * Contraction stems that are never a complete word on their own — a title or
+ * content string ending in one of these plus a bare apostrophe (`I'`,
+ * `isn'`, `didn'`) was cut mid-contraction, not closed with a legitimate
+ * quote. Checked in {@link endsMidClause} before the generic trailing-quote
+ * strip, which would otherwise discard the apostrophe and hide the cut.
+ */
+const TRUNCATED_CONTRACTION_STEMS = new Set([
+  'i',
+  'you',
+  'he',
+  'she',
+  'we',
+  'they',
+  'it',
+  'that',
+  'there',
+  'here',
+  'what',
+  'who',
+  'let',
+  'isn',
+  'aren',
+  'wasn',
+  'weren',
+  'don',
+  'doesn',
+  'didn',
+  'won',
+  'wouldn',
+  'couldn',
+  'shouldn',
+  'can',
+  'haven',
+  'hasn',
+  'hadn',
+  'mustn',
+  'needn',
+  'ain',
+]);
+
+/**
  * Bare self-referential result-announcement verbs with no object — either
  * standing entirely alone, or cut off by punctuation right after the verb
  * ("Nailed —...", "Found. Let me verify..."). A real decision reads as an
@@ -830,10 +871,25 @@ export function endsMidClause(s: string): boolean {
   // an otherwise-complete title purely as a soft length-clamp indicator, so
   // "...across nodes..." must be judged on the word BEFORE the ellipsis
   // ("nodes" — fine), not treated as truncation on its own.
-  const trimmed = s
-    .trimEnd()
-    .replace(/(?:\.\.\.|…)+$/, '')
-    .replace(/[)\]}"'`]+$/, '');
+  const preQuoteStrip = s.trimEnd().replace(/(?:\.\.\.|…)+$/, '');
+  // A trailing apostrophe right after a contraction stem ("I'", "isn'",
+  // "didn'") is always a cut-off contraction, never a complete word — the
+  // general quote-strip below would otherwise erase this exact evidence of
+  // truncation (e.g. "...the electron-builder step. I'"). Plural possessives
+  // ("users'") are real words and excluded. A stem wrapped in a BALANCED
+  // closing quote ("Use 'I'", "value is 'I'") is a quoted word, not a cut
+  // contraction — the opening quote immediately before it (preceded by
+  // whitespace/start/bracket) proves it's closed, not truncated.
+  const stemMatch = preQuoteStrip.match(/([a-z]+)'$/i);
+  const isBalancedQuotedWord = /(?:^|[\s([{])'[a-zA-Z]+'$/.test(preQuoteStrip);
+  if (
+    stemMatch &&
+    !isBalancedQuotedWord &&
+    TRUNCATED_CONTRACTION_STEMS.has(stemMatch[1].toLowerCase())
+  ) {
+    return true;
+  }
+  const trimmed = preQuoteStrip.replace(/[)\]}"'`]+$/, '');
   if (!trimmed) return false;
   // A clean terminator means the clause closed — not truncated.
   if (/[.!?:;]$/.test(trimmed)) return false;
