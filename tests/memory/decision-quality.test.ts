@@ -400,6 +400,8 @@ describe('endsMidClause', () => {
   it.each([
     "Call it 'done'", // balanced closing quote, not a cut contraction
     "Respect the users' settings", // plural possessive, a real word
+    "Use 'I'", // balanced quote around a stem that's ALSO in the truncation set
+    "The final value is 'I'", // same overlap, mid-sentence
   ])('does not flag a legitimate trailing quote: %s', (s) => {
     expect(endsMidClause(s)).toBe(false);
   });
@@ -541,6 +543,19 @@ describe('TRA-1056 — complete statements and quality helpers', () => {
       const reason = minedDecisionRejectReason(
         'Left the issue in `in_progress` rather than `in_review`',
         'Left the issue in `in_progress` rather than `in_review` — no work exists to review yet; Builder owns it from here.',
+      );
+      expect(reason).toBeNull();
+    });
+
+    // TRA-3170 PR #1936 review (Reviewer F): the first version of the
+    // contraction-stem check flagged ANY stem wrapped in a balanced closing
+    // quote, even when the stem happens to collide with a truncation stem
+    // ("I"). A complete decision ending on a quoted "'I'" must not be
+    // rejected.
+    it('does not reject a complete decision ending on a balanced quoted "I"', () => {
+      const reason = minedDecisionRejectReason(
+        'Set the mode to enabled',
+        "We changed the configuration to use this mode. The final value is 'I'",
       );
       expect(reason).toBeNull();
     });

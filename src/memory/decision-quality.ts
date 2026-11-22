@@ -876,9 +876,17 @@ export function endsMidClause(s: string): boolean {
   // "didn'") is always a cut-off contraction, never a complete word — the
   // general quote-strip below would otherwise erase this exact evidence of
   // truncation (e.g. "...the electron-builder step. I'"). Plural possessives
-  // ("users'") are real words and excluded.
+  // ("users'") are real words and excluded. A stem wrapped in a BALANCED
+  // closing quote ("Use 'I'", "value is 'I'") is a quoted word, not a cut
+  // contraction — the opening quote immediately before it (preceded by
+  // whitespace/start/bracket) proves it's closed, not truncated.
   const stemMatch = preQuoteStrip.match(/([a-z]+)'$/i);
-  if (stemMatch && TRUNCATED_CONTRACTION_STEMS.has(stemMatch[1].toLowerCase())) {
+  const isBalancedQuotedWord = /(?:^|[\s([{])'[a-zA-Z]+'$/.test(preQuoteStrip);
+  if (
+    stemMatch &&
+    !isBalancedQuotedWord &&
+    TRUNCATED_CONTRACTION_STEMS.has(stemMatch[1].toLowerCase())
+  ) {
     return true;
   }
   const trimmed = preQuoteStrip.replace(/[)\]}"'`]+$/, '');
