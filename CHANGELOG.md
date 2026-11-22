@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.8...v3.44.9) (2026-11-22)
+
+
+### Bug Fixes
+
+* **memory:** bound mined context at word boundaries ([#1937](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1937)) ([9464e0d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9464e0d1f219c474343a54a258c6b2df746e9e1c))
+
 ## [3.44.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.7...v3.44.8) (2026-11-22)
 
 
