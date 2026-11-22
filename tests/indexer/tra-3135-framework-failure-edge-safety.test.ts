@@ -1,15 +1,20 @@
 /**
- * TRA-3135: a framework plugin's resolveEdges() can time out or throw after
- * Pass 1 already deleted the file's previous outgoing edges. Before this
- * fix, a timeout returned ok([]) — indistinguishable from "this plugin
- * legitimately found zero edges" — so the deleted edge was never restored.
+ * TRA-3135 / TRA-3159: a framework plugin's resolveEdges() can time out or
+ * throw after Pass 1 already deleted the file's previous outgoing edges.
+ * Before this fix, a timeout returned ok([]) — indistinguishable from "this
+ * plugin legitimately found zero edges" — so the deleted edge was never
+ * restored.
  *
- * This test proves the full repair loop on a real IndexingPipeline + real
- * SQLite store: a forced resolveEdges failure loses the edge immediately
- * (expected — Pass 1 already deleted it), but the TRA-1017
- * postprocess-incomplete mark stays set, and the very next pipeline run
- * (once the plugin works again) re-extracts and re-resolves the file,
- * restoring the edge and clearing the mark.
+ * Keeping the TRA-1017 postprocess-incomplete mark set is not enough on its
+ * own: a content-only edit (no symbol-name churn) never scheduled the
+ * deferred full reconcile that is the only thing that acts on that mark, so
+ * in a long-lived daemon with no later full-index event the edge could stay
+ * missing indefinitely. This test proves the full repair loop WITHOUT an
+ * explicit indexAll(): a forced resolveEdges failure loses the edge
+ * immediately (expected — Pass 1 already deleted it) and schedules the
+ * existing bounded debounced reconcile on its own; once that reconcile
+ * fires (flushed deterministically here instead of waiting on the
+ * wall-clock debounce), the edge is restored and the mark clears.
  */
 
 import fs from 'node:fs';
@@ -61,6 +66,9 @@ class FlakyPlugin implements FrameworkPlugin {
   }
 }
 
+/** Never fires by itself — the test flushes it explicitly. */
+const DEBOUNCE_MS = 10 * 60_000;
+
 function makeSetup(rootDir: string, plugin: FlakyPlugin) {
   const store = createTestStore();
   const registry = new PluginRegistry();
@@ -74,7 +82,9 @@ function makeSetup(rootDir: string, plugin: FlakyPlugin) {
     plugins: [],
   };
 
-  const pipeline = new IndexingPipeline(store, registry, config, rootDir);
+  const pipeline = new IndexingPipeline(store, registry, config, rootDir, undefined, {
+    reconcileDebounceMs: DEBOUNCE_MS,
+  });
   return { store, pipeline };
 }
 
@@ -98,15 +108,18 @@ describe('framework resolver failure does not permanently lose edges (TRA-3135)'
     fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('restores an edge lost to a resolver failure on the next successful run', async () => {
+  it('restores an edge lost to a resolver failure without an explicit full reindex (TRA-3159)', async () => {
     await pipeline.indexAll();
     expect(store.getEdgesByType('flaky_edge')).toHaveLength(1);
 
-    const internals = pipeline as unknown as { isPostprocessIncomplete(): boolean };
+    const internals = pipeline as unknown as {
+      isPostprocessIncomplete(): boolean;
+      _reconcileTimer: unknown;
+    };
 
-    // Content-only edit (same symbol names) — Pass 1 deletes a.ts's outgoing
-    // edges before Pass 2 runs; this forced failure stops Pass 2 from
-    // replacing them.
+    // Content-only edit (same symbol names, so no symbol-name churn) — Pass 1
+    // deletes a.ts's outgoing edges before Pass 2 runs; this forced failure
+    // stops Pass 2 from replacing them.
     plugin.shouldFail = true;
     fs.writeFileSync(
       path.join(rootDir, 'src', 'a.ts'),
@@ -118,16 +131,17 @@ describe('framework resolver failure does not permanently lose edges (TRA-3135)'
     // it) — but the index must know it owes a repair, not call this "done".
     expect(store.getEdgesByType('flaky_edge')).toHaveLength(0);
     expect(internals.isPostprocessIncomplete()).toBe(true);
+    // No symbol-name churn here — without the fix, nothing would be
+    // scheduled and this edge could stay missing until some unrelated full
+    // pass happened to run.
+    expect(internals._reconcileTimer).not.toBeNull();
 
-    // Plugin recovers. A scoped run can repair its own files but — by
-    // design (TRA-1017) — never clears the incomplete mark on its own,
-    // since it never re-verifies the whole graph; only the next full pass
-    // does. It sees `wasIncomplete`, force-re-extracts a.ts via the durable
-    // repair scope even though its hash is unchanged since the failed run,
-    // re-resolves everything, and — now that the resolver succeeds — clears
-    // the mark.
+    // Plugin recovers. Flush the already-scheduled reconcile instead of
+    // calling indexAll() ourselves — this is what a long-lived daemon does
+    // on its own, bounded by EDGE_RECONCILE_DEBOUNCE_MS, with no unrelated
+    // full-index event required.
     plugin.shouldFail = false;
-    await pipeline.indexAll();
+    await pipeline.__flushEdgeReconcileForTests();
 
     expect(store.getEdgesByType('flaky_edge')).toHaveLength(1);
     expect(internals.isPostprocessIncomplete()).toBe(false);

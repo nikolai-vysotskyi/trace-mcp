@@ -2451,7 +2451,19 @@ export class IndexingPipeline {
     // counts all its symbols as new). The scoped pass above keeps the
     // changed files correct immediately; one debounced full reconcile pass
     // restores global correctness after the edit storm quiets down.
-    if (scope && (scope.newSymbolNames.size > 0 || scope.deletedSymbolNames.size > 0)) {
+    //
+    // TRA-3135/TRA-3159: a framework-plugin failure this pass means Pass 1
+    // may have already deleted edges this pass never replaced, even on a
+    // content-only edit with no symbol-name churn — the case above would
+    // never schedule a repair for it, leaving the marker set but nothing
+    // to act on it. Fall into the same bounded debounced reconcile so the
+    // graph self-heals within EDGE_RECONCILE_DEBOUNCE_MS instead of only on
+    // the next unrelated full pass (which may never come on a long-lived
+    // daemon).
+    if (
+      this._lastResolutionHadFrameworkFailures ||
+      (scope && (scope.newSymbolNames.size > 0 || scope.deletedSymbolNames.size > 0))
+    ) {
       this.scheduleEdgeReconcile();
     }
   }
