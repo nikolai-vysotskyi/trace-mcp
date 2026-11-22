@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.9...v3.44.10) (2026-11-22)
+
+
+### Bug Fixes
+
+* **memory:** catch truncated-contraction tails in endsMidClause ([#1936](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1936)) ([4a7ac57](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4a7ac57182c5be34944ea82a67d53aaf1f8a5cc2))
+
+
+### Documentation
+
+* distinguish daemon RSS from physical footprint ([#1933](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1933)) ([a0b7173](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a0b7173871881e60e84136a56a63e4713ae1da60))
+
 ## [3.44.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.8...v3.44.9) (2026-11-22)
 
 
