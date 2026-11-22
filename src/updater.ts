@@ -449,7 +449,18 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     .filter((v): v is string => Boolean(v && v !== '0.0.0-dev'))
     .reduce((highest, v) => (semverGt(v, highest) ? v : highest), CURRENT_VERSION);
 
-  if (!semverGt(latestVersion, effectiveCurrent)) {
+  // TRA-3165: the daemon can keep running a version it already loaded into
+  // memory after the package directory it loaded from is downgraded out of
+  // band (a manual `npm install -g trace-mcp@<old>`, or a registry mirror that
+  // resolved "latest" to a stale release while something else reinstalled).
+  // `effectiveCurrent` folds in CURRENT_VERSION, so "latest > effectiveCurrent"
+  // is never true again once disk falls behind what is already running — the
+  // daemon's own staleness watchdog (cli.ts) only refuses the mismatched
+  // restart, it never repairs disk. Detect that gap independently so a
+  // same-version reinstall can still happen with no newer release in play.
+  const diskNeedsRepair = initialDiskVer != null && semverGt(CURRENT_VERSION, initialDiskVer);
+
+  if (!semverGt(latestVersion, effectiveCurrent) && !diskNeedsRepair) {
     logger.debug(
       {
         current: CURRENT_VERSION,
@@ -466,12 +477,24 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     return false;
   }
 
+  // What to actually (re)install: the latest release if it beats what we're
+  // running, otherwise our own version — a same-version reinstall that
+  // repairs a downgraded disk copy without needing a new release to exist.
+  const targetVersion = semverGt(latestVersion, effectiveCurrent) ? latestVersion : CURRENT_VERSION;
+
+  if (diskNeedsRepair) {
+    logger.warn(
+      { current: CURRENT_VERSION, disk: initialDiskVer, target: targetVersion },
+      'Auto-update: package on disk is older than the running daemon — repairing',
+    );
+  }
+
   // Back off on repeated failures for the same target version so a broken
   // install doesn't trigger a `npm install` storm on every MCP client respawn.
   // After FAILED_INSTALL_LONG_RETRY_THRESHOLD consecutive failures for the
   // same target, switch to a 7-day window so an offline / fundamentally broken
   // target version doesn't keep retrying every hour.
-  if (cache?.lastFailedVersion === latestVersion && cache.lastFailedInstall) {
+  if (cache?.lastFailedVersion === targetVersion && cache.lastFailedInstall) {
     const consecutive = cache.consecutiveFailedInstalls ?? 1;
     const window =
       consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD
@@ -480,7 +503,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     if (now - cache.lastFailedInstall < window) {
       logger.debug(
         {
-          version: latestVersion,
+          version: targetVersion,
           failedAgo: now - cache.lastFailedInstall,
           consecutiveFailedInstalls: consecutive,
           windowMs: window,
@@ -492,8 +515,10 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   }
 
   logger.info(
-    { current: CURRENT_VERSION, latest: latestVersion },
-    'Auto-update: newer version found, installing...',
+    { current: CURRENT_VERSION, target: targetVersion },
+    diskNeedsRepair
+      ? 'Auto-update: repairing downgraded disk copy...'
+      : 'Auto-update: newer version found, installing...',
   );
 
   // Cross-process lock: prevents concurrent MCP client sessions (e.g. Claude Code
@@ -505,7 +530,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     lockHandle = acquireLock({
       lockDir,
       name: 'auto-update',
-      op: `npm-install-${latestVersion}`,
+      op: `npm-install-${targetVersion}`,
     });
   } catch (err) {
     if (err instanceof LockError) {
@@ -521,9 +546,9 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   try {
     // If another process held the lock and finished installing ahead of us, re-check cache
     const recheckCache = readCache();
-    if (recheckCache?.installedVersion && !semverGt(latestVersion, recheckCache.installedVersion)) {
+    if (recheckCache?.installedVersion && !semverGt(targetVersion, recheckCache.installedVersion)) {
       logger.debug(
-        { latest: latestVersion, installed: recheckCache.installedVersion },
+        { target: targetVersion, installed: recheckCache.installedVersion },
         'Auto-update: target version was already installed by a peer process',
       );
       return true;
@@ -551,11 +576,14 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     ]
       .filter((v): v is string => Boolean(v && v !== '0.0.0-dev'))
       .reduce((highest, v) => (semverGt(v, highest) ? v : highest), CURRENT_VERSION);
+    // Re-derive under lock: a peer may have already repaired the disk copy
+    // between our initial check and acquiring the lock.
+    const lockedDiskNeedsRepair = lockedDiskVer != null && semverGt(CURRENT_VERSION, lockedDiskVer);
 
-    if (!semverGt(latestVersion, lockedEffective)) {
+    if (!semverGt(targetVersion, lockedEffective) && !lockedDiskNeedsRepair) {
       logger.info(
         {
-          latest: latestVersion,
+          target: targetVersion,
           diskVersion: lockedDiskVer,
           launcherVersion: lockedLauncherVer,
           effective: lockedEffective,
@@ -571,7 +599,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     }
 
     const runInstall = () =>
-      run('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], 120_000);
+      run('npm', ['install', '-g', `trace-mcp@${targetVersion}`, '--force'], 120_000);
 
     // TRA-2687: create a proactive runtime swap backup before invoking npm install,
     // so running daemons and launcher shims can continue serving requests/spawning
@@ -675,7 +703,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
         try {
           fs.renameSync(backupDir, mainDir);
           logger.warn(
-            { version: latestVersion },
+            { version: targetVersion },
             'Auto-update: install retry failed, previous install restored from backup',
           );
         } catch (restoreErr) {
@@ -700,16 +728,16 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
         'Auto-update: npm install failed',
       );
       // Increment the consecutive-failure counter for this exact target.
-      const sameTarget = cache?.lastFailedVersion === latestVersion;
+      const sameTarget = cache?.lastFailedVersion === targetVersion;
       const consecutive = sameTarget ? (cache?.consecutiveFailedInstalls ?? 0) + 1 : 1;
       if (consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD) {
         logger.warn(
           {
-            version: latestVersion,
+            version: targetVersion,
             consecutiveFailedInstalls: consecutive,
             retryAfterDays: FAILED_INSTALL_LONG_RETRY_MS / (24 * 60 * 60 * 1000),
           },
-          `Auto-update: disabled for v${latestVersion} until manual intervention (too many failures)`,
+          `Auto-update: disabled for v${targetVersion} until manual intervention (too many failures)`,
         );
       }
       writeCache({
@@ -717,7 +745,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
         latestVersion,
         installedVersion: cache?.installedVersion,
         lastFailedInstall: now,
-        lastFailedVersion: latestVersion,
+        lastFailedVersion: targetVersion,
         consecutiveFailedInstalls: consecutive,
       });
       return false;
@@ -726,10 +754,10 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     // Record the version we just installed so the restarted process can detect
     // the upgrade and run post-update migrations. Clear any prior failure stamp
     // (including the consecutive-failure counter — success resets the streak).
-    writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
+    writeCache({ lastChecked: now, latestVersion, installedVersion: targetVersion });
 
     logger.info(
-      { version: latestVersion },
+      { version: targetVersion },
       'Auto-update: installed successfully — takes effect on the next start',
     );
     return true;

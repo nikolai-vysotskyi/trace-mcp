@@ -203,6 +203,36 @@ describe('setupLauncher (install + config)', () => {
     expect(readLauncherConfig().version).toBe('2.0.0');
   });
 
+  // TRA-3165: `trace-mcp init`/`trace-mcp upgrade` can run from any binary on
+  // PATH, not necessarily the one that last configured the control plane — an
+  // older global install under a different Node version manager, a stale
+  // npx/pnpm-dlx extract, or the desktop app's bundled CLI. Before this guard,
+  // setupLauncher always rewrote launcher.env, silently downgrading the shim
+  // every MCP client and the daemon's own plist resolve through.
+  it('refuses to downgrade launcher.env to an older pkgVersion', () => {
+    setupLauncher({ pkgVersion: '3.44.7' });
+    const second = setupLauncher({ pkgVersion: '3.44.2' });
+    expect(second[1].action).toBe('skipped');
+    expect(second[1].detail).toMatch(/Refusing to downgrade/);
+    expect(readLauncherConfig().version).toBe('3.44.7');
+    expect(readLauncherConfig().cli).toBe(resolveCurrentCliPath());
+  });
+
+  it('still allows a same-or-newer pkgVersion to refresh launcher.env after a refused downgrade', () => {
+    setupLauncher({ pkgVersion: '3.44.7' });
+    setupLauncher({ pkgVersion: '3.44.2' }); // refused
+    const third = setupLauncher({ pkgVersion: '3.44.8' });
+    expect(third[1].action).toBe('updated');
+    expect(readLauncherConfig().version).toBe('3.44.8');
+  });
+
+  it('exempts 0.0.0-dev from the downgrade guard (local checkout pointing at itself)', () => {
+    setupLauncher({ pkgVersion: '3.44.7' });
+    const dev = setupLauncher({ pkgVersion: '0.0.0-dev' });
+    expect(dev[1].action).toBe('updated');
+    expect(readLauncherConfig().version).toBe('0.0.0-dev');
+  });
+
   it('does not pin launcher.env to a pnpm dlx cache during init', () => {
     const stable = {
       node: '/stable/bin/node',

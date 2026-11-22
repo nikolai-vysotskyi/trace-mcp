@@ -559,4 +559,68 @@ describe('checkAndInstallUpdate', () => {
       .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
     expect(installCalls).toHaveLength(0);
   });
+
+  // TRA-3165: a daemon kept alive across an out-of-band downgrade of the
+  // package directory it loaded from (manual `npm install -g trace-mcp@<old>`,
+  // or a registry mirror resolving "latest" to a stale release) must repair
+  // disk even when the registry reports no release newer than what it's
+  // already running — otherwise nothing ever re-syncs disk to memory, and the
+  // daemon's own staleness watchdog just keeps refusing the mismatched
+  // restart forever.
+  it('repairs disk when the installed package is older than the running daemon, even with no newer release (TRA-3165)', async () => {
+    // CURRENT_VERSION is '1.0.0' (set in this describe's beforeEach). No newer
+    // release exists — cache and registry both say latest is also '1.0.0'.
+    setupCache({ lastChecked: Date.now(), latestVersion: '1.0.0' });
+
+    const npmRoot = '/fake/npm/root';
+    const globalPkgJson = path.join(npmRoot, 'trace-mcp', 'package.json');
+    // launcher.env itself was never rewritten — only the physical package
+    // directory it points at got overwritten externally. readInstalledPackageVersion()
+    // follows TRACE_MCP_CLI to find that same package.json even before npmRoot
+    // is resolved, which is what must surface the downgrade pre-lock.
+    const launcherEnvPath = path.join('/tmp/test-trace-mcp', 'launcher.env');
+    const cliPath = path.join(npmRoot, 'trace-mcp', 'dist', 'cli.js');
+
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const sp = String(p);
+      return sp === CACHE_PATH || sp === globalPkgJson || sp === launcherEnvPath;
+    });
+    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+      const sp = String(p);
+      if (sp === CACHE_PATH) {
+        return JSON.stringify({ lastChecked: Date.now(), latestVersion: '1.0.0' });
+      }
+      if (sp === globalPkgJson) {
+        // Disk was downgraded to an older release out of band.
+        return JSON.stringify({ version: '0.9.0' });
+      }
+      if (sp === launcherEnvPath) {
+        return `TRACE_MCP_VERSION="1.0.0"\nTRACE_MCP_NODE="/bin/node"\nTRACE_MCP_CLI="${cliPath}"\n`;
+      }
+      return '{}';
+    });
+
+    const { execFile } = await import('node:child_process');
+    stubExecFile(execFile, (cmd, args) => {
+      if (args.includes('root') || args.some((a) => a.includes('npm root -g'))) {
+        return { status: 0, stdout: `${npmRoot}\n` };
+      }
+      return { status: 0 };
+    });
+
+    const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
+    expect(result).toBe(true);
+
+    // Must reinstall the version it is ALREADY running (not the stale "latest"),
+    // so disk converges even though the registry has nothing newer to offer.
+    const installCalls = vi
+      .mocked(execFile)
+      .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
+    expect(installCalls).toHaveLength(1);
+    expect(installCalls[0][1]).toContain('trace-mcp@1.0.0');
+
+    const written = getWrittenCache();
+    expect(written).not.toBeNull();
+    expect(written!.installedVersion).toBe('1.0.0');
+  });
 });

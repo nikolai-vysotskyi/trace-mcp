@@ -30,6 +30,7 @@ import {
 import { getHomeDir } from './home.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
+import { semverGt } from '../updater.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -756,6 +757,27 @@ export function setupLauncher(
     }
     recordPkgRoot(cfg.cli);
     const existing = readLauncherConfig();
+    // TRA-3165: `trace-mcp init`/`trace-mcp upgrade` can run from any binary
+    // on PATH — an old global install under a different Node version manager,
+    // a leftover npx/pnpm-dlx-resolved copy, or the desktop app's bundled CLI —
+    // not necessarily the one that last configured the control plane. Unlike
+    // the npm postinstall hook (TRA-1963) and the auto-updater (TRA-2903),
+    // this path had no guard at all: it would silently repoint launcher.env at
+    // an older CLI/version, downgrading the shim every MCP client and the
+    // daemon's own plist resolve through. `0.0.0-dev` is exempt — a developer
+    // deliberately pointing the shim at their own checkout is not a downgrade.
+    if (
+      existing.version &&
+      cfg.version !== '0.0.0-dev' &&
+      semverGt(existing.version, cfg.version)
+    ) {
+      steps.push({
+        target: getLauncherConfigPath(),
+        action: 'skipped',
+        detail: `Refusing to downgrade launcher.env ${existing.version} -> ${cfg.version} (TRA-3165)`,
+      });
+      return steps;
+    }
     const unchanged =
       existing.node === cfg.node && existing.cli === cfg.cli && existing.version === cfg.version;
     if (unchanged && !opts.force) {
