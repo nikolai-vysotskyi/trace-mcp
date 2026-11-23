@@ -56,8 +56,8 @@
     }
   },
   "devDependencies": {
-    "@cosmos.gl/graph": "3.5.1",
-    "@tailwindcss/vite": "^4.3.3",
+    "@cosmos.gl/graph": "3.6.0",
+    "@tailwindcss/vite": "^4.3.5",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.6",
@@ -74,9 +74,9 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0",
     "sharp": "^0.35.5",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
-    "vite": "^6.4.5",
-    "vitest": "^5.0.5"
+    "vite": "^6.4.6",
+    "vitest": "^5.1.0"
   }
 }
