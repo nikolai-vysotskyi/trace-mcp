@@ -38,7 +38,8 @@ import {
 } from './reindex-file-handler.js';
 import { SqliteTaskCache } from '../pipeline/index.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
+import { clearServerPid, ProgressState } from '../progress.js';
+import { writeServerPidOffThread } from './pid-registration.js';
 import { detectGitWorktree } from '../project-root.js';
 import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
 import {
@@ -546,7 +547,11 @@ export class ProjectManager {
       deleteDbFamily(dbPath);
       db = initializeDatabase(dbPath, dbOpenOpts);
     }
-    writeServerPid(db);
+    try {
+      await writeServerPidOffThread(dbPath);
+    } catch (err) {
+      logger.warn({ err, projectRoot, dbPath }, 'failed to register server PID (non-fatal)');
+    }
     const store = new Store(db);
     const registry = PluginRegistry.createWithDefaults();
 
