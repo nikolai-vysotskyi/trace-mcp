@@ -868,6 +868,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        node: ['22']
+        # Node 26 (current LTS) on macOS, the platform the launchd daemon runs
+        # on. All native deps (better-sqlite3, @parcel/watcher, @ast-grep/napi,
+        # oxc-resolver, sqlite-vec, onnxruntime-node) are N-API prebuilds and
+        # load unchanged; this leg keeps that true. Node 22 stays the engines
+        # floor and the default everywhere else.
+        include:
+          - os: macos-latest
+            node: '26'
     runs-on: ${{ matrix.os }}
     # Safety net per OS. macOS/Windows runners are slower than ubuntu, so the
     # cap is higher than the ubuntu shard cap.
@@ -885,7 +894,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
 
       # No node_modules cache here — install fresh every run. actions/cache
