@@ -28,9 +28,3 @@ export {
   type LspEnrichmentTaskInput,
   type LspEnrichmentTaskOutput,
 } from './tasks/lsp-enrichment-task.js';
-export {
-  createGraphSnapshotsTask,
-  GRAPH_SNAPSHOTS_TASK_NAME,
-  type GraphSnapshotsTaskInput,
-  type GraphSnapshotsTaskOutput,
-} from './tasks/graph-snapshots-task.js';

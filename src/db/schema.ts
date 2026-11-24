@@ -7,7 +7,7 @@ import { backfillSymbolHeritage } from './heritage.js';
 import { installSlowStatementGuard } from './slow-statement.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
-const SCHEMA_VERSION = 36;
+const SCHEMA_VERSION = 37;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -1965,6 +1965,32 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       'CREATE INDEX IF NOT EXISTS idx_routes_controller_symbol ON routes(controller_symbol_id)',
     );
   },
+  37: (db) => {
+    // Per-file 'coupling' rows (+ 'coupling_summary') were written on every
+    // full reindex and never read; non-git roots had no commit dedup, so an
+    // umbrella index grew to 3.8M rows / ~1.2 GB with its four indexes.
+    // Rebuild instead of DELETE: a row-by-row delete through four indexes
+    // stalls the open for tens of seconds; DROP frees pages in one pass.
+    db.exec(`
+      CREATE TEMP TABLE gs_keep AS
+        SELECT * FROM graph_snapshots WHERE snapshot_type NOT IN ('coupling', 'coupling_summary');
+      DROP TABLE graph_snapshots;
+      CREATE TABLE graph_snapshots (
+        id              INTEGER PRIMARY KEY,
+        commit_hash     TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        snapshot_type   TEXT NOT NULL,
+        file_path       TEXT,
+        data            TEXT NOT NULL
+      );
+      INSERT INTO graph_snapshots SELECT * FROM gs_keep;
+      DROP TABLE gs_keep;
+      CREATE INDEX IF NOT EXISTS idx_gs_type ON graph_snapshots(snapshot_type);
+      CREATE INDEX IF NOT EXISTS idx_gs_commit ON graph_snapshots(commit_hash);
+      CREATE INDEX IF NOT EXISTS idx_gs_file ON graph_snapshots(file_path);
+      CREATE INDEX IF NOT EXISTS idx_gs_created ON graph_snapshots(created_at);
+    `);
+  },
 };
 
 function runMigrations(db: Database.Database, fromVersion: number): void {
@@ -2191,6 +2217,26 @@ export function initializeDatabase(
  * Only call this inside the initial bulk-index phase, never on a live DB
  * that may be queried by other connections.
  */
+/**
+ * Give free pages back to the filesystem once they are more than a quarter of
+ * the file. TRA-1541 creates every DB with `auto_vacuum = INCREMENTAL` but
+ * nothing ever ran `incremental_vacuum`, so reindex churn left files mostly
+ * empty (one index measured 442 of 581 MB free). No-op on pre-TRA-1541 DBs
+ * (`auto_vacuum = NONE`) — those need a one-off `VACUUM`.
+ *
+ * Frees at most `maxPages` per call (16 MB at 4 KB pages) so a caller can
+ * yield between calls: one unbounded pass over a large freelist is a
+ * synchronous main-thread stall. Returns pages freed; 0 means done.
+ */
+export function reclaimFreePages(db: Database.Database, maxPages = 4096): number {
+  if (db.pragma('auto_vacuum', { simple: true }) !== 2) return 0;
+  const free = db.pragma('freelist_count', { simple: true }) as number;
+  const total = db.pragma('page_count', { simple: true }) as number;
+  if (free === 0 || free * 4 < total) return 0;
+  db.pragma(`incremental_vacuum(${maxPages})`);
+  return Math.min(free, maxPages);
+}
+
 export function enableBulkMode(db: Database.Database): void {
   db.pragma('synchronous = OFF');
   db.pragma('foreign_keys = OFF');

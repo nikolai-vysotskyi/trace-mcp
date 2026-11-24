@@ -1,10 +1,11 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
-import { disableBulkMode, enableBulkMode } from '../db/schema.js';
+import { disableBulkMode, enableBulkMode, reclaimFreePages } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
@@ -20,12 +21,11 @@ import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { LOCKS_DIR, projectHash } from '../global.js';
 import { acquireLock, LockError, releaseLock, type LockHandle } from '../utils/pid-lock.js';
 import { invalidateTreeCacheFile } from '../parser/tree-cache.js';
-import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import { beginReindex } from './reindex-inflight.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
-import { descendantExcludeGlobs } from '../registry.js';
+import { descendantExcludeGlobs, nestedOwnedRepoRoots } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
 import { isHotChurnPath } from '../utils/hot-churn.js';
@@ -33,6 +33,7 @@ import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
+import { dropWorktreeDuplicates } from './worktree-dedup.js';
 import { ExtractPool, resolveWorkerThreshold } from './extract-pool.js';
 import { collectFiles as collectFilesImpl, type CollectFilesResult } from './file-collector.js';
 import {
@@ -59,15 +60,13 @@ import {
   clearPackageEntriesCache,
   clearPackageEntriesCacheForDeletedPath,
 } from './package-entries.js';
-// P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
+// P02 Task DAG migration: 2 passes are scheduled through a TaskDag instead
 // of being called imperatively from `runPipeline`. The Task wrappers live in
 // `src/pipeline/tasks/*` and delegate to the existing private methods on
 // this class. See plans/plan-cognee-pipeline-migration-IMPL.md.
 import {
-  createGraphSnapshotsTask,
   createLspEnrichmentTask,
   createResolveEdgesTask,
-  GRAPH_SNAPSHOTS_TASK_NAME,
   LSP_ENRICHMENT_TASK_NAME,
   RESOLVE_EDGES_TASK_NAME,
   TaskDag,
@@ -337,6 +336,43 @@ function readGitHeadSha(rootPath: string): string | null {
 }
 
 /**
+ * Freshness key for a NON-git root that holds git repos (an umbrella
+ * workspace): a hash over every owned nested repo's HEAD. Plays the role
+ * `index_head_sha` plays for a git root, so canSkipFullPostprocess() can
+ * prove an umbrella unchanged too. Before this, umbrellas never skipped:
+ * every watcher-overflow reconcile that hash-skipped 100% of files still
+ * re-resolved the full graph (tens of seconds, ~1 GB main-thread heap).
+ * null when there is no nested repo or any HEAD is unreadable — no proof.
+ * Async + parallel: an umbrella can hold dozens of repos.
+ */
+const NESTED_HEADS_KEY = 'index_nested_heads';
+
+async function readNestedHeadsKey(rootPath: string): Promise<string | null> {
+  const repos = nestedOwnedRepoRoots(rootPath);
+  if (repos.length === 0) return null;
+  const heads = await Promise.all(
+    repos.map(
+      (repo) =>
+        new Promise<string | null>((resolve) => {
+          execFile(
+            'git',
+            ['rev-parse', 'HEAD'],
+            { cwd: repo, encoding: 'utf-8', timeout: 2000, env: safeGitEnv() },
+            (err, out) => {
+              const sha = err ? '' : String(out).trim();
+              resolve(
+                /^[0-9a-f]{40}$/.test(sha) ? `${path.relative(rootPath, repo)}=${sha}` : null,
+              );
+            },
+          );
+        }),
+    ),
+  );
+  if (heads.some((h) => h === null)) return null;
+  return `nested:${createHash('sha1').update(heads.sort().join('\n')).digest('hex')}`;
+}
+
+/**
  * Decide whether a full (non-incremental) `indexAll` can skip the postprocess
  * phase (edge resolution + LSP enrichment + env scan).
  *
@@ -517,7 +553,7 @@ export class IndexingPipeline {
     }
     // P02 Task DAG: register the migrated passes once per pipeline instance.
     // Each Task is a thin adapter — the actual work still happens in the
-    // private methods on this class (or in `captureGraphSnapshots`); the
+    // private methods on this class; the
     // Task layer only changes how those methods are scheduled.
     //
     // When `deps.taskCache` is provided (the daemon path passes a
@@ -528,7 +564,6 @@ export class IndexingPipeline {
     this._dag = deps?.taskCache ? new TaskDag({ cache: deps.taskCache }) : new TaskDag();
     this._dag.register(createResolveEdgesTask());
     this._dag.register(createLspEnrichmentTask());
-    this._dag.register(createGraphSnapshotsTask());
   }
 
   private workspaces: WorkspaceInfo[] = [];
@@ -594,9 +629,24 @@ export class IndexingPipeline {
    */
   private _postprocessLevel: PostprocessLevel = 'full';
 
+  /** currentHead/storedHead for canSkipFullPostprocess(): the git HEAD for a
+   *  repo root, the nested-repo HEADs key for a non-git umbrella root. */
+  private async readFreshnessHeads(): Promise<{
+    currentHead: string | null;
+    storedHead: string | null;
+  }> {
+    const head = readGitHeadSha(this.rootPath);
+    if (head)
+      return { currentHead: head, storedHead: this.store.getRepoMetadata('index_head_sha') };
+    return {
+      currentHead: await readNestedHeadsKey(this.rootPath),
+      storedHead: this.store.getRepoMetadata(NESTED_HEADS_KEY),
+    };
+  }
+
   /**
    * P02 Task DAG holding the migrated pipeline passes (resolve-edges,
-   * lsp-enrichment, graph-snapshots). Registered once per pipeline
+   * lsp-enrichment). Registered once per pipeline
    * instance in the constructor. Internal API — production callers stay on
    * `indexAll` / `indexFiles`.
    */
@@ -1863,6 +1913,11 @@ export class IndexingPipeline {
           return true;
         });
       }
+      // Nested worktree files identical to their main checkout are already
+      // answered by the main checkout's rows (worktree-dedup.ts).
+      const beforeDedup = activeRelPaths.length;
+      activeRelPaths = await dropWorktreeDuplicates(this.rootPath, activeRelPaths);
+      lateSkippedDescendant += beforeDedup - activeRelPaths.length;
       if (activeRelPaths.length === 0) {
         return {
           totalFiles: skippedUnindexable + lateSkippedDescendant,
@@ -2235,8 +2290,7 @@ export class IndexingPipeline {
           indexed: 0,
           errors: 0,
           totalEdges: this.store.getStats().totalEdges,
-          currentHead: readGitHeadSha(this.rootPath),
-          storedHead: this.store.getRepoMetadata('index_head_sha'),
+          ...(await this.readFreshnessHeads()),
         });
       }
       if (skipPostprocess) {
@@ -2306,35 +2360,35 @@ export class IndexingPipeline {
       invalidateSearchCache(this.store.db);
     }
 
-    if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
-      // TRA-1017: the snapshot phase is pure telemetry — never worth holding
-      // a shutdown for.
-      throwIfIndexAborted(signal, this.rootPath);
-      // #237: yield before the (synchronous, potentially multi-second) graph
-      // snapshot capture so /health can be serviced between edge resolution and
-      // snapshotting on a full reindex.
-      await yieldToEventLoopFair();
-      try {
-        // P02 Task DAG: graph-snapshots is scheduled via this._dag. The Task
-        // wrapper is a pure adapter — it calls `captureGraphSnapshots(store,
-        // rootPath)`. The outer try/catch stays here because the original
-        // contract is "log the failure, never abort indexing".
-        await this._dag.run(GRAPH_SNAPSHOTS_TASK_NAME, {
-          captureSnapshots: () => captureGraphSnapshots(this.store, this.rootPath),
-        });
-      } catch (e) {
-        logger.warn({ error: e }, 'Graph snapshot capture failed');
-      }
-    }
-
     // Capture git HEAD at index time so freshness checks can detect a stale snapshot.
     // Best-effort — non-git repos and missing git binary are silently ignored.
     try {
       const head = readGitHeadSha(this.rootPath);
       if (head) this.store.setRepoMetadata('index_head_sha', head);
+      // Full runs only: the key costs one git spawn per nested repo. A stamp
+      // left stale by incremental runs only makes the next full run skip
+      // less, never wrongly.
+      else if (!this._isIncremental) {
+        const nested = await readNestedHeadsKey(this.rootPath);
+        if (nested) this.store.setRepoMetadata(NESTED_HEADS_KEY, nested);
+        else this.store.deleteRepoMetadata(NESTED_HEADS_KEY);
+      }
       this.store.setRepoMetadata('indexed_at_ms', String(Date.now()));
     } catch {
       /* best-effort */
+    }
+    if (!this._isIncremental) {
+      try {
+        let freed = 0;
+        for (let n = reclaimFreePages(this.store.db); n > 0; n = reclaimFreePages(this.store.db)) {
+          freed += n;
+          await yieldToEventLoopFair();
+        }
+        if (freed > 0)
+          logger.info({ root: this.rootPath, freed_pages: freed }, 'Reclaimed free index pages');
+      } catch (e) {
+        logger.warn({ error: e }, 'incremental_vacuum failed');
+      }
     }
 
     result.durationMs = Date.now() - startMs;

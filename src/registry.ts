@@ -923,6 +923,83 @@ export function descendantExcludeGlobs(root: string): string[] {
   );
 }
 
+const NESTED_CHECKOUT_SCAN_DEPTH = 3;
+const NESTED_CHECKOUT_CACHE_MS = 60_000;
+interface NestedCheckouts {
+  /** Independent repos (own `.git` dir, or a submodule pointer). */
+  repos: string[];
+  /** Linked worktrees (`.git` file pointing at `.git/worktrees/<id>`). */
+  worktrees: string[];
+}
+const nestedCheckoutCache = new Map<string, { at: number; found: NestedCheckouts }>();
+
+/**
+ * Git checkouts at most {@link NESTED_CHECKOUT_SCAN_DEPTH} levels below
+ * `absRoot`. Stops at every repo boundary, so on an umbrella of repos it
+ * reads a handful of dirs.
+ * ponytail: 60 s TTL cache — a checkout added mid-window is missed until the
+ * next lookup after expiry; invalidate on watcher dir-create events if that
+ * ever matters.
+ */
+function scanNestedCheckouts(absRoot: string): NestedCheckouts {
+  const hit = nestedCheckoutCache.get(absRoot);
+  if (hit && Date.now() - hit.at < NESTED_CHECKOUT_CACHE_MS) return hit.found;
+  const found: NestedCheckouts = { repos: [], worktrees: [] };
+  const walk = (dir: string, depth: number) => {
+    if (depth > NESTED_CHECKOUT_SCAN_DEPTH) return;
+    let children: fs.Dirent[];
+    try {
+      children = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const child of children) {
+      if (!child.isDirectory() || NESTED_REPO_SCAN_SKIP_DIRS.has(child.name)) continue;
+      const childPath = path.join(dir, child.name);
+      const gitEntry = path.join(childPath, '.git');
+      if (fs.existsSync(gitEntry)) {
+        (isWorktreeGitFile(gitEntry) ? found.worktrees : found.repos).push(childPath);
+        continue; // repo boundary: never scan inside another checkout
+      }
+      walk(childPath, depth + 1);
+    }
+  };
+  walk(absRoot, 1);
+  nestedCheckoutCache.set(absRoot, { at: Date.now(), found });
+  return found;
+}
+
+/**
+ * Linked worktrees nested under `root` (not inside another checkout, not
+ * under a registered descendant). See `indexer/worktree-dedup.ts` for how an
+ * umbrella index treats them.
+ */
+export function nestedWorktreeRoots(root: string): string[] {
+  const absRoot = path.resolve(root);
+  const descendants = registeredDescendantRoots(absRoot);
+  return scanNestedCheckouts(absRoot).worktrees.filter(
+    (w) => !descendants.some((d) => w === d || w.startsWith(d + path.sep)),
+  );
+}
+
+/**
+ * Independent git repos nested under a (typically non-git umbrella) root,
+ * excluding linked worktrees and registered descendants — i.e. the repos
+ * whose files this root's index actually owns.
+ */
+export function nestedOwnedRepoRoots(root: string): string[] {
+  const absRoot = path.resolve(root);
+  const descendants = registeredDescendantRoots(absRoot);
+  return scanNestedCheckouts(absRoot).repos.filter(
+    (r) => !descendants.some((d) => r === d || r.startsWith(d + path.sep)),
+  );
+}
+
+/** Test hook: drop the nested-checkout TTL cache. */
+export function _resetNestedWorktreeCache(): void {
+  nestedCheckoutCache.clear();
+}
+
 /** Directory names never worth descending into while scanning for nested repos. */
 const NESTED_REPO_SCAN_SKIP_DIRS = new Set([
   'node_modules',
