@@ -304,6 +304,10 @@ _New entrants since April 2026 (local code-graph / packing lane, worth tracking)
 
 **codebase-memory-mcp's stars more than doubled over two revisions (18.1K → 41.0K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
 
+### ClickHouse Loom and its shared code index
+
+[ClickHouse Loom](https://github.com/ClickHouse/loom) is a self-hosted service that combines a shared code index, agent memory and document search over MCP, HTTP and SDKs. Its [released code tools](https://github.com/ClickHouse/loom/blob/v1.3.0/docs/features/code-index/overview.md) provide code search, definitions, callers and change impact. [Code-linked memories](https://github.com/ClickHouse/loom/blob/v1.3.0/docs/use-cases/memory-linked-to-code.md) can accompany those results and report when their referenced code moves, changes or disappears. Code workers must be enabled for configured repositories; the index follows committed branch history, so uncommitted edits require local reads.
+
 ## vs. AI session memory
 
 Tools that persist context across AI agent sessions — activity logs, knowledge graphs, memory compression.
