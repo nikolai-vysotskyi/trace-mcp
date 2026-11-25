@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.10...v3.44.11) (2026-11-25)
+
+
+### Bug Fixes
+
+* **daemon:** register project PID off the event loop ([#1946](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1946)) ([5235a83](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5235a8349c144f1efb39c350d84bda2465719356))
+* Node 26 daemon runtime — release extract-worker memory, dependency patches, CI leg ([#1951](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1951)) ([1edec86](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1edec864fbb4dfbf8d4975ebdd8619292e938ad2))
+* **router:** let a session pinned local go back to the daemon ([#1950](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1950)) ([482c919](https://github.com/nikolai-vysotskyi/trace-mcp/commit/482c919c5b2a773045bc5c0f2bf805c0763ba38e))
+
+
+### Performance
+
+* **index:** stop umbrella-root index bloat and no-op reconcile spikes ([#1949](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1949)) ([7be2199](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7be21996f66db619e29cf8c1a3803c62212c13e4))
+
 ## [3.44.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.9...v3.44.10) (2026-11-22)
 
 
