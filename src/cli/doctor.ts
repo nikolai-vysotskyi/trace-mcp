@@ -532,13 +532,13 @@ function checkDbHealth(dbPath: string): {
       const metadata = Object.fromEntries(rows.map((row) => [row.key, row.value]));
       const found = Number(metadata.index_truncated_found);
       const limit = Number(metadata.index_truncated_limit);
+      // TRA-3214: `found > limit` is the proof, not the `index_truncated`
+      // flag by itself — a `'0'` flag sitting next to a stale `found`/`limit`
+      // pair left over from an older truncated stamp must still report the
+      // overflow instead of silently trusting the flag.
       return {
         readable: true,
-        ...(metadata.index_truncated === '1' &&
-        Number.isFinite(found) &&
-        Number.isFinite(limit) &&
-        found > limit &&
-        limit > 0
+        ...(Number.isFinite(found) && Number.isFinite(limit) && limit > 0 && found > limit
           ? { truncated: { found, limit } }
           : {}),
       };

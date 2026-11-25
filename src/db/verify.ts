@@ -492,18 +492,19 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
   // ── 9. Index truncation check (TRA-2639) ─────────────────────────────
   if (tableExists(db, 'repo_metadata')) {
     try {
-      const row = db
-        .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated'")
+      const foundRow = db
+        .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_found'")
         .get() as { value: string } | undefined;
-      if (row?.value === '1') {
-        const foundRow = db
-          .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_found'")
-          .get() as { value: string } | undefined;
-        const limitRow = db
-          .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_limit'")
-          .get() as { value: string } | undefined;
-        const found = foundRow?.value ?? 'unknown';
-        const limit = limitRow?.value ?? 'unknown';
+      const limitRow = db
+        .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_limit'")
+        .get() as { value: string } | undefined;
+      const found = Number(foundRow?.value);
+      const limit = Number(limitRow?.value);
+      // TRA-3214: `found > limit` is the proof, not the `index_truncated`
+      // flag alone — a `'0'` flag next to a stale `found`/`limit` pair left
+      // over from an older truncated stamp must still warn instead of
+      // trusting the flag.
+      if (Number.isFinite(found) && Number.isFinite(limit) && limit > 0 && found > limit) {
         checks.push({
           name: 'index_truncation',
           status: 'warn',
