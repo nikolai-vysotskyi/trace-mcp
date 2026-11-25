@@ -26,6 +26,7 @@ import { resolveRemoteRepo } from '../../src/cli/ask.js';
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
   execFileSync: vi.fn(),
+  execFile: vi.fn(),
 }));
 
 const mockExecSync = vi.mocked(execSync);

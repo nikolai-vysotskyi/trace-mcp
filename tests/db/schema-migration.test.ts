@@ -40,12 +40,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 36 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 37 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(36);
+    expect(Number(row!.value)).toBe(37);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -299,11 +299,11 @@ describe('migration 35 -> 36 (TRA-2810: idx_routes_controller_symbol)', () => {
     // Now re-open with initializeDatabase — triggers migration 36
     const upgradedDb = initializeDatabase(dbPath);
 
-    // Verify schema_version is now 36
+    // Verify schema_version is now the latest (37 — migrations run through)
     const v36Version = upgradedDb
       .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
       .get() as { value: string };
-    expect(v36Version.value).toBe('36');
+    expect(v36Version.value).toBe('37');
 
     // Verify migration 36 is recorded in schema_migrations
     const migRow = upgradedDb

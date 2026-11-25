@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EnvIndexer } from '../../indexer/env-indexer.js';
 import { TaskDag } from '../task.js';
-import {
-  createGraphSnapshotsTask,
-  GRAPH_SNAPSHOTS_TASK_NAME,
-} from '../tasks/graph-snapshots-task.js';
 import { createIndexEnvTask, INDEX_ENV_TASK_NAME } from '../tasks/index-env-task.js';
 import { createLspEnrichmentTask, LSP_ENRICHMENT_TASK_NAME } from '../tasks/lsp-enrichment-task.js';
 import { createResolveEdgesTask, RESOLVE_EDGES_TASK_NAME } from '../tasks/resolve-edges-task.js';
@@ -25,7 +21,6 @@ import { createResolveEdgesTask, RESOLVE_EDGES_TASK_NAME } from '../tasks/resolv
 interface FakePipelineSideEffects {
   resolveEdgesCalls: number;
   lspEnrichmentCalls: number;
-  graphSnapshotCalls: number;
   envIndexCalls: number;
   callOrder: string[];
 }
@@ -34,7 +29,6 @@ function createFreshDag(effects: FakePipelineSideEffects): TaskDag {
   const dag = new TaskDag();
   dag.register(createResolveEdgesTask());
   dag.register(createLspEnrichmentTask());
-  dag.register(createGraphSnapshotsTask());
   dag.register(createIndexEnvTask());
   return dag;
 }
@@ -48,18 +42,13 @@ function buildClosures(effects: FakePipelineSideEffects) {
     effects.lspEnrichmentCalls++;
     effects.callOrder.push(LSP_ENRICHMENT_TASK_NAME);
   };
-  const captureSnapshots = () => {
-    effects.graphSnapshotCalls++;
-    effects.callOrder.push(GRAPH_SNAPSHOTS_TASK_NAME);
-  };
-  return { runResolveAllEdges, runLspEnrichment, captureSnapshots };
+  return { runResolveAllEdges, runLspEnrichment };
 }
 
 function freshEffects(): FakePipelineSideEffects {
   return {
     resolveEdgesCalls: 0,
     lspEnrichmentCalls: 0,
-    graphSnapshotCalls: 0,
     envIndexCalls: 0,
     callOrder: [],
   };
@@ -74,23 +63,21 @@ function stubEnvIndexer(effects: FakePipelineSideEffects): EnvIndexer {
 }
 
 describe('pipeline-dag-integration', () => {
-  it('registers all four migrated tasks under their canonical names', () => {
+  it('registers all three migrated tasks under their canonical names', () => {
     const effects = freshEffects();
     const dag = createFreshDag(effects);
 
     expect(dag.has(RESOLVE_EDGES_TASK_NAME)).toBe(true);
     expect(dag.has(LSP_ENRICHMENT_TASK_NAME)).toBe(true);
-    expect(dag.has(GRAPH_SNAPSHOTS_TASK_NAME)).toBe(true);
     expect(dag.has(INDEX_ENV_TASK_NAME)).toBe(true);
     expect(dag.list()).toEqual([
       RESOLVE_EDGES_TASK_NAME,
       LSP_ENRICHMENT_TASK_NAME,
-      GRAPH_SNAPSHOTS_TASK_NAME,
       INDEX_ENV_TASK_NAME,
     ]);
   });
 
-  it('runs the full-postprocess sequence (resolve -> lsp -> env -> snapshots) end to end', async () => {
+  it('runs the full-postprocess sequence (resolve -> lsp -> env) end to end', async () => {
     // Equivalent to the IndexingPipeline.runPipeline call site when
     // postprocess='full' and a full reindex with indexed > 0. We invoke
     // each Task in the same order as the pipeline and assert the
@@ -103,17 +90,14 @@ describe('pipeline-dag-integration', () => {
     await dag.run(RESOLVE_EDGES_TASK_NAME, { runResolveAllEdges: closures.runResolveAllEdges });
     await dag.run(LSP_ENRICHMENT_TASK_NAME, { runLspEnrichment: closures.runLspEnrichment });
     await dag.run(INDEX_ENV_TASK_NAME, { envIndexer: env, force: false });
-    await dag.run(GRAPH_SNAPSHOTS_TASK_NAME, { captureSnapshots: closures.captureSnapshots });
 
     expect(effects.resolveEdgesCalls).toBe(1);
     expect(effects.lspEnrichmentCalls).toBe(1);
     expect(effects.envIndexCalls).toBe(1);
-    expect(effects.graphSnapshotCalls).toBe(1);
     expect(effects.callOrder).toEqual([
       RESOLVE_EDGES_TASK_NAME,
       LSP_ENRICHMENT_TASK_NAME,
       INDEX_ENV_TASK_NAME,
-      GRAPH_SNAPSHOTS_TASK_NAME,
     ]);
   });
 
@@ -131,7 +115,6 @@ describe('pipeline-dag-integration', () => {
     expect(effects.resolveEdgesCalls).toBe(1);
     expect(effects.lspEnrichmentCalls).toBe(0);
     expect(effects.envIndexCalls).toBe(0);
-    expect(effects.graphSnapshotCalls).toBe(0);
     expect(effects.callOrder).toEqual([RESOLVE_EDGES_TASK_NAME]);
   });
 
@@ -145,7 +128,6 @@ describe('pipeline-dag-integration', () => {
     expect(effects.resolveEdgesCalls).toBe(0);
     expect(effects.lspEnrichmentCalls).toBe(0);
     expect(effects.envIndexCalls).toBe(0);
-    expect(effects.graphSnapshotCalls).toBe(0);
     expect(effects.callOrder).toEqual([]);
   });
 

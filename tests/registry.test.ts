@@ -6,10 +6,13 @@ import { announceDbHolder } from '../src/db-holders.js';
 import { indexFilePathForProject, resolveIndexFileProjectRoot } from '../src/cli/index-file.js';
 import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, getDbPath, REGISTRY_PATH } from '../src/global.js';
 import {
+  _resetNestedWorktreeCache,
+  descendantExcludeGlobs,
   findEphemeralProjects,
   findOverlapForNewRoot,
   findOverlappingProjects,
   findUnregisteredNestedRepos,
+  nestedWorktreeRoots,
   getProject,
   listProjects,
   registerProject,
@@ -383,6 +386,48 @@ describe('findUnregisteredNestedRepos', () => {
     const found = findUnregisteredNestedRepos();
     expect(found).toHaveLength(1);
     expect(found[0].nestedRepoRoot).toBe(submodule);
+  });
+});
+
+describe('nestedWorktreeRoots', () => {
+  beforeEach(() => _resetNestedWorktreeCache());
+
+  function linkWorktree(mainRepo: string, dir: string, id: string) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, '.git'),
+      `gitdir: ${path.join(mainRepo, '.git', 'worktrees', id)}\n`,
+    );
+  }
+
+  it('finds worktrees under an umbrella root, not repos, submodules or worktrees inside a checkout', () => {
+    const umbrella = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-umbrella-'));
+    const repo = path.join(umbrella, 'biz', 'app');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    linkWorktree(repo, path.join(umbrella, 'biz', 'app-feature'), 'app-feature');
+    linkWorktree(repo, path.join(umbrella, 'biz', '.codex-worktrees', 'fix'), 'fix');
+    const sub = path.join(umbrella, 'biz', 'lib');
+    fs.mkdirSync(sub, { recursive: true });
+    fs.writeFileSync(
+      path.join(sub, '.git'),
+      `gitdir: ${path.join(repo, '.git', 'modules', 'lib')}\n`,
+    );
+    // A worktree inside another checkout is that checkout's business, not ours.
+    linkWorktree(repo, path.join(repo, 'nested-wt'), 'nested');
+
+    expect(nestedWorktreeRoots(umbrella).sort()).toEqual([
+      path.join(umbrella, 'biz', '.codex-worktrees', 'fix'),
+      path.join(umbrella, 'biz', 'app-feature'),
+    ]);
+    // Worktrees are deduplicated by the indexer, never excluded wholesale.
+    expect(descendantExcludeGlobs(umbrella)).toEqual([]);
+  });
+
+  it('never reports the root itself when the root is a worktree', () => {
+    const main = makeTmpRepo();
+    const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-wt-root-'));
+    linkWorktree(main, wt, 'self');
+    expect(nestedWorktreeRoots(wt)).toEqual([]);
   });
 });
 

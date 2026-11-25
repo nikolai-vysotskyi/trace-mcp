@@ -8,6 +8,7 @@ import { isHotChurnPath } from '../utils/hot-churn.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { TraceignoreMatcher } from '../utils/traceignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
+import { getWorktreePlan, type WorktreePlan } from './worktree-dedup.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 /** Inputs `collectFiles` needs, extracted out of `IndexingPipeline` so the
@@ -67,6 +68,11 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   // registered descendant so an umbrella root doesn't index its child repos
   // into a second DB (the double-index churn behind #209).
   const ignore = [...config.exclude, ...traceignoreIgnore, ...descendantExcludeGlobs(rootPath)];
+  // Nested linked worktrees: walk none of their copies, add back only the
+  // files no indexed twin covers (see worktree-dedup.ts). Background coverage
+  // probes (warnOnTruncate: false) may reuse a plan up to a minute old.
+  const worktreePlan = await getWorktreePlan(rootPath, params.warnOnTruncate !== false);
+  for (const [w, keep] of worktreePlan) if (keep) ignore.push(`${w.rel}/**`);
 
   // suppressErrors: a path component that matches a directory-shaped glob
   // but is actually a file (e.g. a stray `<ws>/test` FILE meeting the
@@ -183,6 +189,8 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
     }
   }
 
+  entries = addWorktreePlanFiles(entries, worktreePlan, config);
+
   if (traceignore) {
     entries = entries.filter((e) => !traceignore.isIgnored(e));
   }
@@ -233,4 +241,36 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   }
 
   return { files: entries, truncated: false, found: entries.length, limit: maxFiles };
+}
+
+/**
+ * Append each planned worktree's files that the project's include /
+ * exclude globs accept. A worktree is a checkout of its own repo, so the globs
+ * are tried both against the worktree-relative path (`app/**` style rooted
+ * patterns) and the root-relative one.
+ */
+function addWorktreePlanFiles(
+  entries: string[],
+  plan: WorktreePlan,
+  config: TraceMcpConfig,
+): string[] {
+  if (plan.size === 0) return entries;
+  const negatives = config.include.filter((p) => p.startsWith('!') && !p.startsWith('!('));
+  const isIncluded = picomatch(
+    config.include.filter((p) => !negatives.includes(p)),
+    { dot: false },
+  );
+  const excludeGlobs = [...config.exclude, ...negatives.map((p) => p.slice(1))];
+  const isExcluded = excludeGlobs.length ? picomatch(excludeGlobs, { dot: true }) : () => false;
+  const merged = new Set(entries);
+  for (const [w, keep] of plan) {
+    if (!keep) continue;
+    for (const sub of keep) {
+      const full = `${w.rel}/${sub}`;
+      if (!(isIncluded(sub) || isIncluded(full))) continue;
+      if (isExcluded(sub) || isExcluded(full)) continue;
+      merged.add(full);
+    }
+  }
+  return [...merged];
 }
