@@ -448,4 +448,62 @@ describe('rescueFailedProxySend slow-vs-dead gate (TRA-1997)', () => {
     },
     60_000,
   );
+  it('a failed re-adoption swap keeps serving locally and retries on the next check', async () => {
+    const daemon = await startStarvedDaemon();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const session = makeSession(daemon.port, stdin, stdout, { disabledDaemonRecheckMs: 100 });
+    cleanup = async () => {
+      await session.shutdown('test');
+      await daemon.close();
+    };
+    const frames: unknown[] = [];
+    stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split('\n')) {
+        if (line.trim()) frames.push(JSON.parse(line));
+      }
+    });
+    await session.bootstrap();
+    daemon.killMcp();
+    const sendList = (id: number) =>
+      stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list', params: {} })}\n`);
+    for (const id of [61, 62, 63]) {
+      sendList(id);
+      await waitFor(frames, isAnswer(id));
+    }
+
+    // The daemon vanishes between the probe and the proxy backend's start.
+    let failedStarts = 0;
+    const internals = session as unknown as { buildProxyBackend: () => unknown };
+    const realBuild = internals.buildProxyBackend.bind(session);
+    internals.buildProxyBackend = () => {
+      if (failedStarts > 0) return realBuild();
+      failedStarts++;
+      return {
+        kind: 'proxy',
+        async start() {
+          throw new Error('daemon gone');
+        },
+        async stop() {},
+        async send() {},
+      };
+    };
+    daemon.restart(3000);
+
+    // Still served (locally) right after the failed swap...
+    await new Promise((r) => setTimeout(r, 250));
+    expect(failedStarts).toBe(1);
+    // ...and a later check re-adopts.
+    const start = Date.now();
+    let served: string | undefined;
+    for (let id = 64; Date.now() - start < 10_000; id++) {
+      sendList(id);
+      const f = (await waitFor(frames, isAnswer(id))) as { result?: { servedBy?: string } };
+      served = f.result?.servedBy;
+      expect(served).toBeDefined();
+      if (served === 'daemon-3000') break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(served).toBe('daemon-3000');
+  }, 60_000);
 });

@@ -273,6 +273,7 @@ export class StdioSession {
    */
   private disabledDaemonPid: number | undefined;
   private disabledRecheckTimer: ReturnType<typeof setInterval> | null = null;
+  private readopting = false;
   /**
    * Consecutive proxied sends that failed while /health still answered
    * (TRA-1997). One such failure is a starved daemon and stays proxy; a streak
@@ -1041,31 +1042,47 @@ export class StdioSession {
   // ponytail: a handler that passes initialize but fails tool calls costs at
   // most one 3-failure streak per recheck; add backoff if that shows up.
   private async readoptDaemon(): Promise<void> {
-    if (this.shuttingDown || !this.proxyDisabled) return;
-    const r = await probeProxyReadiness(this.opts.daemonPort).catch(() => null);
-    if (!r || r.starting || this.shuttingDown || !this.proxyDisabled) return;
-    const restarted =
-      r.pid !== undefined &&
-      this.disabledDaemonPid !== undefined &&
-      r.pid !== this.disabledDaemonPid;
-    if (!restarted) {
-      const daemonUrl = this.opts.daemonUrl ?? `http://127.0.0.1:${this.opts.daemonPort}`;
-      if (!(await probeMcpHandshake(daemonUrl, this.opts.projectRoot))) return;
-      if (this.shuttingDown || !this.proxyDisabled) return;
-    }
-    logger.info(
-      { oldPid: this.disabledDaemonPid, pid: r.pid, restarted },
-      'StdioSession: daemon serves MCP again — leaving local mode',
-    );
-    this.proxyDisabled = false;
-    this.disabledDaemonPid = undefined;
-    if (this.disabledRecheckTimer) clearInterval(this.disabledRecheckTimer);
-    this.disabledRecheckTimer = null;
-    if (this.router.getActiveKind() !== 'proxy') {
-      await this.swapTo(
-        this.buildProxyBackend(),
-        restarted ? 'daemon-restarted' : 'daemon-recovered',
+    if (this.readopting || this.shuttingDown || !this.proxyDisabled) return;
+    this.readopting = true;
+    try {
+      const r = await probeProxyReadiness(this.opts.daemonPort).catch(() => null);
+      if (!r || r.starting || this.shuttingDown || !this.proxyDisabled) return;
+      const restarted =
+        r.pid !== undefined &&
+        this.disabledDaemonPid !== undefined &&
+        r.pid !== this.disabledDaemonPid;
+      if (!restarted) {
+        const daemonUrl = this.opts.daemonUrl ?? `http://127.0.0.1:${this.opts.daemonPort}`;
+        if (!(await probeMcpHandshake(daemonUrl, this.opts.projectRoot))) return;
+        if (this.shuttingDown || !this.proxyDisabled) return;
+      }
+      if (this.router.getActiveKind() !== 'proxy') {
+        await this.swapTo(
+          this.buildProxyBackend(),
+          restarted ? 'daemon-restarted' : 'daemon-recovered',
+        );
+      }
+      if (this.router.getActiveKind() !== 'proxy') {
+        // The swap failed after the router had already stopped the local
+        // backend. Rebuild it and keep the block and the timer: the next tick
+        // tries again.
+        if (!this.shuttingDown) {
+          await this.swapTo(await this.buildLocalBackend(), 'readopt-failed').catch(() => {});
+        }
+        return;
+      }
+      logger.info(
+        { oldPid: this.disabledDaemonPid, pid: r.pid, restarted },
+        'StdioSession: daemon serves MCP again — left local mode',
       );
+      this.proxyDisabled = false;
+      this.disabledDaemonPid = undefined;
+      if (this.disabledRecheckTimer) clearInterval(this.disabledRecheckTimer);
+      this.disabledRecheckTimer = null;
+    } catch (err) {
+      logger.warn({ err: String(err) }, 'StdioSession: daemon re-adoption check failed');
+    } finally {
+      this.readopting = false;
     }
   }
 
