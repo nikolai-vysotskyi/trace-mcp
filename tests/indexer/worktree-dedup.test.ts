@@ -130,4 +130,25 @@ describe('nested worktree dedup', () => {
     expect(r.indexed).toBe(1);
     expect(paths(store)).toContain('biz/app-feat/c.ts');
   });
+  it("honours the user's core.autocrlf (CRLF checkouts are not 'changed')", async () => {
+    // Git for Windows sets core.autocrlf=true in its system config: worktrees
+    // are checked out with CRLF. Planning must read that config too, or every
+    // file in every worktree looks modified and nothing is deduplicated.
+    const cfg = join(umbrella, 'gitconfig');
+    writeFileSync(cfg, '[core]\n\tautocrlf = true\n');
+    const prev = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = cfg;
+    try {
+      const repo = join(umbrella, 'biz', 'app');
+      git(repo, 'worktree', 'add', '-q', '-b', 'crlf', join(umbrella, 'biz', 'app-crlf'));
+      _resetNestedWorktreeCache();
+      _resetWorktreePlanCache();
+      const { store, p } = pipeline();
+      await p.indexAll(true);
+      expect(paths(store).filter((x) => x.startsWith('biz/app-crlf/'))).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = prev;
+    }
+  });
 });

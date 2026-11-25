@@ -68,6 +68,22 @@ function realpathSafe(p: string): string {
   }
 }
 
+/**
+ * Hardened env, minus the system/global config opt-out: whether a checked-out
+ * file counts as changed depends on the user's line-ending config, and Git for
+ * Windows sets `core.autocrlf=true` in its *system* config. Without it every
+ * CRLF worktree file reads as modified and nothing is deduplicated. Only
+ * `ls-files` and `status` run here, with fsmonitor forced off; the threat
+ * safeGitEnv guards against is the workspace's own config, which git reads
+ * either way.
+ */
+const planGitEnv = () =>
+  safeGitEnv({
+    // The caller's own values (unset → git's defaults), not the opt-out.
+    GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+    GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+  });
+
 function git(cwd: string, args: string[]): Promise<string | null> {
   return new Promise((resolve) => {
     execFile(
@@ -78,7 +94,7 @@ function git(cwd: string, args: string[]): Promise<string | null> {
         encoding: 'utf-8',
         timeout: GIT_TIMEOUT_MS,
         maxBuffer: GIT_MAX_BUFFER,
-        env: safeGitEnv(),
+        env: planGitEnv(),
       },
       (err, out) => resolve(err ? null : String(out)),
     );
