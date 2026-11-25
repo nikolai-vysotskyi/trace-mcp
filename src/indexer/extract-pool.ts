@@ -25,6 +25,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { Worker } from 'node:worker_threads';
 import type { FileRow } from '../db/types.js';
 import { logger } from '../logger.js';
@@ -307,6 +309,52 @@ interface SlotState {
   suppressedSince: number;
 }
 
+/**
+ * V8 14+ (Node 25+) hands the heap pages of a terminated isolate to the main
+ * isolate's memory pool and frees them only at a full GC that runs after
+ * `--memory-pool-timeout` (8 s). An idle daemon may not run one for hours:
+ * 4 extract workers torn down after an indexing burst left ~370 MB of physical
+ * footprint on Node 26 (Node 22: ~50 MB). Two full GCs once the pages are old
+ * enough return it — the second frees what the first GC itself put back into
+ * the pool (measured 559 -> 225 -> 180 MB after indexing 1.1k files).
+ * Debounced: back-to-back teardowns restart the schedule.
+ */
+export const TEARDOWN_GC_DELAY_MS = 20_000;
+const TEARDOWN_GC_PASSES = 2;
+const V8_POOLS_TEARDOWN_PAGES = Number(process.versions.v8.split('.')[0]) >= 14;
+let teardownGcTimer: NodeJS.Timeout | null = null;
+let teardownGcPassesLeft = 0;
+let fullGc: (() => void) | null | undefined;
+
+function runFullGc(): void {
+  try {
+    if (fullGc === undefined) {
+      // Node's documented way to reach gc() without --expose-gc at startup.
+      v8.setFlagsFromString('--expose-gc');
+      fullGc = vm.runInNewContext('gc') as () => void;
+    }
+    fullGc?.();
+  } catch {
+    fullGc = null;
+  }
+}
+
+function armTeardownGc(): void {
+  if (teardownGcTimer) clearTimeout(teardownGcTimer);
+  teardownGcTimer = setTimeout(() => {
+    teardownGcTimer = null;
+    runFullGc();
+    if (--teardownGcPassesLeft > 0) armTeardownGc();
+  }, TEARDOWN_GC_DELAY_MS);
+  teardownGcTimer.unref();
+}
+
+export function scheduleTeardownGc(enabled = V8_POOLS_TEARDOWN_PAGES): void {
+  if (!enabled) return;
+  teardownGcPassesLeft = TEARDOWN_GC_PASSES;
+  armTeardownGc();
+}
+
 export class ExtractPool {
   private workers: Worker[] = [];
   private busy: boolean[] = [];
@@ -522,6 +570,7 @@ export class ExtractPool {
     // mid-teardown, which onExit would then kill as a crash.
     for (const w of workers) w.removeAllListeners();
     await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
+    if (workers.length > 0) scheduleTeardownGc();
   }
 
   private dispatch(req: InternalRequest): void {
