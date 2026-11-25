@@ -749,3 +749,33 @@ and `ps` showed CPU above 200% at the time of the footprint sample. This was
 a leak rate. TRA-2061 remains the owner of heap attribution; TRA-3068 and
 TRA-2603 cover the reconcile stalls. For future field samples, collect both
 `/debug/memory` and `footprint -p <pid>` before interpreting high RSS.
+
+---
+
+## 2026-11-26 — distinguish sleep gaps from live event-loop stalls
+
+Read-only review of the installed v3.44.11 daemon (PID 11220, started 2026-11-25
+14:29 UTC). Its JSON log recorded 82 event-loop warnings: 52 with
+`reindexInFlight: 1`, 17 with zero, eight with two and five with three. The
+largest reported lag, 862,671 ms at 18:55:08 UTC, overlaps a macOS sleep from
+22:40:43 to 22:55:07 +0400. A 133,301 ms warning at 18:40:34 UTC likewise
+overlaps the preceding 136-second sleep. These are wall-clock gaps, not evidence
+of a blocked event loop; TRA-2583 tracks the monitor's sleep accounting.
+
+A separate indexing window at 20:19–20:23 UTC has no Sleep, Wake or DarkWake
+event in `pmset -g log` at 00:18–00:23 +0400. It contains 53,205 ms and
+46,571 ms lag warnings with `reindexInFlight: 1`, seven `Resolver chunk took
+suspiciously long` warnings (2,125–4,443 ms per reported chunk), and two
+SQLite queries taking 4,234 and 2,219 ms. The indexing pipeline completed at
+20:23:13 UTC after 316,207 ms. These records confirm progress after the stall
+but do not identify the operation responsible for the 53-second gap or measure
+`/health` latency during it. TRA-2603 owns that attribution; TRA-1765 owns
+main-thread health responsiveness. A later 13,865 ms warning at 20:27:41 UTC
+had `reindexInFlight: 0`, with no sleep event in that local minute.
+
+At one read-only sample after this window, `/health` returned `ok` with four
+resident projects. Near-simultaneous measurements gave `/debug/memory` RSS
+1,393 MB, JS heap used 351 MB, `ps` RSS 1,361 MB and macOS `footprint`
+628 MB. CPU was 0.3% at one instant; this is not a sustained idle sample and
+does not validate the idle ceiling or establish a leak rate. TRA-2061 owns
+retained-memory attribution.
