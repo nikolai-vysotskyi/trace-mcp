@@ -55,9 +55,14 @@ function toPosix(p: string): string {
   return p.split(path.sep).join('/');
 }
 
+/**
+ * Native realpath: on Windows it also expands 8.3 short names (`RUNNER~1`),
+ * which git never writes into a worktree's `gitdir` — the JS realpath keeps
+ * them, and the main checkout then looks like it lives outside the root.
+ */
 function realpathSafe(p: string): string {
   try {
-    return fs.realpathSync(p);
+    return fs.realpathSync.native(p);
   } catch {
     return path.resolve(p);
   }
@@ -129,10 +134,11 @@ export function dedupableWorktrees(rootPath: string): NestedWorktree[] {
   for (const wt of nestedWorktreeRoots(absRoot)) {
     const found = findLinkedWorktree(wt);
     if (!found) continue;
-    const mainRel = path.relative(realRoot, found.mainRoot);
+    const mainRoot = realpathSafe(found.mainRoot);
+    const mainRel = path.relative(realRoot, mainRoot);
     if (mainRel === '' || mainRel.startsWith('..') || path.isAbsolute(mainRel)) continue;
     if (ownedByDescendant(`${toPosix(mainRel)}/x`)) continue;
-    out.push({ rel: toPosix(path.relative(absRoot, wt)), root: wt, mainRoot: found.mainRoot });
+    out.push({ rel: toPosix(path.relative(absRoot, wt)), root: wt, mainRoot });
   }
   return out.sort((a, b) => a.rel.localeCompare(b.rel));
 }

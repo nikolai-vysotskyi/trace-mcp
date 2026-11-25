@@ -369,7 +369,7 @@ async function readNestedHeadsKey(rootPath: string): Promise<string | null> {
     ),
   );
   if (heads.some((h) => h === null)) return null;
-  return `nested:${createHash('sha1').update(heads.sort().join('\n')).digest('hex')}`;
+  return `nested:${createHash('sha256').update(heads.sort().join('\n')).digest('hex')}`;
 }
 
 /**
