@@ -19,6 +19,7 @@ import { PROXY_SEND_TRANSIENT_REASON, recordSessionFallback } from './fallback-s
 import {
   computeProxyTimeoutMs,
   hasStartupProgressChanged,
+  probeMcpHandshake,
   probeProxyReadiness,
   resolveProxyInitializeTimeout,
   resolveProxyWarmupGrace,
@@ -60,6 +61,8 @@ const LIST_CHANGED = 'notifications/tools/list_changed';
  * closure), so spread-out blips never accumulate into a promotion.
  */
 const PROXY_SEND_TRANSIENT_STREAK_LIMIT = 3;
+/** A session pinned local re-checks once a minute whether the daemon serves MCP again. */
+const DISABLED_DAEMON_RECHECK_MS = 60_000;
 
 /**
  * Owes the client exactly one `tools/list_changed` per `load_tools` call that
@@ -124,6 +127,8 @@ export interface StdioSessionOptions {
   idleTimeoutMs: number;
   /** ms the daemon state must be stable before we accept it. */
   daemonStabilityMs: number;
+  /** How often a session pinned off a daemon checks whether it can go back to it. */
+  disabledDaemonRecheckMs?: number;
   /** ms to wait for pending requests to finish during a backend swap. */
   drainTimeoutMs?: number;
   /** If true and no daemon is running, try to spawn one before falling back to local mode. */
@@ -257,6 +262,17 @@ export class StdioSession {
    * next poll and hang the session all over again.
    */
   private proxyDisabled = false;
+  /**
+   * /health pid of the daemon `proxyDisabled` gave up on, and the timer that
+   * re-checks it. Nothing used to clear the block, so a session pinned local
+   * for its whole life — its own index copy and indexer — next to a daemon
+   * that was only busy for a minute (most pins are initialize timeouts during
+   * a reindex) or was restarted since. A pinned session now re-adopts a daemon
+   * with a different pid, or the same one once a real MCP handshake succeeds.
+   * The watcher cannot drive this: it saw no outage, so it emits no event.
+   */
+  private disabledDaemonPid: number | undefined;
+  private disabledRecheckTimer: ReturnType<typeof setInterval> | null = null;
   /**
    * Consecutive proxied sends that failed while /health still answered
    * (TRA-1997). One such failure is a starved daemon and stays proxy; a streak
@@ -550,6 +566,8 @@ export class StdioSession {
     logger.info({ reason }, 'StdioSession: shutting down');
 
     this.watcher.stop();
+    if (this.disabledRecheckTimer) clearInterval(this.disabledRecheckTimer);
+    this.disabledRecheckTimer = null;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
     this.handshake?.cancel();
@@ -899,7 +917,7 @@ export class StdioSession {
       } as unknown as JSONRPCMessage);
       return;
     }
-    this.proxyDisabled = true;
+    this.disableProxy();
     // Drop the in-flight id so the swap does not answer it with a synthetic
     // error; the replay below is the response the client actually receives.
     this.router.forgetPending(id);
@@ -973,9 +991,7 @@ export class StdioSession {
     // wedged MCP handler, not a starved one: promote, and block the watcher
     // from swapping this session back onto the same daemon.
     const wedged = readiness !== null;
-    if (wedged) {
-      this.proxyDisabled = true;
-    }
+    if (wedged) this.disableProxy(readiness?.pid);
     recordSessionFallback('proxy-send-failed', undefined, detail);
     logger.warn(
       { id, tool: detail.tool, err: String(err), wedged },
@@ -1002,6 +1018,55 @@ export class StdioSession {
     if (this.router.getActiveKind() !== 'local') return false;
     await this.router.ingestFromClient(msg);
     return true;
+  }
+
+  /** Pin this session off the current daemon until a different one appears. */
+  private disableProxy(pid?: number): void {
+    this.proxyDisabled = true;
+    this.disabledDaemonPid = pid;
+    if (pid === undefined) {
+      void probeProxyReadiness(this.opts.daemonPort)
+        .then((r) => {
+          if (this.disabledDaemonPid === undefined) this.disabledDaemonPid = r?.pid;
+        })
+        .catch(() => {});
+    }
+    if (this.disabledRecheckTimer) return;
+    this.disabledRecheckTimer = setInterval(() => {
+      void this.readoptDaemon();
+    }, this.opts.disabledDaemonRecheckMs ?? DISABLED_DAEMON_RECHECK_MS);
+    this.disabledRecheckTimer.unref?.();
+  }
+
+  // ponytail: a handler that passes initialize but fails tool calls costs at
+  // most one 3-failure streak per recheck; add backoff if that shows up.
+  private async readoptDaemon(): Promise<void> {
+    if (this.shuttingDown || !this.proxyDisabled) return;
+    const r = await probeProxyReadiness(this.opts.daemonPort).catch(() => null);
+    if (!r || r.starting || this.shuttingDown || !this.proxyDisabled) return;
+    const restarted =
+      r.pid !== undefined &&
+      this.disabledDaemonPid !== undefined &&
+      r.pid !== this.disabledDaemonPid;
+    if (!restarted) {
+      const daemonUrl = this.opts.daemonUrl ?? `http://127.0.0.1:${this.opts.daemonPort}`;
+      if (!(await probeMcpHandshake(daemonUrl, this.opts.projectRoot))) return;
+      if (this.shuttingDown || !this.proxyDisabled) return;
+    }
+    logger.info(
+      { oldPid: this.disabledDaemonPid, pid: r.pid, restarted },
+      'StdioSession: daemon serves MCP again — leaving local mode',
+    );
+    this.proxyDisabled = false;
+    this.disabledDaemonPid = undefined;
+    if (this.disabledRecheckTimer) clearInterval(this.disabledRecheckTimer);
+    this.disabledRecheckTimer = null;
+    if (this.router.getActiveKind() !== 'proxy') {
+      await this.swapTo(
+        this.buildProxyBackend(),
+        restarted ? 'daemon-restarted' : 'daemon-recovered',
+      );
+    }
   }
 
   private async onDaemonStateChange(nowActive: boolean): Promise<void> {

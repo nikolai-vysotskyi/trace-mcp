@@ -67,12 +67,16 @@ async function startStarvedDaemon(): Promise<{
   killMcp: () => void;
   /** Answer the next POST /mcp once with a valid SSE result (streak reset). */
   answerOnce: () => void;
+  /** Daemon recovers (optionally as a new process): every POST /mcp answered. */
+  restart: (pid?: number) => void;
   close: () => Promise<void>;
 }> {
   let mcpAlive = true;
   let answerNext = false;
+  let healthy = false;
+  let pid = 1000;
   const server = http.createServer((req, res) => {
-    if (req.url?.startsWith('/mcp') && req.method === 'POST' && answerNext) {
+    if (req.url?.startsWith('/mcp') && req.method === 'POST' && (answerNext || healthy)) {
       answerNext = false;
       const chunks: Buffer[] = [];
       req.on('data', (c: Buffer) => chunks.push(c));
@@ -84,14 +88,16 @@ async function startStarvedDaemon(): Promise<{
           /* malformed — answer with null id */
         }
         res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'close' });
-        res.end(`data: ${JSON.stringify({ jsonrpc: '2.0', id, result: { tools: [] } })}\n\n`);
+        res.end(
+          `data: ${JSON.stringify({ jsonrpc: '2.0', id, result: { tools: [], servedBy: `daemon-${pid}` } })}\n\n`,
+        );
       });
       return;
     }
     req.resume();
     if (req.url === '/health' || req.url?.startsWith('/health')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
+      res.end(JSON.stringify({ status: 'ok', pid }));
       return;
     }
     if (req.url?.startsWith('/mcp')) {
@@ -121,6 +127,10 @@ async function startStarvedDaemon(): Promise<{
     answerOnce: () => {
       answerNext = true;
     },
+    restart: (newPid?: number) => {
+      if (newPid !== undefined) pid = newPid;
+      healthy = true;
+    },
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
@@ -129,7 +139,12 @@ async function startStarvedDaemon(): Promise<{
   };
 }
 
-function makeSession(port: number, stdin: PassThrough, stdout: PassThrough) {
+function makeSession(
+  port: number,
+  stdin: PassThrough,
+  stdout: PassThrough,
+  extra: { disabledDaemonRecheckMs?: number } = {},
+) {
   return new StdioSession({
     projectRoot: process.cwd(),
     indexRoot: process.cwd(),
@@ -143,6 +158,7 @@ function makeSession(port: number, stdin: PassThrough, stdout: PassThrough) {
     handshakeTimeoutMs: 0,
     stdin,
     stdout,
+    ...extra,
   });
 }
 
@@ -380,4 +396,56 @@ describe('rescueFailedProxySend slow-vs-dead gate (TRA-1997)', () => {
       'proxy-send-transient',
     ]);
   }, 60_000);
+  it.each([
+    ['a restarted daemon (new pid)', 2000, 'daemon-2000'],
+    ['the same daemon once its MCP handler answers again', undefined, 'daemon-1000'],
+  ])(
+    'a session pinned off a wedged daemon re-adopts %s',
+    async (_label, newPid, servedByDaemon) => {
+      const daemon = await startStarvedDaemon();
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const session = makeSession(daemon.port, stdin, stdout, { disabledDaemonRecheckMs: 100 });
+      cleanup = async () => {
+        await session.shutdown('test');
+        await daemon.close();
+      };
+      const frames: unknown[] = [];
+      stdout.on('data', (chunk: Buffer) => {
+        for (const line of chunk.toString('utf8').split('\n')) {
+          if (line.trim()) frames.push(JSON.parse(line));
+        }
+      });
+      await session.bootstrap();
+      daemon.killMcp();
+      const sendList = (id: number) =>
+        stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list', params: {} })}\n`,
+        );
+      for (const id of [41, 42, 43]) {
+        sendList(id);
+        await waitFor(frames, isAnswer(id));
+      }
+      expect(recorded.at(-1)?.reason).toBe('proxy-send-failed');
+
+      // Same daemon still wedged: several rechecks later the session stays local.
+      await new Promise((r) => setTimeout(r, 400));
+      sendList(44);
+      const local = (await waitFor(frames, isAnswer(44))) as { result?: { servedBy?: string } };
+      expect(local.result?.servedBy).toBe('fake-local');
+
+      daemon.restart(newPid);
+      const start = Date.now();
+      let served: string | undefined;
+      for (let id = 45; Date.now() - start < 10_000; id++) {
+        sendList(id);
+        const f = (await waitFor(frames, isAnswer(id))) as { result?: { servedBy?: string } };
+        served = f.result?.servedBy;
+        if (served === servedByDaemon) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(served).toBe(servedByDaemon);
+    },
+    60_000,
+  );
 });
