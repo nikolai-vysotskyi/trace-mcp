@@ -129,6 +129,8 @@ export interface ProxyReadiness {
   rttMs: number;
   /** Startup progress from /health, present only while `starting`. */
   progress?: StartupProgress;
+  /** Daemon process id from /health — tells a restarted daemon from the old one. */
+  pid?: number;
   /**
    * True when the port is bound but /health timed out — the daemon's event
    * loop is stalled by bulk indexing, not dead (GH#1448). The kernel still
@@ -228,7 +230,11 @@ export async function probeProxyReadiness(
       signal: AbortSignal.timeout(healthTimeoutMs),
     });
     if (!res.ok) return null;
-    let health: { status?: unknown; progress?: { projectsReady: number; projectsTotal: number } };
+    let health: {
+      status?: unknown;
+      pid?: unknown;
+      progress?: { projectsReady: number; projectsTotal: number };
+    };
     try {
       health = (await res.json()) as typeof health;
     } catch {
@@ -240,6 +246,7 @@ export async function probeProxyReadiness(
       starting: (health as { status?: string }).status === 'starting',
       rttMs: Date.now() - start,
       progress: readStartupProgress(health.progress),
+      pid: typeof health.pid === 'number' ? health.pid : undefined,
     };
   } catch {
     // Network error or health timeout — alive-but-busy or dead?
@@ -303,4 +310,52 @@ export function computeProxyTimeoutMs(
   }
   const extra = Math.min(Math.max(0, readiness.rttMs) * LOAD_RTT_FACTOR, PROXY_MAX_LOAD_EXTRA_MS);
   return Math.min(baseMs + extra, PROXY_ABSOLUTE_MAX_MS);
+}
+
+/**
+ * One real MCP handshake against the daemon: POST `initialize` to /mcp the
+ * way a proxy session would, then close the session it opened. True only when
+ * the daemon answered with a result — proof its MCP handler works, which
+ * /health alone cannot give (a wedged handler keeps /health green).
+ */
+export async function probeMcpHandshake(
+  daemonUrl: string,
+  projectRoot: string,
+  timeoutMs = 5_000,
+): Promise<boolean> {
+  const url = `${daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    'X-Trace-Project': projectRoot,
+  };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'readopt-probe',
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'trace-mcp-readopt-probe', version: '0' },
+        },
+      }),
+    });
+    const body = await res.text();
+    const sid = res.headers.get('mcp-session-id');
+    if (sid) {
+      void fetch(url, {
+        method: 'DELETE',
+        headers: { ...headers, 'mcp-session-id': sid },
+        signal: AbortSignal.timeout(timeoutMs),
+      }).catch(() => {});
+    }
+    return res.ok && body.includes('"result"');
+  } catch {
+    return false;
+  }
 }
