@@ -1127,19 +1127,32 @@ if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
     fi
   fi
   if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
-    ROOTS=$(pkg_roots "$NODE_PATH")
-    CLI_PATH=$(probe_cli "$ROOTS") || {
-      # An update (npm install -g or self-update) may be swapping the package
-      # directory right this second. Wait briefly and retry before declaring
-      # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
-      # kills the session permanently.
-      retry=0
-      while [ "$retry" -lt 10 ]; do
-        sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
-        retry=$((retry + 1))
-        CLI_PATH=$(probe_cli "$ROOTS") && break
-      done
-    }
+    # During an update, keep serving the configured installation's complete
+    # backup before considering a different Node prefix. Otherwise another
+    # global install can silently downgrade this client and heal that older
+    # path into launcher.env for all later sessions.
+    case "$CLI_PATH" in
+      */trace-mcp/dist/cli.js)
+        PREFERRED_ROOT="${CLI_PATH%/trace-mcp/dist/cli.js}"
+        PREFERRED_CLI=$(probe_cli "$PREFERRED_ROOT") || PREFERRED_CLI=""
+        [ -z "$PREFERRED_CLI" ] || CLI_PATH="$PREFERRED_CLI"
+        ;;
+    esac
+    if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
+      ROOTS=$(pkg_roots "$NODE_PATH")
+      CLI_PATH=$(probe_cli "$ROOTS") || {
+        # An update (npm install -g or self-update) may be swapping the package
+        # directory right this second. Wait briefly and retry before declaring
+        # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
+        # kills the session permanently.
+        retry=0
+        while [ "$retry" -lt 10 ]; do
+          sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
+          retry=$((retry + 1))
+          CLI_PATH=$(probe_cli "$ROOTS") && break
+        done
+      }
+    fi
     # No npm prefix holds us: check for an app bundle (app-only install, TRA-996).
     # This must run AFTER npm roots retry: during a package update, an installed
     # app bundle must never preempt an in-flight npm directory swap (TRA-2687).

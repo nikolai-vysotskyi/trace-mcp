@@ -364,6 +364,25 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       );
     });
 
+    it('prefers the configured prefix backup over a live package in another Node prefix', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const otherCli = plantNvmPackage(home);
+      const root = path.join(home, 'preferred', 'lib', 'node_modules');
+      const backup = path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist', 'cli.js');
+      const live = path.join(root, 'trace-mcp', 'dist', 'cli.js');
+      fs.mkdirSync(path.dirname(backup), { recursive: true });
+      fs.writeFileSync(backup, '// configured version before swap\n');
+      writeConfig(traceHome, node, live);
+
+      const result = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(`NODE_ARGS:${fs.realpathSync(backup)} serve`);
+      expect(result.stdout).not.toContain(otherCli);
+      expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).not.toContain(
+        'tmcp-bak',
+      );
+    });
+
     // TRA-881: the backup fallback took whatever the glob listed first. The
     // suffix is the updater's PID, so name order is arbitrary — two crashed
     // updates could leave the client served an arbitrarily old build for the
