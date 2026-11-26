@@ -86,8 +86,9 @@ describe('trace-mcp prune topology & decisions integration (TRA-595)', () => {
     topo.upsertService({ name: 'live-service', repoRoot, dbPath });
     topo.close();
 
-    const { registerProject } = await import('../../src/registry.js');
+    const { registerProject, updateLastIndexed } = await import('../../src/registry.js');
     registerProject(repoRoot);
+    updateLastIndexed(repoRoot);
     const report = pruneModule.scanOrPruneTopology(true);
     expect(report.missingDbServices.map((s) => s.name)).toEqual(['live-service']);
     expect(report.unindexedServices).toEqual([]);

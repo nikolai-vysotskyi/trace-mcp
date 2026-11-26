@@ -171,8 +171,8 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
       const resolvedDbPath = resolveExistingServiceIndexPath(row.repo_root);
       if (resolvedDbPath) {
         staleDbPathServices.push({ ...row, resolved_db_path: resolvedDbPath });
-      } else if (!resolveRegisteredAncestor(row.repo_root)) {
-        // Discovery records a prospective DB path without registering an index.
+      } else if (!resolveRegisteredAncestor(row.repo_root)?.lastIndexed) {
+        // Discovery and registration can both precede the first completed index.
         unindexedServices.push(row);
       } else {
         missingDbServices.push(row);

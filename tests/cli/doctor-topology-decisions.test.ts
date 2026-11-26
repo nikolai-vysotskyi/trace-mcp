@@ -109,8 +109,10 @@ describe('doctor topology and decisions hygiene (TRA-595)', () => {
     expect(before.unindexedServices).toEqual([{ name: 'live-service', repoRoot, dbPath }]);
     expect(before.missingDbServices).toEqual([]);
 
-    const { registerProject } = await import('../../src/registry.js');
+    const { registerProject, updateLastIndexed } = await import('../../src/registry.js');
     registerProject(repoRoot);
+    expect(doctor.diagnoseTopology().unindexedServices).toHaveLength(1);
+    updateLastIndexed(repoRoot);
     const report = doctor.diagnoseTopology();
     expect(report.missingDbServices).toEqual([{ name: 'live-service', repoRoot, dbPath }]);
     expect(report.unindexedServices).toEqual([]);
