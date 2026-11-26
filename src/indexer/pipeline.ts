@@ -207,8 +207,9 @@ const SHRINK_MIN_BASELINE = 200;
 /**
  * Repo-metadata keys stamping the last full walk's `security.max_files`
  * truncation (TRA-1664). `index_truncated` is `'1'` when the walk was cut to
- * the cap, `'0'` after a walk that fit; the `found`/`limit` companions are
- * only meaningful while it reads `'1'`. Persisted (not just returned on
+ * the cap, `'0'` after a walk that fit — and that walk clears the
+ * `found`/`limit` companions in the same write (TRA-3214), so the three keys
+ * never disagree with each other. Persisted (not just returned on
  * `IndexingResult`) so stats/UI keep reporting "index partial" across daemon
  * restarts that take the incremental fast path and never re-walk the tree.
  */
@@ -285,13 +286,24 @@ export function isFrameworkManifestBasename(base: string): boolean {
  * Read the persisted max_files truncation stamp. Returns null when the last
  * full walk fit under the cap (or predates the stamp) — the index covers the
  * whole tree as far as the walker knows.
+ *
+ * TRA-3214: the `'1'` flag is trusted as-is — a clean walk that set it
+ * stamped `found`/`limit` in the same write. But a `'0'` (or missing) flag
+ * is NOT enough on its own to report "not truncated": `found`/`limit`
+ * companions left over from an older truncated stamp (pre-fix data, or any
+ * future write path that sets the flag without clearing them) would
+ * otherwise be silently ignored even though they still prove an overflow.
+ * Fail safe — keep reporting truncated using those numbers until a walk
+ * that actually fits writes (or clears) them consistently.
  */
 export function readIndexTruncation(store: Store): { found: number; limit: number } | null {
   try {
-    if (store.getRepoMetadata(META_INDEX_TRUNCATED) !== '1') return null;
+    const flag = store.getRepoMetadata(META_INDEX_TRUNCATED);
     const found = Number.parseInt(store.getRepoMetadata(META_INDEX_TRUNCATED_FOUND) ?? '', 10);
     const limit = Number.parseInt(store.getRepoMetadata(META_INDEX_TRUNCATED_LIMIT) ?? '', 10);
-    if (!Number.isFinite(found) || !Number.isFinite(limit) || found <= 0 || limit <= 0) return null;
+    const proven = Number.isFinite(found) && Number.isFinite(limit) && limit > 0 && found > limit;
+    if (!proven) return null;
+    if (flag !== '1' && flag !== '0') return null;
     return { found, limit };
   } catch {
     return null;
@@ -1404,16 +1416,36 @@ export class IndexingPipeline {
    * (TRA-1664). A walk that fit clears the flag so a previously-partial
    * index stops reporting partial after the cap is raised and a full reindex
    * runs. Best-effort: a metadata write must never fail indexing.
+   *
+   * TRA-3214: the untruncated branch used to leave the previous run's
+   * `found`/`limit` companions in place after clearing the flag. Every
+   * reader already gates those fields on `index_truncated === '1'`
+   * (`readIndexTruncation`, doctor's `checkDbHealth`), so nothing
+   * downstream mis-reported — but a stale `found` left sitting above
+   * `limit` right next to a fresh `'0'` flag reads as self-contradictory to
+   * anyone inspecting `repo_metadata` directly, which is exactly how this
+   * was found. Delete them in lockstep so the row set itself never claims
+   * both "not truncated" and "found > limit" at once.
+   *
+   * The three writes run inside one transaction: three separate
+   * auto-committed statements would leave a crash or a mid-write exception
+   * free to land between them, stamping the flag without its companions (or
+   * vice versa) — exactly the partial state the readers' fail-safes above
+   * exist to catch, but better not to produce in the first place.
    */
   private stampTruncationMetadata(collected: CollectFilesResult): void {
     try {
-      if (collected.truncated) {
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED_FOUND, String(collected.found));
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED_LIMIT, String(collected.limit));
-      } else {
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
-      }
+      this.store.db.transaction(() => {
+        if (collected.truncated) {
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED_FOUND, String(collected.found));
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED_LIMIT, String(collected.limit));
+        } else {
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
+          this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_FOUND);
+          this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_LIMIT);
+        }
+      })();
     } catch (err) {
       logger.debug({ err }, 'Truncation metadata stamp skipped (non-fatal)');
     }
