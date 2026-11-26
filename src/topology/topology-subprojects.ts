@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
-import { resolveExistingServiceIndexPath } from './service-index-path.js';
+import { getProject, resolveRegisteredAncestor } from '../registry.js';
 import type { SubprojectRow } from './topology-types.js';
 
 /**
@@ -108,6 +108,7 @@ export interface StaleTopologyReport {
     repo_root: string;
   }>;
   missingDbServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
+  unindexedServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
   staleDbPathServices: Array<{
     id: number;
     name: string;
@@ -154,6 +155,7 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
 
   let staleServices: Array<{ id: number; name: string; repo_root: string }> = [];
   let missingDbServices: StaleTopologyReport['missingDbServices'] = [];
+  let unindexedServices: StaleTopologyReport['unindexedServices'] = [];
   let staleDbPathServices: StaleTopologyReport['staleDbPathServices'] = [];
   try {
     const svcRows = db.prepare('SELECT id, name, repo_root, db_path FROM services').all() as Array<{
@@ -165,9 +167,15 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
     staleServices = svcRows.filter((r) => !fs.existsSync(r.repo_root));
     for (const row of svcRows) {
       if (!fs.existsSync(row.repo_root) || fs.existsSync(row.db_path)) continue;
-      const resolvedDbPath = resolveExistingServiceIndexPath(row.repo_root);
+      // getProject also handles lexical/realpath aliases of a registered root.
+      const registered = resolveRegisteredAncestor(row.repo_root) ?? getProject(row.repo_root);
+      const resolvedDbPath =
+        registered?.dbPath && fs.existsSync(registered.dbPath) ? registered.dbPath : null;
       if (resolvedDbPath) {
         staleDbPathServices.push({ ...row, resolved_db_path: resolvedDbPath });
+      } else if (!registered?.lastIndexed) {
+        // Discovery and registration can both precede the first completed index.
+        unindexedServices.push(row);
       } else {
         missingDbServices.push(row);
       }
@@ -176,7 +184,13 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
     /* table may not exist */
   }
 
-  return { staleSubprojects, staleServices, missingDbServices, staleDbPathServices };
+  return {
+    staleSubprojects,
+    staleServices,
+    missingDbServices,
+    unindexedServices,
+    staleDbPathServices,
+  };
 }
 
 /**

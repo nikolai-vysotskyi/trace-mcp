@@ -136,7 +136,7 @@ describe('TopologyStore stale pruning (TRA-595)', () => {
     expect(res.removedSubprojects).toEqual([]);
   });
 
-  it('reports a missing service index without pruning its topology data', () => {
+  it('reports a discovered but unregistered service without pruning its topology data', () => {
     const repoRoot = path.join(tmpDir, 'indexed-repo');
     const dbPath = path.join(tmpDir, 'removed-index.db');
     fs.mkdirSync(repoRoot);
@@ -152,15 +152,16 @@ describe('TopologyStore stale pruning (TRA-595)', () => {
       parsedSpec: '{}',
     });
 
-    expect(store.findStale().missingDbServices).toEqual([
+    expect(store.findStale().unindexedServices).toEqual([
       { id: serviceId, name: 'indexed-service', repo_root: repoRoot, db_path: dbPath },
     ]);
+    expect(store.findStale().missingDbServices).toEqual([]);
     expect(store.findStale().staleServices).toEqual([]);
     expect(store.pruneStale().services).toBe(0);
     expect(store.getService('indexed-service')).toBeDefined();
     expect(store.getContractsByService(serviceId).map((c) => c.id)).toEqual([contractId]);
 
     fs.writeFileSync(dbPath, 'index');
-    expect(store.findStale().missingDbServices).toEqual([]);
+    expect(store.findStale().unindexedServices).toEqual([]);
   });
 });
