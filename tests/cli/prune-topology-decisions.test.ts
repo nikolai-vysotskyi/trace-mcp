@@ -78,7 +78,7 @@ describe('trace-mcp prune topology & decisions integration (TRA-595)', () => {
     expect(cleanDec.staleRoots).toHaveLength(0);
   });
 
-  it('reports missing service databases without deleting the service on apply', () => {
+  it('reports registered service databases missing without deleting the service on apply', async () => {
     const repoRoot = path.join(tmpHome, 'live-app');
     const dbPath = path.join(tmpHome, 'old-index.db');
     fs.mkdirSync(repoRoot);
@@ -86,8 +86,11 @@ describe('trace-mcp prune topology & decisions integration (TRA-595)', () => {
     topo.upsertService({ name: 'live-service', repoRoot, dbPath });
     topo.close();
 
+    const { registerProject } = await import('../../src/registry.js');
+    registerProject(repoRoot);
     const report = pruneModule.scanOrPruneTopology(true);
     expect(report.missingDbServices.map((s) => s.name)).toEqual(['live-service']);
+    expect(report.unindexedServices).toEqual([]);
     expect(report.removedServices).toBe(0);
     expect(report.staleServices).toEqual([]);
   });

@@ -666,6 +666,7 @@ function toJson(
 export interface TopologyPruneSummary {
   staleServices: Array<{ id: number; name: string; repo_root: string }>;
   missingDbServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
+  unindexedServices: Array<{ id: number; name: string; repo_root: string; db_path: string }>;
   staleDbPathServices: Array<{
     id: number;
     name: string;
@@ -692,6 +693,7 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
     return {
       staleServices: [],
       missingDbServices: [],
+      unindexedServices: [],
       staleDbPathServices: [],
       staleSubprojects: [],
       removedServices: 0,
@@ -712,6 +714,7 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
       return {
         staleServices: stale.staleServices,
         missingDbServices: stale.missingDbServices,
+        unindexedServices: stale.unindexedServices,
         staleDbPathServices: stale.staleDbPathServices,
         staleSubprojects: stale.staleSubprojects,
         removedServices,
@@ -725,6 +728,7 @@ export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
     return {
       staleServices: [],
       missingDbServices: [],
+      unindexedServices: [],
       staleDbPathServices: [],
       staleSubprojects: [],
       removedServices: 0,
@@ -925,6 +929,7 @@ export const pruneCommand = new Command('prune')
               topology: {
                 staleServices: topoSummary.staleServices,
                 missingDbServices: topoSummary.missingDbServices,
+                unindexedServices: topoSummary.unindexedServices,
                 staleDbPathServices: topoSummary.staleDbPathServices,
                 staleSubprojects: topoSummary.staleSubprojects,
                 removedServices: topoSummary.removedServices,

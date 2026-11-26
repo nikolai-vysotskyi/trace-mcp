@@ -599,6 +599,7 @@ export interface TopologyHealthReport {
   topologyExists: boolean;
   staleServices: Array<{ id: number; name: string; repoRoot: string }>;
   missingDbServices: Array<{ name: string; repoRoot: string; dbPath: string }>;
+  unindexedServices: Array<{ name: string; repoRoot: string; dbPath: string }>;
   staleDbPathServices: Array<{
     name: string;
     repoRoot: string;
@@ -616,6 +617,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyExists: false,
       staleServices: [],
       missingDbServices: [],
+      unindexedServices: [],
       staleDbPathServices: [],
       staleSubprojects: [],
       staleCount: 0,
@@ -634,6 +636,11 @@ export function diagnoseTopology(): TopologyHealthReport {
           repoRoot: s.repo_root,
         })),
         missingDbServices: stale.missingDbServices.map((s) => ({
+          name: s.name,
+          repoRoot: s.repo_root,
+          dbPath: s.db_path,
+        })),
+        unindexedServices: stale.unindexedServices.map((s) => ({
           name: s.name,
           repoRoot: s.repo_root,
           dbPath: s.db_path,
@@ -661,6 +668,7 @@ export function diagnoseTopology(): TopologyHealthReport {
       topologyExists: true,
       staleServices: [],
       missingDbServices: [],
+      unindexedServices: [],
       staleDbPathServices: [],
       staleSubprojects: [],
       staleCount: 0,
@@ -1191,6 +1199,11 @@ function printTopologyReport(t: TopologyHealthReport): void {
     }
     console.log(
       "  Re-index affected repositories, then run 'trace-mcp subproject sync'. Missing indexes are not removed by --fix.\n",
+    );
+  }
+  if (t.unindexedServices.length > 0) {
+    console.log(
+      `Topology: ${t.unindexedServices.length} discovered service(s) have no registered index (informational; see --json for paths).\n`,
     );
   }
   if (t.staleDbPathServices.length > 0) {
