@@ -14,6 +14,7 @@ import { PluginRegistry } from '../../plugin-api/registry.js';
 import { TypeScriptLanguagePlugin } from '../plugins/language/typescript/index.js';
 import { createTestStore } from '../../../tests/test-utils.js';
 import { verifyIndex } from '../../db/verify.js';
+import { getIndexHealth } from '../../tools/project/project.js';
 
 // TRA-3214: a project found truncated on one full walk (found=57080,
 // limit=40000) later showed index_truncated=0 while the found/limit
@@ -80,6 +81,44 @@ describe('TRA-3214: index_truncated metadata stays internally consistent', () =>
     await pipeline.dispose();
   });
 
+  it('full-walk → auto with an unchanged file set and limit keeps reporting the same overflow (TRA-3214 acceptance case)', async () => {
+    fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true });
+    for (let i = 0; i < 8; i++) {
+      fs.writeFileSync(path.join(tempDir, 'src', `f${i}.ts`), `export const v${i} = ${i};`);
+    }
+    const store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    const config = TraceMcpConfigSchema.parse({
+      root: tempDir,
+      include: ['src/**/*.ts'],
+      exclude: [],
+      security: { max_files: 5 },
+    });
+    const pipeline = new IndexingPipeline(store, registry, config, tempDir, undefined, {});
+
+    // Initial full walk: truncated, stamps {found: 8, limit: 5}.
+    await pipeline.indexAll();
+    expect(readIndexTruncation(store)).toEqual({ found: 8, limit: 5 });
+
+    // "auto": the normal, non-forced indexAll call a watcher/schedule would
+    // make, with nothing on disk and nothing in config changed. Whether it
+    // takes the incremental fast path (which never touches this metadata) or
+    // re-walks, the persisted overflow must not change.
+    await pipeline.indexAll();
+
+    expect(readIndexTruncation(store)).toEqual({ found: 8, limit: 5 });
+    expect(store.getRepoMetadata(META_INDEX_TRUNCATED)).toBe('1');
+    expect(store.getRepoMetadata(META_INDEX_TRUNCATED_FOUND)).toBe('8');
+    expect(store.getRepoMetadata(META_INDEX_TRUNCATED_LIMIT)).toBe('5');
+
+    const health = getIndexHealth(store, config, tempDir);
+    expect(health.status).toBe('degraded');
+    expect(health.truncated).toEqual({ found: 8, limit: 5 });
+
+    await pipeline.dispose();
+  });
+
   it('readIndexTruncation reports the overflow from a stale found/limit pair even when the flag reads 0', () => {
     const store = createTestStore();
     store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
@@ -106,5 +145,19 @@ describe('TRA-3214: index_truncated metadata stays internally consistent', () =>
     const check = report.checks.find((c) => c.name === 'index_truncation');
     expect(check?.status).toBe('warn');
     expect(check?.detail).toContain('57080 file(s) found on disk, capped at 40000');
+  });
+
+  // Regression (caught in review): the found>limit fail-safe above must not
+  // replace the unconditional warning on flag='1' — a partial stamp (the
+  // flag written, the found/limit write failing or never having landed)
+  // must still read as truncated, not silently as complete.
+  it('verifyIndex warns when the flag reads 1 even without a valid found/limit pair', () => {
+    const store = createTestStore();
+    store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
+
+    const report = verifyIndex(store.db);
+    const check = report.checks.find((c) => c.name === 'index_truncation');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('unknown file(s) found on disk, capped at unknown');
   });
 });

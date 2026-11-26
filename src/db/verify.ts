@@ -492,6 +492,9 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
   // ── 9. Index truncation check (TRA-2639) ─────────────────────────────
   if (tableExists(db, 'repo_metadata')) {
     try {
+      const flagRow = db
+        .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated'")
+        .get() as { value: string } | undefined;
       const foundRow = db
         .prepare("SELECT value FROM repo_metadata WHERE key = 'index_truncated_found'")
         .get() as { value: string } | undefined;
@@ -500,15 +503,22 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
         .get() as { value: string } | undefined;
       const found = Number(foundRow?.value);
       const limit = Number(limitRow?.value);
-      // TRA-3214: `found > limit` is the proof, not the `index_truncated`
-      // flag alone — a `'0'` flag next to a stale `found`/`limit` pair left
-      // over from an older truncated stamp must still warn instead of
-      // trusting the flag.
-      if (Number.isFinite(found) && Number.isFinite(limit) && limit > 0 && found > limit) {
+      const pairProvenTruncated =
+        Number.isFinite(found) && Number.isFinite(limit) && limit > 0 && found > limit;
+      // TRA-3214: two independent reasons to warn, either is sufficient —
+      // neither alone is trustworthy on its own:
+      //   - the flag reads '1': always warn, even with a missing/invalid
+      //     pair (a partial stamp — see the transaction below — must not
+      //     read as "complete").
+      //   - the flag reads '0' but a stale found>limit pair proves an
+      //     older truncated stamp was never cleared in lockstep.
+      if (flagRow?.value === '1' || pairProvenTruncated) {
+        const foundDisplay = foundRow?.value ?? 'unknown';
+        const limitDisplay = limitRow?.value ?? 'unknown';
         checks.push({
           name: 'index_truncation',
           status: 'warn',
-          detail: `Index is truncated by security.max_files: ${found} file(s) found on disk, capped at ${limit}`,
+          detail: `Index is truncated by security.max_files: ${foundDisplay} file(s) found on disk, capped at ${limitDisplay}`,
           suggested_repair: 'increase security.max_files in config and run reindex',
         });
       } else {

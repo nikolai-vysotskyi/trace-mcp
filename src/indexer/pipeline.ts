@@ -1426,18 +1426,26 @@ export class IndexingPipeline {
    * anyone inspecting `repo_metadata` directly, which is exactly how this
    * was found. Delete them in lockstep so the row set itself never claims
    * both "not truncated" and "found > limit" at once.
+   *
+   * The three writes run inside one transaction: three separate
+   * auto-committed statements would leave a crash or a mid-write exception
+   * free to land between them, stamping the flag without its companions (or
+   * vice versa) — exactly the partial state the readers' fail-safes above
+   * exist to catch, but better not to produce in the first place.
    */
   private stampTruncationMetadata(collected: CollectFilesResult): void {
     try {
-      if (collected.truncated) {
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED_FOUND, String(collected.found));
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED_LIMIT, String(collected.limit));
-      } else {
-        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
-        this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_FOUND);
-        this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_LIMIT);
-      }
+      this.store.db.transaction(() => {
+        if (collected.truncated) {
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED_FOUND, String(collected.found));
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED_LIMIT, String(collected.limit));
+        } else {
+          this.store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
+          this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_FOUND);
+          this.store.deleteRepoMetadata(META_INDEX_TRUNCATED_LIMIT);
+        }
+      })();
     } catch (err) {
       logger.debug({ err }, 'Truncation metadata stamp skipped (non-fatal)');
     }
