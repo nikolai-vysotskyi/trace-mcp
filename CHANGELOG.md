@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.12](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.11...v3.44.12) (2026-11-26)
+
+
+### Bug Fixes
+
+* **daemon:** refuse unsupervised Multica task daemons ([#1959](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1959)) ([95ea9b2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/95ea9b26452aacf79faf82cd3381b36e0371690c))
+* **index:** clear found/limit when index_truncated clears (TRA-3214) ([#1953](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1953)) ([85e96c5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/85e96c5800681ab9c89f4619cee4440585fd9eaf))
+* **proxy:** route nested repositories to their own index (TRA-3228) ([#1957](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1957)) ([3dee9e9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3dee9e9867aa4d7de8d40c39d9ba5d2bace5d006))
+* **topology:** distinguish unindexed services from missing indexes ([#1958](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1958)) ([481b61d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/481b61dd6a5bc60f10ab0bfad582dc1ac7acaf21))
+
+
+### Documentation
+
+* **perf:** classify sleep gaps and live daemon stalls (TRA-3217) ([#1954](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1954)) ([53e4a3e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/53e4a3ed7c7310da5046394e955f65f903901d82))
+
 ## [3.44.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.10...v3.44.11) (2026-11-25)
 
 
