@@ -143,6 +143,16 @@ describe.skipIf(process.platform === 'win32')('ProxyBackend worktree hint', () =
     expect(url.searchParams.has('worktree')).toBe(false);
   });
 
+  it('accepts a nested clone in a directory whose name starts with two dots', async () => {
+    const { main } = makeMainWithWorktree();
+    const nested = path.join(main, '..experiment');
+    fs.mkdirSync(nested);
+    runGit(nested, 'init', '-q', '-b', 'main');
+
+    const url = new URL(await startFor(nested));
+    expect(url.searchParams.get('project')).toBe(nested);
+  });
+
   it('serves a nested submodule with a .git file from its own root', async () => {
     const { main } = makeMainWithWorktree();
     const nested = path.join(main, 'vendor-lib');

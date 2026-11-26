@@ -16,7 +16,7 @@ function nestedGitRoot(cwd: string, knownRoot: string, linkedRoot?: string): str
   const boundary = path.resolve(knownRoot);
   let dir = path.resolve(cwd);
   const rel = path.relative(boundary, dir);
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null;
   while (dir !== boundary) {
     try {
       const gitEntry = fs.statSync(path.join(dir, '.git'));
