@@ -500,7 +500,7 @@ export interface RegistryHealthReport {
   truncatedCount: number;
   /** Project pairs where one registered root contains another — double indexing/watching. */
   overlaps: RegistryOverlapReport[];
-  /** Sibling repos (own `.git`) found under a registered root that were never registered — zero index coverage. */
+  /** Independent nested repos without their own registry entry; parent indexing may cover some files. */
   unregisteredNestedRepos: UnregisteredNestedRepoReport[];
   /** One-shot Multica agent-run workdirs that are still registered long after their run ended (TRA-94). */
   ephemeralProjects: EphemeralProjectCandidate[];
@@ -1143,8 +1143,10 @@ function printRegistryReport(r: RegistryHealthReport): void {
   }
   if (r.unregisteredNestedRepos.length > 0) {
     console.log(
-      '  Files under these repos have zero index coverage — searches/lookups will silently ' +
-        'miss them. Register each one: `trace-mcp add <nested-repo-path>`.',
+      '  These repos have no separate registry entry. Parent indexing may cover some files, ' +
+        'depending on its include rules and file limit. Sessions started inside an independent ' +
+        'nested repo use its own index; use `trace-mcp add <nested-repo-path>` only for repos ' +
+        'you want to keep registered.',
     );
   }
   for (const e of r.ephemeralProjects) {

@@ -131,6 +131,29 @@ describe.skipIf(process.platform === 'win32')('ProxyBackend worktree hint', () =
     expect(url.searchParams.get('worktree')).toBe(nested);
   });
 
+  it('serves an independent nested clone from its own root', async () => {
+    const { main } = makeMainWithWorktree();
+    const nested = path.join(main, 'experiments', 'classifier');
+    fs.mkdirSync(nested, { recursive: true });
+    runGit(nested, 'init', '-q', '-b', 'main');
+    fs.mkdirSync(path.join(nested, 'src'));
+
+    const url = new URL(await startFor(path.join(nested, 'src')));
+    expect(url.searchParams.get('project')).toBe(nested);
+    expect(url.searchParams.has('worktree')).toBe(false);
+  });
+
+  it('serves a nested submodule with a .git file from its own root', async () => {
+    const { main } = makeMainWithWorktree();
+    const nested = path.join(main, 'vendor-lib');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, '.git'), 'gitdir: ../.git/modules/vendor-lib\n');
+
+    const url = new URL(await startFor(nested));
+    expect(url.searchParams.get('project')).toBe(nested);
+    expect(url.searchParams.has('worktree')).toBe(false);
+  });
+
   it('sends no worktree hint for a registered main checkout', async () => {
     const { main } = makeMainWithWorktree();
     const url = new URL(await startFor(main));
