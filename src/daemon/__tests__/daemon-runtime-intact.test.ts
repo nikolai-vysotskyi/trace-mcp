@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { checkDaemonRuntimeIntact, ephemeralServeHttpRefusal } from '../lifecycle.js';
 
 describe('checkDaemonRuntimeIntact (TRA-1807)', () => {
@@ -41,8 +41,15 @@ describe('checkDaemonRuntimeIntact (TRA-1807)', () => {
 
 describe('ephemeralServeHttpRefusal (TRA-1807)', () => {
   const dirs: string[] = [];
+  let previousAllow: string | undefined;
+  beforeEach(() => {
+    previousAllow = process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON;
+    delete process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON;
+  });
   afterEach(() => {
     for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+    if (previousAllow === undefined) delete process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON;
+    else process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON = previousAllow;
   });
 
   it('refuses serve-http from /tmp and sandbox task paths', () => {

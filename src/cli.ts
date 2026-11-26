@@ -22,6 +22,7 @@ import {
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
 import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/exit-breadcrumb.js';
+import { multicaTaskDaemonRefusal } from './daemon/multica-task-guard.js';
 import {
   logUncleanStopDiagnosis,
   readRecentOomCrashes,
@@ -753,9 +754,14 @@ program
     // TRA-1807: fail closed when launched from an ephemeral install (agent-run
     // sandbox, shared tmp). A daemon serving from a directory that dies with
     // the run keeps answering /health while parsing + extraction are dead.
-    // Dev checkouts (.git above the entry) are deliberate invocations, not a
-    // hijacked live daemon, and are exempt — same as the postinstall skip.
-    const refusal = ephemeralServeHttpRefusal(process.argv[1] ?? '');
+    // Dev checkouts are exempt from the install-path check, but a checkout
+    // inside a Multica task is still unsafe without explicit supervision.
+    const refusal =
+      multicaTaskDaemonRefusal(
+        process.argv[1] ?? '',
+        process.cwd(),
+        process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON === '1',
+      ) ?? ephemeralServeHttpRefusal(process.argv[1] ?? '');
     if (refusal) {
       console.error(refusal);
       noteDaemonShutdownReason('ephemeral-install-refusal');

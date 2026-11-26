@@ -71,6 +71,11 @@ function escapeTaskScopedTmpdir(): void {
 
 escapeTaskScopedTmpdir();
 
+// The suite deliberately starts short-lived serve-http children from this
+// checkout. In a Multica task, production CLI startup refuses unsupervised
+// daemons; these test children are owned and stopped by their fixtures.
+process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON ??= '1';
+
 if (!process.env.TRACE_MCP_DATA_DIR) {
   // Preserve a pointer to the real home before we redirect it. When the override
   // is unset the real home is the package default (~/.trace-mcp).
