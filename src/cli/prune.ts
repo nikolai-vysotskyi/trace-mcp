@@ -1033,6 +1033,12 @@ export const pruneCommand = new Command('prune')
         );
         p.note(lines.join('\n'), 'Topology');
       }
+      if (topoSummary.unindexedServices.length > 0) {
+        p.note(
+          `${topoSummary.unindexedServices.length} discovered service(s) have no registered index (informational; see --json for paths).`,
+          'Topology',
+        );
+      }
       if (topoSummary.staleDbPathServices.length > 0) {
         const lines = [
           `${topoSummary.staleDbPathServices.length} stale service database path(s) with an existing parent index:`,

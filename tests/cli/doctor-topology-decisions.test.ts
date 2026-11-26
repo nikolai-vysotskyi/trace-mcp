@@ -119,4 +119,22 @@ describe('doctor topology and decisions hygiene (TRA-595)', () => {
     expect(report.staleCount).toBe(0);
     expect(doctor.fixTopologyIssues(report, { dryRun: false }).removedServices).toEqual([]);
   });
+
+  it('recognizes an indexed service registered through a symlink alias', async () => {
+    const repoRoot = path.join(tmpHome, 'real-app');
+    const aliasRoot = path.join(tmpHome, 'alias-app');
+    const dbPath = path.join(tmpHome, 'removed-index.db');
+    fs.mkdirSync(repoRoot);
+    fs.symlinkSync(repoRoot, aliasRoot, 'junction');
+    const { registerProject, updateLastIndexed } = await import('../../src/registry.js');
+    registerProject(aliasRoot);
+    updateLastIndexed(aliasRoot);
+    const topo = new TopologyStore(path.join(tmpHome, 'topology.db'));
+    topo.upsertService({ name: 'aliased-service', repoRoot, dbPath });
+    topo.close();
+
+    const report = doctor.diagnoseTopology();
+    expect(report.missingDbServices).toEqual([{ name: 'aliased-service', repoRoot, dbPath }]);
+    expect(report.unindexedServices).toEqual([]);
+  });
 });

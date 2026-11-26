@@ -13,8 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
-import { resolveRegisteredAncestor } from '../registry.js';
-import { resolveExistingServiceIndexPath } from './service-index-path.js';
+import { getProject, resolveRegisteredAncestor } from '../registry.js';
 import type { SubprojectRow } from './topology-types.js';
 
 /**
@@ -168,10 +167,13 @@ export function findStaleTopology(db: Database.Database): StaleTopologyReport {
     staleServices = svcRows.filter((r) => !fs.existsSync(r.repo_root));
     for (const row of svcRows) {
       if (!fs.existsSync(row.repo_root) || fs.existsSync(row.db_path)) continue;
-      const resolvedDbPath = resolveExistingServiceIndexPath(row.repo_root);
+      // getProject also handles lexical/realpath aliases of a registered root.
+      const registered = resolveRegisteredAncestor(row.repo_root) ?? getProject(row.repo_root);
+      const resolvedDbPath =
+        registered?.dbPath && fs.existsSync(registered.dbPath) ? registered.dbPath : null;
       if (resolvedDbPath) {
         staleDbPathServices.push({ ...row, resolved_db_path: resolvedDbPath });
-      } else if (!resolveRegisteredAncestor(row.repo_root)?.lastIndexed) {
+      } else if (!registered?.lastIndexed) {
         // Discovery and registration can both precede the first completed index.
         unindexedServices.push(row);
       } else {
