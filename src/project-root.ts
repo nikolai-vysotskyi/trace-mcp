@@ -260,6 +260,10 @@ export function detectGitWorktree(dir?: string): WorktreeInfo | null {
   if (!match) return null;
 
   const worktreeAdminDir = path.resolve(projectDir, match[1].trim());
+  // A submodule also has a .git file, but its admin dir lives under
+  // .git/modules/<name>. The ../../ fallback below would otherwise mistake
+  // that directory for a linked worktree of the containing repository.
+  if (path.basename(path.dirname(worktreeAdminDir)) !== 'worktrees') return null;
 
   // commondir is relative to the worktree admin directory and points to the
   // main .git dir (e.g. "../.." or an absolute path)

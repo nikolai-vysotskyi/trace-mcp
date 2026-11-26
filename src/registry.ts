@@ -1058,7 +1058,7 @@ function isWorktreeGitFile(gitEntry: string): boolean {
 
 /**
  * Find sibling repos (their own `.git`) living under a registered project's
- * tree that were never registered themselves — the "zero index coverage" gap
+ * tree that were never registered themselves — a possible coverage gap
  * (TRA-86), distinct from findOverlappingProjects' "both registered, doubly
  * indexed" case. A nested repo in a language/framework the parent's include
  * globs don't reach (e.g. a Vue frontend sibling under a Laravel root) is

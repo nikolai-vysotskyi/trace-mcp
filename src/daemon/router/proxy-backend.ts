@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
@@ -9,6 +10,26 @@ import { isTransientError, withRetry } from '../../utils/retry.js';
 import { LOAD_TOOLS_HINT, expandLoadRequest, planToolLoad } from '../../server/tool-surface.js';
 import { listPresets } from '../../tools/project/presets.js';
 import type { Backend } from './types.js';
+
+/** An independent nested checkout must not inherit its container's index. */
+function nestedGitRoot(cwd: string, knownRoot: string, linkedRoot?: string): string | null {
+  const boundary = path.resolve(knownRoot);
+  let dir = path.resolve(cwd);
+  const rel = path.relative(boundary, dir);
+  if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null;
+  while (dir !== boundary) {
+    try {
+      const gitEntry = fs.statSync(path.join(dir, '.git'));
+      if (gitEntry.isDirectory() || (gitEntry.isFile() && dir !== linkedRoot)) return dir;
+    } catch {
+      // No Git boundary at this level.
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
 
 /**
  * Minimal transport surface ProxyBackend depends on. The real implementation
@@ -701,10 +722,17 @@ export class ProxyBackend implements Backend {
     // binds to the subproject's own scoped index instead of the container's
     // mixed blob (#209 — "ругается на зонтик").
     const known = await resolveDeepestKnownRoot(this.opts.projectRoot);
+    const linked = findLinkedWorktree(this.opts.projectRoot);
+    if (known) {
+      const independent = nestedGitRoot(this.opts.projectRoot, known, linked?.worktreeRoot);
+      if (independent) {
+        if (linked && linked.mainRoot === independent) this.worktreeHint = linked.worktreeRoot;
+        return independent;
+      }
+    }
     // A worktree nested inside its main checkout (`<main>/.claude/worktrees/x`)
     // resolves to the registered main as an ordinary ancestor, never reaching the
     // worktree branch below — still tell the daemon which worktree this is.
-    const linked = findLinkedWorktree(this.opts.projectRoot);
     if (known && linked && realpathOrSelf(known) === linked.mainRoot) {
       this.worktreeHint = linked.worktreeRoot;
     }
