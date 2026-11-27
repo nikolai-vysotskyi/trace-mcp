@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.14](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.13...v3.44.14) (2026-11-27)
+
+
+### Bug Fixes
+
+* **registry:** stop auto-registering agent config homes and tmp scratch dirs ([#1968](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1968)) ([903e030](https://github.com/nikolai-vysotskyi/trace-mcp/commit/903e0303aa5db2f807fea6d953fac42dba28ee9a))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group across 1 directory with 7 updates ([#1966](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1966)) ([76d5935](https://github.com/nikolai-vysotskyi/trace-mcp/commit/76d593538c1839786ce426a08f56cc2496b4e013))
+* **deps-dev:** bump the development-minor-patch group across 1 directory with 4 updates ([#1964](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1964)) ([5cfeac1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5cfeac18f10130c83f6d8b4d66a822a1c26aa5ef))
+
 ## [3.44.13](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.12...v3.44.13) (2026-11-27)
 
 
