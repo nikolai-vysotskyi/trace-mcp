@@ -2,7 +2,7 @@
 title: "trace-mcp Configuration Guide — .trace.json Reference"
 description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
 category: guides
-updated: 2026-11-08
+updated: 2026-11-27
 ---
 
 # trace-mcp Configuration
@@ -878,7 +878,8 @@ Auto-discovery records services for topology and contract linking. It does not
 index every discovered service as a separate project. An index of a registered
 parent can cover its child services; otherwise `doctor` reports them as
 unindexed candidates without failing its exit code. To index a candidate you
-actually work on, run `trace-mcp add <path>` with that service's repository root.
+actually work on, run `trace-mcp add <path>` with that service's repository root
+(`--allow-overlap` may be needed if a registered parent covers it).
 `trace-mcp subproject sync` refreshes contracts and client calls but does not
 create an index. Trace state directories are excluded from new discovery and
 legacy entries under them are removed when the topology database opens.

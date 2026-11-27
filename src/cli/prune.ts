@@ -1044,7 +1044,7 @@ export const pruneCommand = new Command('prune')
           lines.push(`  ...and ${topoSummary.unindexedServices.length - 20} more (see --json)`);
         }
         lines.push(
-          'Discovery does not index folders. To index one you want, run trace-mcp add <path> for its repo root. trace-mcp subproject sync only refreshes topology; it does not create an index.',
+          'Discovery does not index folders. A registered parent may already cover them. To index one separately, run trace-mcp add <path> for its repo root (add --allow-overlap if prompted). trace-mcp subproject sync only refreshes topology; it does not create an index.',
         );
         p.note(lines.join('\n'), 'Topology');
       }
