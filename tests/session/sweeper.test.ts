@@ -158,7 +158,7 @@ describe('sweepSessionFiles (TRA-1218)', () => {
   });
 
   it('respects missing root grace period for non-ephemeral project roots', () => {
-    const missingRoot = '/tmp/nonexistent-normal-project-xyz';
+    const missingRoot = path.join(os.homedir(), 'nonexistent-normal-project-xyz');
     const hashYoung = 'young1234567';
     const hashOld = 'oldroot12345';
 
