@@ -901,7 +901,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">VS-COMPARISONS</span>
-<time class="article-card-date">2026-11-25</time>
+<time class="article-card-date">2026-11-27</time>
 </div>
 <h3 class="article-card-title"><a href="/comparisons.html">MCP Code-Graph Tools Compared: Serena, Repomix + 20 More</a></h3>
 <p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 91 frameworks, GitHub stars. Pick the one that fits your stack.</p>
