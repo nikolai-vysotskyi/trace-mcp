@@ -114,6 +114,72 @@ export class GraphRepository {
       .run(fileId, fileId);
   }
 
+  /**
+   * Same as deleteOutgoingEdgesForFileNodes, but leaves edges of the given
+   * types untouched. TRA-3159: on the fast symbol-update path, node ids are
+   * stable across the pass, so edge types exclusively owned by a framework
+   * plugin's resolveEdges() (Pass 2) can be left for that pass to replace
+   * atomically on success instead of being wiped here unconditionally — a
+   * timeout/error in Pass 2 then leaves the prior edges in place rather than
+   * losing them with no replacement. `edgeTypeNames` is bounded by the
+   * plugin registry's declared edge-type taxonomy (dozens at most, never
+   * index-sized) — same bounded-receiver class as other callers in this
+   * file (TRA-1005).
+   */
+  deleteOutgoingEdgesForFileNodesExcludingTypes(fileId: number, edgeTypeNames: string[]): void {
+    if (edgeTypeNames.length === 0) {
+      this.deleteOutgoingEdgesForFileNodes(fileId);
+      return;
+    }
+    const placeholders = edgeTypeNames.map(() => '?').join(', ');
+    this.db
+      .prepare(`
+      DELETE FROM edges WHERE source_node_id IN (
+        SELECT n.id FROM nodes n
+        WHERE (n.node_type = 'file' AND n.ref_id = ?)
+           OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
+      )
+      AND edge_type_id NOT IN (SELECT id FROM edge_types WHERE name IN (${placeholders}))
+    `)
+      .run(fileId, fileId, ...edgeTypeNames);
+  }
+
+  /**
+   * Delete outgoing edges of exactly the given types from a file's own node
+   * and its symbols' nodes. Pairs with deleteOutgoingEdgesForFileNodesExcludingTypes:
+   * the caller (EdgeResolver) owns deleting+replacing these types, but only
+   * once its resolver has actually produced a fresh result (TRA-3159).
+   */
+  deleteOutgoingEdgesForFileNodesByTypes(fileId: number, edgeTypeNames: string[]): void {
+    if (edgeTypeNames.length === 0) return;
+    const placeholders = edgeTypeNames.map(() => '?').join(', ');
+    this.db
+      .prepare(`
+      DELETE FROM edges WHERE source_node_id IN (
+        SELECT n.id FROM nodes n
+        WHERE (n.node_type = 'file' AND n.ref_id = ?)
+           OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
+      )
+      AND edge_type_id IN (SELECT id FROM edge_types WHERE name IN (${placeholders}))
+    `)
+      .run(fileId, fileId, ...edgeTypeNames);
+  }
+
+  /**
+   * Unscoped version for full (non-incremental) runs: delete ALL edges of
+   * the given types before Pass 2 reinserts the complete current set for
+   * the whole corpus (TRA-3159).
+   */
+  deleteEdgesByTypes(edgeTypeNames: string[]): void {
+    if (edgeTypeNames.length === 0) return;
+    const placeholders = edgeTypeNames.map(() => '?').join(', ');
+    this.db
+      .prepare(
+        `DELETE FROM edges WHERE edge_type_id IN (SELECT id FROM edge_types WHERE name IN (${placeholders}))`,
+      )
+      .run(...edgeTypeNames);
+  }
+
   traverseEdges(startNodeId: number, direction: 'outgoing' | 'incoming', depth: number): EdgeRow[] {
     const directionCol = direction === 'outgoing' ? 'source_node_id' : 'target_node_id';
     const otherCol = direction === 'outgoing' ? 'target_node_id' : 'source_node_id';

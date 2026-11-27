@@ -48,7 +48,9 @@ describe('framework timeout across suspend', () => {
     const result = executeFrameworkResolveEdges(plugin, ctx, 30);
     active = 30;
     await vi.advanceTimersByTimeAsync(30);
-    expect((await result)._unsafeUnwrap()).toEqual([]);
+    // TRA-3159: a timeout returns Err, not ok([]) — callers must be able to
+    // tell "resolution did not complete" apart from "legitimately empty".
+    expect((await result).isErr()).toBe(true);
   });
 
   it('scales timeout for large repositories when using default timeout (TRA-2434)', async () => {

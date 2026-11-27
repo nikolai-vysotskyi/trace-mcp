@@ -305,6 +305,18 @@ export class Store {
     this.graph.deleteOutgoingEdgesForFileNodes(fileId);
   }
 
+  deleteOutgoingEdgesForFileNodesExcludingTypes(fileId: number, edgeTypeNames: string[]): void {
+    this.graph.deleteOutgoingEdgesForFileNodesExcludingTypes(fileId, edgeTypeNames);
+  }
+
+  deleteOutgoingEdgesForFileNodesByTypes(fileId: number, edgeTypeNames: string[]): void {
+    this.graph.deleteOutgoingEdgesForFileNodesByTypes(fileId, edgeTypeNames);
+  }
+
+  deleteEdgesByTypes(edgeTypeNames: string[]): void {
+    this.graph.deleteEdgesByTypes(edgeTypeNames);
+  }
+
   traverseEdges(startNodeId: number, direction: 'outgoing' | 'incoming', depth: number): EdgeRow[] {
     return this.graph.traverseEdges(startNodeId, direction, depth);
   }

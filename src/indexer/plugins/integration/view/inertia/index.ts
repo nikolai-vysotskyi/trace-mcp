@@ -67,6 +67,11 @@ export class InertiaPlugin implements FrameworkPlugin {
     dependencies: ['laravel', 'vue-framework'],
   };
 
+  // TRA-3159: both types are exclusively produced by resolveEdges() below —
+  // extractNodes() only sets frameworkRole, never edges. Safe to defer their
+  // deletion to a successful resolve pass (see FrameworkPlugin.resolveEdgesOwnedTypes).
+  resolveEdgesOwnedTypes = ['inertia_renders', 'passes_props'];
+
   detect(ctx: ProjectContext): boolean {
     // Check composer.json for inertiajs/inertia-laravel
     if (ctx.composerJson) {
