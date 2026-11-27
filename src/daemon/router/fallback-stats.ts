@@ -63,11 +63,19 @@ export interface SessionFallbackDetails {
 export interface SessionFallbackSummary {
   /**
    * Sessions that actually went local-mode inside the window. Excludes
-   * `proxy-send-transient` (stayed on proxy — no local backend was built),
-   * which is still counted in `byReason` for attribution.
+   * reasons listed in `excludedFromTotal` (e.g. `proxy-send-transient`,
+   * which stayed on proxy — no local backend was built), which are still
+   * counted in `byReason` for attribution.
    */
   total: number;
   byReason: Record<string, number>;
+  /**
+   * Per-reason counts included in `byReason` but NOT in `total`/`perMin`.
+   * `sum(byReason) === total + sum(excludedFromTotal)` always holds — this
+   * is what makes the gap between `total` and `sum(byReason)` legible to any
+   * reader of the JSON contract without re-deriving it from source (TRA-3237).
+   */
+  excludedFromTotal: Record<string, number>;
   /** Local-mode fallbacks per minute over the summarized window — the storm gauge. */
   perMin: number;
   /** Window length in ms the summary covers. */
@@ -209,8 +217,9 @@ export function readSessionFallbacks(
  * absolute timestamp; omitted/<=0 means all-time.
  *
  * `proxy-send-transient` lines are attributed in `byReason` but excluded
- * from `total`/`perMin`: no local backend was built for them, and counting
- * them would turn the TRA-1605 storm gauge into a shelf gauge (TRA-1997).
+ * from `total`/`perMin` (and surfaced in `excludedFromTotal`): no local
+ * backend was built for them, and counting them would turn the TRA-1605
+ * storm gauge into a shelf gauge (TRA-1997).
  */
 export function summarizeSessionFallbacks(
   events: SessionFallbackEvent[],
@@ -220,15 +229,29 @@ export function summarizeSessionFallbacks(
   const sinceMs = opts.sinceMs ?? null;
   const windowMs = sinceMs !== null && sinceMs > 0 ? sinceMs : 0;
   const cutoff = windowMs > 0 ? nowMs - windowMs : null;
-  const byReason: Record<string, number> = {};
+  // Maps, not plain objects: `reason` round-trips through a JSONL file and a
+  // value like "constructor" or "toString" must count as an ordinary key,
+  // never read back a prototype member (TRA-3237 review).
+  const byReasonMap = new Map<string, number>();
+  const excludedFromTotalMap = new Map<string, number>();
   let total = 0;
   for (const e of events) {
     if (cutoff !== null && e.ts < cutoff) continue;
-    if (e.reason !== PROXY_SEND_TRANSIENT_REASON) total++;
-    byReason[e.reason] = (byReason[e.reason] ?? 0) + 1;
+    byReasonMap.set(e.reason, (byReasonMap.get(e.reason) ?? 0) + 1);
+    if (e.reason === PROXY_SEND_TRANSIENT_REASON) {
+      excludedFromTotalMap.set(e.reason, (excludedFromTotalMap.get(e.reason) ?? 0) + 1);
+    } else {
+      total++;
+    }
   }
   const spanMs = windowMs > 0 ? windowMs : Math.max(1, nowMs - oldestTs(events, nowMs));
-  return { total, byReason, perMin: total / (spanMs / 60_000), windowMs: spanMs };
+  return {
+    total,
+    byReason: Object.fromEntries(byReasonMap),
+    excludedFromTotal: Object.fromEntries(excludedFromTotalMap),
+    perMin: total / (spanMs / 60_000),
+    windowMs: spanMs,
+  };
 }
 
 function oldestTs(events: SessionFallbackEvent[], nowMs: number): number {
