@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.13](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.12...v3.44.13) (2026-11-27)
+
+
+### Bug Fixes
+
+* **daemon:** make session_fallbacks total/byReason gap explicit on the wire ([#1960](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1960)) ([4f4e860](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f4e860fcb382f5ec5b304121ef118965f120bc3))
+* **init:** stop registering the WorktreeCreate hook ([#1930](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1930)) ([#1963](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1963)) ([5d358a5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5d358a52c8cec0525d9344266b024f5336066dae))
+
+
+### Documentation
+
+* include Loom in the code index comparison ([#1948](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1948)) ([15a0733](https://github.com/nikolai-vysotskyi/trace-mcp/commit/15a073340a9f29406464c0800a568c31887a3e02))
+
+
+### Chores
+
+* **app-deps-dev:** bump electron in /packages/app ([#1945](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1945)) ([26acb71](https://github.com/nikolai-vysotskyi/trace-mcp/commit/26acb71a92e094ae517fa84787b8f5efdb007760))
+* **ci:** bump the github-actions-minor-patch group across 1 directory with 5 updates ([#1911](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1911)) ([e62982a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e62982a58b6d969a9c01268a60cf34b72e8bf0dd))
+* **deps-dev:** bump the development-minor-patch group across 1 directory with 3 updates ([#1915](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1915)) ([032af3c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/032af3c4ed6417815e67ab0d38596da35ebc2ddc))
+* **deps:** bump @hono/node-server in /integrations/bb ([#1904](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1904)) ([e8da6a3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8da6a3d7e2e2b14c93377a27926257c5d2d9453))
+* **deps:** bump hono from 4.13.13 to 4.13.23 in /integrations/bb ([#1905](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1905)) ([11f5f38](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11f5f387f23f5d143705addcf4b658afaf6e7052))
+* **deps:** bump the production-minor-patch group across 1 directory with 2 updates ([#1952](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1952)) ([15f27c9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/15f27c98c59eac7e7cf8777d6bcfef6f5bc396ee))
+* **vscode-deps-dev:** bump the development-minor-patch group across 1 directory with 3 updates ([#1914](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1914)) ([60708b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60708b84a41c1a92b6d96baecf292917bee6eb79))
+
 ## [3.44.12](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.11...v3.44.12) (2026-11-26)
 
 
