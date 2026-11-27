@@ -874,6 +874,15 @@ Both topology and subprojects are **enabled by default** — every indexed proje
 
 ### Auto-discovery flow
 
+Auto-discovery records services for topology and contract linking. It does not
+index every discovered service as a separate project. An index of a registered
+parent can cover its child services; otherwise `doctor` reports them as
+unindexed candidates without failing its exit code. To index a candidate you
+actually work on, run `trace-mcp add <path>` with that service's repository root.
+`trace-mcp subproject sync` refreshes contracts and client calls but does not
+create an index. Trace state directories are excluded from new discovery and
+legacy entries under them are removed when the topology database opens.
+
 When a project is indexed (via `serve`, `serve-http`, or `index`):
 
 1. **Subprojects are detected** within the project root using these strategies (in order):

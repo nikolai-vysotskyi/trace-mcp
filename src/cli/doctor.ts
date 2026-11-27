@@ -1204,8 +1204,15 @@ function printTopologyReport(t: TopologyHealthReport): void {
     );
   }
   if (t.unindexedServices.length > 0) {
+    console.log(`Topology: ${t.unindexedServices.length} discovered service(s) have no index:`);
+    for (const s of t.unindexedServices.slice(0, 20)) {
+      console.log(`  [service] ${s.name}  ${shortPath(s.repoRoot)}`);
+    }
+    if (t.unindexedServices.length > 20) {
+      console.log(`  ...and ${t.unindexedServices.length - 20} more (see --json)`);
+    }
     console.log(
-      `Topology: ${t.unindexedServices.length} discovered service(s) have no registered index (informational; see --json for paths).\n`,
+      '  Discovery does not index folders. To index one you want, run `trace-mcp add <path>` for its repo root. `trace-mcp subproject sync` only refreshes topology; it does not create an index.\n',
     );
   }
   if (t.staleDbPathServices.length > 0) {

@@ -301,6 +301,27 @@ describe('TopologyStore', () => {
   });
 
   describe('dangerous-subproject pruning (TRA-232)', () => {
+    it('removes legacy service-only discoveries under trace state without touching project services', () => {
+      const stateRoot = path.join(os.homedir(), '.trace', 'import-resolution-bench', 'go');
+      store.upsertService({
+        name: 'fixture',
+        repoRoot: stateRoot,
+        detectionSource: 'workspace',
+        dbPath: '/missing/fixture.db',
+      });
+      store.upsertService({
+        name: 'project-service',
+        repoRoot: '/project/api',
+        detectionSource: 'workspace',
+        dbPath: '/missing/project.db',
+      });
+
+      const raw = new Database(dbPath);
+      expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 0, services: 1 });
+      raw.close();
+      expect(store.getAllServices().map((s) => s.name)).toEqual(['project-service']);
+    });
+
     it('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
       const good = store.upsertSubproject({
         name: 'good',
