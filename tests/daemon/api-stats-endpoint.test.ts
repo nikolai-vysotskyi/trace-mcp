@@ -71,6 +71,17 @@ describe('GET /api/stats endpoint surface', () => {
     expect(typeof out.session_fallbacks.total).toBe('number');
     expect(typeof out.session_fallbacks.byReason).toBe('object');
     expect(typeof out.session_fallbacks.perMin).toBe('number');
+    // TRA-3237: excludedFromTotal must be on the wire so a consumer can
+    // reconcile total vs. sum(byReason) without re-deriving the exclusion
+    // rule from source.
+    expect(typeof out.session_fallbacks.excludedFromTotal).toBe('object');
+    const byReasonSum = Object.values(
+      out.session_fallbacks.byReason as Record<string, number>,
+    ).reduce((a, b) => a + b, 0);
+    const excludedSum = Object.values(
+      out.session_fallbacks.excludedFromTotal as Record<string, number>,
+    ).reduce((a, b) => a + b, 0);
+    expect(byReasonSum).toBe((out.session_fallbacks.total as number) + excludedSum);
   });
 
   it('respects optional ?since=1h to filter older events', async () => {

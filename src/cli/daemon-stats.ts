@@ -190,6 +190,8 @@ export interface DaemonEventStats {
 export interface SessionFallbackSummary {
   total: number;
   byReason: Record<string, number>;
+  /** Per-reason counts included in `byReason` but excluded from `total`/`perMin`. */
+  excludedFromTotal: Record<string, number>;
   perMin: number;
   windowMs: number;
 }
@@ -232,7 +234,10 @@ export function renderSessionFallbacks(
 ): string {
   const lines: string[] = [];
   lines.push(`=== Session local-fallbacks (last ${windowLabel}) ===`);
-  const transient = s?.byReason['proxy-send-transient'] ?? 0;
+  // Prefer the explicit field (TRA-3237); fall back to byReason for daemons
+  // from before it existed — the daemon can outlive a CLI upgrade.
+  const transient =
+    s?.excludedFromTotal?.['proxy-send-transient'] ?? s?.byReason['proxy-send-transient'] ?? 0;
   if (!s || (s.total === 0 && transient === 0)) {
     lines.push('  (no local-mode fallbacks recorded in this window)');
     return lines.join('\n');

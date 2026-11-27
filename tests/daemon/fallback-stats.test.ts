@@ -147,6 +147,7 @@ describe('summarizeSessionFallbacks', () => {
     const s = summarizeSessionFallbacks(events, { sinceMs: 60_000, nowMs: now });
     expect(s.total).toBe(3);
     expect(s.byReason).toEqual({ 'proxy-initialize-timeout': 2, 'daemon-disappeared': 1 });
+    expect(s.excludedFromTotal).toEqual({});
     expect(s.perMin).toBeCloseTo(3, 5);
   });
 
@@ -171,6 +172,13 @@ describe('summarizeSessionFallbacks', () => {
     expect(s.total).toBe(1);
     expect(s.perMin).toBeCloseTo(1, 5);
     expect(s.byReason).toEqual({ 'proxy-send-transient': 2, 'daemon-disappeared': 1 });
+    expect(s.excludedFromTotal).toEqual({ 'proxy-send-transient': 2 });
+    // The contract any reader of the JSON response can rely on (TRA-3237):
+    // byReason always reconciles to total + excludedFromTotal, so a naive
+    // sum(byReason) !== total is explainable from the payload itself.
+    const byReasonSum = Object.values(s.byReason).reduce((a, b) => a + b, 0);
+    const excludedSum = Object.values(s.excludedFromTotal).reduce((a, b) => a + b, 0);
+    expect(byReasonSum).toBe(s.total + excludedSum);
   });
 });
 
@@ -180,6 +188,7 @@ describe('renderSessionFallbacks', () => {
       {
         total: 8,
         byReason: { 'proxy-initialize-timeout': 8 },
+        excludedFromTotal: {},
         perMin: 2,
         windowMs: 240_000,
       },
@@ -191,7 +200,10 @@ describe('renderSessionFallbacks', () => {
 
   it('renders the calm state without alarming', () => {
     expect(
-      renderSessionFallbacks({ total: 0, byReason: {}, perMin: 0, windowMs: 1 }, '24h'),
+      renderSessionFallbacks(
+        { total: 0, byReason: {}, excludedFromTotal: {}, perMin: 0, windowMs: 1 },
+        '24h',
+      ),
     ).toContain('(no local-mode fallbacks recorded in this window)');
     expect(renderSessionFallbacks(null, '24h')).toContain(
       '(no local-mode fallbacks recorded in this window)',
@@ -200,11 +212,33 @@ describe('renderSessionFallbacks', () => {
 
   it('names stayed-on-proxy transients instead of printing a false calm (TRA-1997)', () => {
     const text = renderSessionFallbacks(
-      { total: 0, byReason: { 'proxy-send-transient': 300 }, perMin: 0, windowMs: 3_600_000 },
+      {
+        total: 0,
+        byReason: { 'proxy-send-transient': 300 },
+        excludedFromTotal: { 'proxy-send-transient': 300 },
+        perMin: 0,
+        windowMs: 3_600_000,
+      },
       '1h',
     );
     expect(text).not.toContain('no local-mode fallbacks recorded');
     expect(text).toContain('"proxy-send-transient": 300');
+    expect(text).toContain('stayed on proxy');
+  });
+
+  it('still names transients from a pre-TRA-3237 daemon lacking excludedFromTotal', () => {
+    const text = renderSessionFallbacks(
+      // `as never` acknowledges deliberately testing with a field missing — this reproduces the
+      // JSON an older daemon sends.
+      {
+        total: 0,
+        byReason: { 'proxy-send-transient': 5 },
+        perMin: 0,
+        windowMs: 60_000,
+      } as never,
+      '1m',
+    );
+    expect(text).toContain('"proxy-send-transient": 5');
     expect(text).toContain('stayed on proxy');
   });
 });
