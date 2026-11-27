@@ -576,8 +576,23 @@ export function installWorktreeHook(opts: {
   global?: boolean;
   dryRun?: boolean;
 }): InitStepResult[] {
-  // Install both WorktreeCreate and WorktreeRemove — same script handles both events
-  return [installHook(WORKTREE_HOOK, opts), installHook(WORKTREE_REMOVE_HOOK, opts)];
+  // Only WorktreeRemove is registered. A WorktreeCreate hook *replaces* Claude
+  // Code's built-in `git worktree add` and must print the new worktree path, so
+  // a notification-only script makes every worktree creation fail (GH #1930).
+  // Drop any WorktreeCreate entry earlier versions left behind.
+  if (!opts.dryRun) removeWorktreeCreateEntries(opts);
+  return [installHook(WORKTREE_REMOVE_HOOK, opts)];
+}
+
+function removeWorktreeCreateEntries(opts: { global?: boolean }): void {
+  for (const client of CLIENTS) {
+    const sPath = settingsPath(client, !!opts.global);
+    if (!fs.existsSync(sPath)) continue;
+    const settings = readSettings(sPath);
+    const before = JSON.stringify(settings.hooks ?? null);
+    removeHookEntry(settings, WORKTREE_HOOK);
+    if (JSON.stringify(settings.hooks ?? null) !== before) writeSettings(sPath, settings);
+  }
 }
 
 function _uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
