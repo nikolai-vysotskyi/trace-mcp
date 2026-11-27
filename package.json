@@ -124,7 +124,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.3",
+    "@biomejs/biome": "2.6.8",
     "@conventional-commits/parser": "0.4.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.3",
@@ -134,7 +134,7 @@
     "fast-check": "^4.6.0",
     "gpt-tokenizer": "^4.0.0",
     "jsdom": "^30.0.1",
-    "lint-staged": "17.6.0",
+    "lint-staged": "17.6.1",
     "simple-git-hooks": "2.14.0",
     "tsup": "^8.4.0",
     "tsx": "^4.23.13",
