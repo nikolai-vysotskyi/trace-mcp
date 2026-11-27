@@ -11,6 +11,7 @@ import {
   getDbPath,
   getGitHeadFingerprint,
   getProjectRemoteIdentity,
+  isAutoRegisterNoiseRoot,
   isEphemeralProjectRoot,
   projectName,
   REGISTRY_PATH,
@@ -269,7 +270,12 @@ export function registerProject(
   // process, but keep it out of registry.json. `opts` only ever comes from an
   // explicit multi-root `add`/`init`, which is a deliberate act and stays
   // persistent even for a workdir-shaped path.
-  const ephemeral = !opts && isEphemeralProjectRoot(absRoot);
+  // An agent config home / tmp scratch dir is only kept out when no row exists
+  // yet; a row already on disk is left to the sweeper instead of being hidden.
+  const ephemeral =
+    !opts &&
+    (isEphemeralProjectRoot(absRoot) ||
+      (isAutoRegisterNoiseRoot(absRoot) && !reg.projects[absRoot]));
   // TRA-706: a multi-root `opts` has only ever come from `add`/`init`, so its
   // presence is itself the deliberate signal; `explicit` carries the same
   // signal for the single-root form of those commands.
@@ -336,7 +342,7 @@ export function registerProject(
     sibling && sharedDbCompatible(sibling, absRoot)
       ? claimSharedDb(sibling.dbPath, absRoot)
       : false;
-  const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot);
+  const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot, { ephemeral });
   try {
     if (!shareWithSibling) announceDbHolder(dbPath, absRoot);
   } catch {
@@ -1138,7 +1144,11 @@ export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandida
   const now = Date.now();
   const out: EphemeralProjectCandidate[] = [];
   for (const entry of listProjects()) {
-    if (!isEphemeralProjectRoot(entry.root)) continue;
+    if (
+      !isEphemeralProjectRoot(entry.root) &&
+      !(isAutoRegisterNoiseRoot(entry.root) && !entry.explicit)
+    )
+      continue;
     const addedMs = Date.parse(entry.addedAt);
     if (Number.isNaN(addedMs)) continue;
     const ageHours = (now - addedMs) / (60 * 60 * 1000);
@@ -1279,7 +1289,9 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
     // reported machine. An explicit `add`/`init` of a workdir-shaped path is a
     // deliberate act and keeps the grace.
     const disposable =
-      isEphemeralProjectRoot(root) && !entry.explicit && entry.type !== 'multi-root';
+      (isEphemeralProjectRoot(root) || isAutoRegisterNoiseRoot(root)) &&
+      !entry.explicit &&
+      entry.type !== 'multi-root';
 
     if (!disposable && !entry.missingRootSince) {
       entry.missingRootSince = new Date().toISOString();

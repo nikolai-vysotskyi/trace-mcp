@@ -225,6 +225,47 @@ const EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN =
   /[/\\]scratch-workspaces[/\\][^/\\]+[/\\][^/\\]+[/\\]scratch-[^/\\]+([/\\]|$)/i;
 
 /**
+ * Config/state homes of AI coding agents (`~/.codex`, `~/.claude`, ...). An
+ * agent can be started with one of these as its cwd (Codex does so for its own
+ * maintenance runs), and `serve` would then auto-register it as a project. They
+ * hold skills, caches and session logs, never user code, so indexing them only
+ * adds noise rows (and thousands of bogus findings) to the project list.
+ */
+const AGENT_CONFIG_HOME_DIRS = ['.codex', '.claude', '.claw', '.cursor', '.gemini', '.bb'];
+
+function isInsideDir(abs: string, dir: string): boolean {
+  const rel = path.relative(dir, abs);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function isAgentConfigHome(abs: string): boolean {
+  const home = os.homedir();
+  return AGENT_CONFIG_HOME_DIRS.some((d) => isInsideDir(abs, path.join(home, d)));
+}
+
+/**
+ * A directory *below* the shared POSIX tmp roots (`/tmp`, `/private/tmp`):
+ * scratch dirs made by agent launch checks, test harnesses and one-off clones
+ * (`/private/tmp/fr_codex_0_x1y2`). Nothing there outlives its run, yet each
+ * one used to leave a permanent registry row. The process's own `os.tmpdir()`
+ * is exempt: it is where the test suite builds its "ordinary persistent
+ * project" fixtures, and on Linux it is `/tmp` itself. macOS `$TMPDIR`
+ * (`/var/folders/...`) never matches this rule to begin with.
+ */
+function isSharedTmpScratch(abs: string): boolean {
+  const norm = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
+  const m = /^(?:\/private)?\/tmp\/./.test(norm);
+  if (!m) return false;
+  const own = os
+    .tmpdir()
+    .replace(/\\/g, '/')
+    .replace(/^[A-Za-z]:/, '');
+  const ownNorm = own.replace(/^\/private(?=\/)/, '');
+  const absNorm = norm.replace(/^\/private(?=\/)/, '');
+  return !(absNorm === ownNorm || absNorm.startsWith(`${ownNorm}/`));
+}
+
+/**
  * True when `root` is a one-shot agent-run checkout, in any layout the
  * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN},
  * {@link EPHEMERAL_TASK_DIR_PATTERN},
@@ -248,6 +289,19 @@ export function isEphemeralProjectRoot(root: string): boolean {
     EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN.test(abs) ||
     isUserExcludedProjectRoot(abs)
   );
+}
+
+/**
+ * Roots that `serve` must not *implicitly* register: agent config homes and
+ * scratch dirs below the shared tmp roots (see {@link isAgentConfigHome} and
+ * {@link isSharedTmpScratch}). Deliberately separate from
+ * {@link isEphemeralProjectRoot}: that predicate also gates reads of rows that
+ * were written on purpose (`trace add`, hand-built registries in tests), while
+ * this one only decides whether an *unasked-for* row may be created or kept.
+ */
+export function isAutoRegisterNoiseRoot(root: string): boolean {
+  const abs = path.resolve(root);
+  return isAgentConfigHome(abs) || isSharedTmpScratch(abs);
 }
 
 /**
