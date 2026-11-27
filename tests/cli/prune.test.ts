@@ -102,6 +102,60 @@ describe('scanIndexDir', () => {
     expect(candidates[0].registeredRoot).toBe(path.resolve(root));
   });
 
+  it('marks an old implicit noise registration for deletion in the same run', () => {
+    const root = path.resolve('/Users/x/.codex');
+    const hash = projectHash(root);
+    mockListProjects.mockReturnValue([
+      { name: '.codex', root, dbPath: `/idx/.codex-${hash}.db`, lastIndexed: null, addedAt: 'x' },
+    ]);
+    mockReaddirSync.mockReturnValue([`.codex-${hash}.db`] as unknown as ReturnType<
+      typeof fs.readdirSync
+    >);
+    mockStatSync.mockImplementation((p: fs.PathLike) => {
+      if (String(p).endsWith('.db')) return fakeStat(NOW - DAY_MS);
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    const options = { staleRegisteredRoots: [root] };
+    expect(scanIndexDir(options)[0].category).toBe('stale_registration');
+    expect(pruneIndexDir(options).deleted).toEqual([]);
+    expect(pruneIndexDir({ ...options, apply: true }).totals.stale_registration.count).toBe(1);
+    expect(mockUnlinkSync).toHaveBeenCalled();
+  });
+
+  it('keeps a shared DB when a non-stale registration still anchors it', () => {
+    const staleRoot = path.resolve('/Users/x/.codex');
+    const activeRoot = path.resolve('/Users/x/projects/app');
+    const hash = projectHash(staleRoot);
+    mockListProjects.mockReturnValue([
+      {
+        name: '.codex',
+        root: staleRoot,
+        dbPath: `/idx/.codex-${hash}.db`,
+        lastIndexed: null,
+        addedAt: 'x',
+      },
+      {
+        name: 'app',
+        root: activeRoot,
+        dbPath: `/idx/.codex-${hash}.db`,
+        lastIndexed: null,
+        addedAt: 'x',
+      },
+    ]);
+    mockReaddirSync.mockReturnValue([`.codex-${hash}.db`] as unknown as ReturnType<
+      typeof fs.readdirSync
+    >);
+    mockStatSync.mockImplementation((p: fs.PathLike) => {
+      if (String(p).endsWith('.db')) return fakeStat(NOW - DAY_MS);
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    expect(scanIndexDir({ staleRegisteredRoots: [staleRoot] })[0].category).toBe('live');
+  });
+
   it('classifies a DB whose registered root no longer exists as orphan_missing_root', () => {
     const root = '/Users/x/projects/deleted-app';
     const hash = projectHash(path.resolve(root));
