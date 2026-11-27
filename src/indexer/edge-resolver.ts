@@ -100,6 +100,19 @@ export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
   /**
+   * TRA-3135: set when a framework plugin's resolveEdges call fails/times
+   * out this pass (executeFrameworkResolveEdges returned an error instead of
+   * a confirmed-empty ok([])). Pass 1 (FilePersister) already deleted this
+   * file's outgoing edges before this pass ran, trusting Pass 2 to rebuild
+   * them — so a failure here means the delete was NOT followed by a
+   * successful replace. The pipeline checks this after resolveEdges() to
+   * decide whether it's safe to clear the TRA-1017 postprocess-incomplete
+   * mark; leaving it set means a later repair pass re-resolves these files
+   * instead of silently missing edges forever.
+   */
+  hadFrameworkFailures = false;
+
+  /**
    * Pass 2: resolve framework plugin edges (root + per-workspace).
    *
    * Every plugin pass runs in a turn of its own (TRA-922). These passes are
@@ -237,7 +250,12 @@ export class EdgeResolver {
       if (signal?.aborted) throw new IndexAbortedError('resolvePluginEdges aborted');
       if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
       const result = await executeFrameworkResolveEdges(plugin, ctx);
-      if (result.isErr()) return;
+      if (result.isErr()) {
+        // TRA-3135: don't let a timed-out/failed plugin's absence look like
+        // a clean, confirmed-empty pass — see `hadFrameworkFailures` above.
+        this.hadFrameworkFailures = true;
+        return;
+      }
       await this.storeRawEdgesAsync(result.value, signal);
     });
   }

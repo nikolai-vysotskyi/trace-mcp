@@ -1,4 +1,4 @@
-import { ok, type TraceMcpResult } from '../errors.js';
+import { err, ok, pluginError, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 import type {
   ExtractSymbolsOptions,
@@ -249,7 +249,14 @@ export async function executeFrameworkResolveEdges(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logger.error({ plugin: plugin.manifest.name, error: msg }, 'Framework resolveEdges error');
-    return ok([]);
+    // TRA-3135: a timeout/throw here means this plugin's edges for this pass
+    // are unknown, not confirmed-empty. Returning ok([]) used to make Pass 1's
+    // earlier delete of this file's outgoing edges look like a completed,
+    // intentional removal — the caller (EdgeResolver.resolvePluginEdges) now
+    // treats an err() here as "resolution did not complete" and keeps the
+    // TRA-1017 postprocess-incomplete mark set, so a later repair pass
+    // re-resolves these files instead of leaving them silently missing.
+    return err(pluginError(plugin.manifest.name, msg));
   }
 }
 

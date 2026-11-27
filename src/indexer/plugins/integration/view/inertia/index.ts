@@ -170,10 +170,19 @@ export class InertiaPlugin implements FrameworkPlugin {
     }
 
     for (const [index, file] of targetFiles.entries()) {
+      if (ctx.signal?.aborted) break;
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
 
       const source = ctx.readFile(file.path);
       if (!source) continue;
+
+      // TRA-3135: cheap substring pre-check before the regex scan below —
+      // matches Laravel's `source.includes('Model')`-style gating. Most PHP
+      // files in a controller-heavy app never call Inertia::render/inertia(),
+      // so this skips compiling + running INERTIA_RENDER_RE's global regex
+      // over their full text, which otherwise ran unconditionally on every
+      // PHP file and was the dominant per-file cost on large repositories.
+      if (!source.includes('nertia')) continue;
 
       const renders = extractInertiaRenders(source);
       if (renders.length === 0) continue;
