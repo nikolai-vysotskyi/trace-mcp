@@ -320,6 +320,14 @@ export async function extractAndPersist(
                   workspaces,
                 } as ExtractRequest);
               } catch (poolErr) {
+                // TRA-3238: a shutdown-triggered pool.terminate() rejects every
+                // in-flight request with "Pool terminated" — that is not a pool
+                // failure, it is this run being cancelled. Falling back to
+                // in-process extraction here would keep working against a
+                // store whose DB is closing concurrently (see the finally
+                // block below). Propagate the abort instead of masking it as
+                // a fallback-worthy error.
+                throwIfIndexAborted(params.signal, rootPath);
                 // TRA-2687: fallback to in-process extraction if worker pool fails or becomes unavailable
                 if (!loggedPoolFallback) {
                   loggedPoolFallback = true;
@@ -456,7 +464,12 @@ export async function extractAndPersist(
     // leaves the triggers dropped and desyncs symbols_fts on every later
     // incremental write. No-op on the incremental path (triggers stayed live
     // and were re-armed via ensureFts5Triggers before the loop).
-    if (useFtsRebuild) await enableFts5TriggersAsync(store.db);
+    // TRA-3238: a shutdown can close `store.db` while this run is still
+    // orphaned on the pipeline lock (stopProject proceeds past a timed-out
+    // drain). Skip the rebuild rather than let `db.exec` throw "The database
+    // connection is not open" — the DB is going away, so there is nothing
+    // left to resync FTS against.
+    if (useFtsRebuild && store.db.open) await enableFts5TriggersAsync(store.db);
   }
 
   // Phase 4 phantom-rebind: expose the persister's diff maps so the caller can
