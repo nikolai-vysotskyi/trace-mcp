@@ -5,9 +5,9 @@
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isEphemeralProjectRoot } from '../global.js';
+import { isAutoRegisterNoiseRoot as isEphemeralProjectRoot } from '../global.js';
 
-describe('isEphemeralProjectRoot — agent homes and shared tmp scratch', () => {
+describe('isAutoRegisterNoiseRoot — agent homes and shared tmp scratch', () => {
   const home = os.homedir();
 
   it('treats agent config homes and anything below them as ephemeral', () => {

@@ -287,10 +287,21 @@ export function isEphemeralProjectRoot(root: string): boolean {
     EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
     EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs) ||
     EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN.test(abs) ||
-    isAgentConfigHome(abs) ||
-    isSharedTmpScratch(abs) ||
     isUserExcludedProjectRoot(abs)
   );
+}
+
+/**
+ * Roots that `serve` must not *implicitly* register: agent config homes and
+ * scratch dirs below the shared tmp roots (see {@link isAgentConfigHome} and
+ * {@link isSharedTmpScratch}). Deliberately separate from
+ * {@link isEphemeralProjectRoot}: that predicate also gates reads of rows that
+ * were written on purpose (`trace add`, hand-built registries in tests), while
+ * this one only decides whether an *unasked-for* row may be created or kept.
+ */
+export function isAutoRegisterNoiseRoot(root: string): boolean {
+  const abs = path.resolve(root);
+  return isAgentConfigHome(abs) || isSharedTmpScratch(abs);
 }
 
 /**
