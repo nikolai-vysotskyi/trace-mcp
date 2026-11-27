@@ -49,6 +49,7 @@ let uninstallLifecycleHooks: typeof import('../../src/init/hooks.js').uninstallL
 let installSessionStartHook: typeof import('../../src/init/hooks.js').installSessionStartHook;
 let installMirrorHook: typeof import('../../src/init/hooks.js').installMirrorHook;
 let isMirrorHookInstalled: typeof import('../../src/init/hooks.js').isMirrorHookInstalled;
+let installWorktreeHook: typeof import('../../src/init/hooks.js').installWorktreeHook;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -74,6 +75,7 @@ beforeEach(async () => {
   installSessionStartHook = mod.installSessionStartHook;
   installMirrorHook = mod.installMirrorHook;
   isMirrorHookInstalled = mod.isMirrorHookInstalled;
+  installWorktreeHook = mod.installWorktreeHook;
 });
 
 afterEach(() => {
@@ -774,5 +776,35 @@ describe('isHookOutdated', () => {
 
   it('returns false for matching version', () => {
     expect(isHookOutdated(GUARD_HOOK_VERSION)).toBe(false);
+  });
+});
+
+describe('installWorktreeHook (GH #1930)', () => {
+  it('registers only WorktreeRemove and drops a stale WorktreeCreate entry', () => {
+    let stored = JSON.stringify({
+      hooks: {
+        WorktreeCreate: [
+          {
+            hooks: [{ type: 'command', command: '/home/user/.claude/hooks/trace-mcp-worktree.sh' }],
+          },
+          { hooks: [{ type: 'command', command: '/usr/local/bin/other-create.sh' }] },
+        ],
+      },
+    });
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => !String(p).includes('.claw'));
+    mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) =>
+      String(p).includes('settings.json') ? stored : '{}',
+    );
+    mockFs.writeFileSync.mockImplementation((p, body) => {
+      if (String(p).includes('settings.json')) stored = String(body);
+    });
+
+    installWorktreeHook({ global: true });
+
+    const last = JSON.parse(stored);
+    expect(last.hooks.WorktreeRemove).toHaveLength(1);
+    expect(last.hooks.WorktreeCreate).toHaveLength(1);
+    expect(JSON.stringify(last.hooks.WorktreeCreate)).toContain('other-create.sh');
+    expect(JSON.stringify(last.hooks.WorktreeCreate)).not.toContain('trace-mcp-worktree');
   });
 });
