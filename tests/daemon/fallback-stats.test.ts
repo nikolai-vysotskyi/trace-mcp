@@ -180,6 +180,26 @@ describe('summarizeSessionFallbacks', () => {
     const excludedSum = Object.values(s.excludedFromTotal).reduce((a, b) => a + b, 0);
     expect(byReasonSum).toBe(s.total + excludedSum);
   });
+
+  it('counts a reason named after an Object.prototype member as an ordinary key (review finding)', () => {
+    const now = Date.now();
+    const events = [
+      { ts: now - 1_000, reason: 'constructor', pid: 1 },
+      { ts: now - 2_000, reason: 'constructor', pid: 2 },
+      { ts: now - 3_000, reason: 'toString', pid: 3 },
+      { ts: now - 4_000, reason: '__proto__', pid: 4 },
+    ];
+    const s = summarizeSessionFallbacks(events, { sinceMs: 60_000, nowMs: now });
+    expect(s.total).toBe(4);
+    // Built via Object.keys/getOwnPropertyDescriptor, not a `{ __proto__: 1 }`
+    // literal — that syntax sets the prototype instead of an own property and
+    // would hide exactly the bug this test guards against.
+    expect(Object.keys(s.byReason).sort()).toEqual(['__proto__', 'constructor', 'toString']);
+    expect(s.byReason.constructor).toBe(2);
+    expect(s.byReason.toString).toBe(1);
+    expect(Object.getOwnPropertyDescriptor(s.byReason, '__proto__')?.value).toBe(1);
+    expect(s.excludedFromTotal).toEqual({});
+  });
 });
 
 describe('renderSessionFallbacks', () => {

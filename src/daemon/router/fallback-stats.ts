@@ -229,14 +229,17 @@ export function summarizeSessionFallbacks(
   const sinceMs = opts.sinceMs ?? null;
   const windowMs = sinceMs !== null && sinceMs > 0 ? sinceMs : 0;
   const cutoff = windowMs > 0 ? nowMs - windowMs : null;
-  const byReason: Record<string, number> = {};
-  const excludedFromTotal: Record<string, number> = {};
+  // Maps, not plain objects: `reason` round-trips through a JSONL file and a
+  // value like "constructor" or "toString" must count as an ordinary key,
+  // never read back a prototype member (TRA-3237 review).
+  const byReasonMap = new Map<string, number>();
+  const excludedFromTotalMap = new Map<string, number>();
   let total = 0;
   for (const e of events) {
     if (cutoff !== null && e.ts < cutoff) continue;
-    byReason[e.reason] = (byReason[e.reason] ?? 0) + 1;
+    byReasonMap.set(e.reason, (byReasonMap.get(e.reason) ?? 0) + 1);
     if (e.reason === PROXY_SEND_TRANSIENT_REASON) {
-      excludedFromTotal[e.reason] = (excludedFromTotal[e.reason] ?? 0) + 1;
+      excludedFromTotalMap.set(e.reason, (excludedFromTotalMap.get(e.reason) ?? 0) + 1);
     } else {
       total++;
     }
@@ -244,8 +247,8 @@ export function summarizeSessionFallbacks(
   const spanMs = windowMs > 0 ? windowMs : Math.max(1, nowMs - oldestTs(events, nowMs));
   return {
     total,
-    byReason,
-    excludedFromTotal,
+    byReason: Object.fromEntries(byReasonMap),
+    excludedFromTotal: Object.fromEntries(excludedFromTotalMap),
     perMin: total / (spanMs / 60_000),
     windowMs: spanMs,
   };
