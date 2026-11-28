@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.44.15](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.14...v3.44.15) (2026-11-28)
+
+
+### Bug Fixes
+
+* **indexer:** resolve calls through constructor parameter properties ([#1969](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1969)) ([63ade1e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/63ade1e03c1ec4403927a0135620fbd7950cf5a4))
+* make unindexed topology discoveries actionable (TRA-3248) ([#1971](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1971)) ([8d1c305](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8d1c30558f50b8711ddd48f2d149e1647b3e2b74))
+* **prune:** sweep legacy noise registrations in one pass ([#1970](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1970)) ([110cab9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/110cab924cd48063a38a08176cb375e391c91873))
+
 ## [3.44.14](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.44.13...v3.44.14) (2026-11-27)
 
 
