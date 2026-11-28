@@ -343,6 +343,25 @@ export function extractClassMethods(
   classSymbolId: string,
 ): RawSymbol[] {
   const symbols: RawSymbol[] = [];
+  const parameterProperties: Record<string, { type: string }> = {};
+  const constructor = body.namedChildren.find(
+    (child) => child.type === 'method_definition' && getNodeName(child) === 'constructor',
+  );
+  const params = constructor?.childForFieldName('parameters');
+  for (const param of params?.namedChildren ?? []) {
+    if (param.type !== 'required_parameter' && param.type !== 'optional_parameter') continue;
+    if (
+      !param.children.some(
+        (child) => child.type === 'accessibility_modifier' || child.type === 'readonly',
+      )
+    )
+      continue;
+    const name = param.childForFieldName('pattern');
+    const type = param.childForFieldName('type');
+    if (name?.type !== 'identifier' || !type) continue;
+    const typeName = extractSimpleTypeName(type);
+    if (typeName) parameterProperties[`this.${name.text}`] = { type: typeName };
+  }
   for (const child of body.namedChildren) {
     if (child.type !== 'method_definition') continue;
     const name = getNodeName(child);
@@ -359,7 +378,7 @@ export function extractClassMethods(
     if (callSites.length > 0) metadata.callSites = callSites;
 
     // Track `this.xxx = new Foo()` field assignments and parameter types for type inference
-    const localTypes = collectLocalTypes(child);
+    const localTypes = { ...parameterProperties, ...collectLocalTypes(child) };
     if (Object.keys(localTypes).length > 0) metadata.localTypes = localTypes;
 
     // Collect type references (parameter/return types, generics)
