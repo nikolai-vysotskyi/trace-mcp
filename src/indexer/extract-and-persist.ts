@@ -30,6 +30,26 @@ import { detectRenames, detectRenamesAsync } from './rename-detector.js';
 import { renameTreeCacheFile } from '../parser/tree-cache.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 
+/**
+ * TRA-3238: durable marker (`repo_metadata`, survives a DB close/reopen)
+ * recording that the bulk path's FTS-trigger-drop window is in progress.
+ * Set right before `disableFts5Triggers()` runs; cleared only once
+ * `enableFts5TriggersAsync()` has fully restored both the FTS content and
+ * the live triggers. A shutdown that closes `store.db` anywhere in that
+ * window — before the restore call, or inside its own internal yield —
+ * leaves the marker set, so the leading check in `extractAndPersist` repairs
+ * the backlog on this project's next run instead of leaving committed
+ * symbols permanently missing from `symbols_fts`.
+ */
+const FTS_REBUILD_PENDING_KEY = 'fts_rebuild_pending';
+
+/** Matches the closed-DB signature better-sqlite3 throws from any statement
+ *  issued after `db.close()` — same check used in edge-resolver.ts,
+ *  env-indexer.ts and resolver-budget.ts for the identical shutdown race. */
+function isClosedDbError(err: unknown): boolean {
+  return err instanceof TypeError && err.message.includes('database connection is not open');
+}
+
 /** Mirrors `IndexingResult` in pipeline.ts (kept as a structural subset here,
  *  not a re-export, to avoid a circular import between this module and
  *  pipeline.ts — pipeline.ts imports `extractAndPersist` from here). */
@@ -241,6 +261,22 @@ export async function extractAndPersist(
   // files never reach extraction, so clustering them is wasted work.
   sortByExtension(candidates);
 
+  // TRA-3238: a previous run may have been interrupted (DB closed by a
+  // shutdown) between dropping the FTS triggers and restoring them — see
+  // the marker set below. Repair that backlog before this run's own
+  // decision, so a stale "pending" marker doesn't linger forever and
+  // symbols committed under that window stay searchable.
+  if (store.getRepoMetadata(FTS_REBUILD_PENDING_KEY) === '1') {
+    try {
+      await enableFts5TriggersAsync(store.db);
+      store.deleteRepoMetadata(FTS_REBUILD_PENDING_KEY);
+    } catch (err) {
+      if (store.db.open && !isClosedDbError(err)) throw err;
+      // Still interrupted (shutdown again mid-repair) — leave the marker
+      // set; the next run's check above retries it.
+    }
+  }
+
   // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
   // For small (incremental) batches the per-row trigger fire is cheaper than
   // rebuilding the entire FTS index from all symbols at the end.
@@ -248,6 +284,7 @@ export async function extractAndPersist(
   // changed file must take the incremental path, not the bulk one (TRA-1536).
   const useFtsRebuild = candidates.length > ftsRebuildThreshold;
   if (useFtsRebuild) {
+    store.setRepoMetadata(FTS_REBUILD_PENDING_KEY, '1');
     disableFts5Triggers(store.db);
   } else {
     // Incremental path relies on the AFTER INSERT/DELETE/UPDATE triggers to
@@ -464,12 +501,22 @@ export async function extractAndPersist(
     // leaves the triggers dropped and desyncs symbols_fts on every later
     // incremental write. No-op on the incremental path (triggers stayed live
     // and were re-armed via ensureFts5Triggers before the loop).
-    // TRA-3238: a shutdown can close `store.db` while this run is still
-    // orphaned on the pipeline lock (stopProject proceeds past a timed-out
-    // drain). Skip the rebuild rather than let `db.exec` throw "The database
-    // connection is not open" — the DB is going away, so there is nothing
-    // left to resync FTS against.
-    if (useFtsRebuild && store.db.open) await enableFts5TriggersAsync(store.db);
+    if (useFtsRebuild) {
+      try {
+        await enableFts5TriggersAsync(store.db);
+        store.deleteRepoMetadata(FTS_REBUILD_PENDING_KEY);
+      } catch (err) {
+        // TRA-3238: a shutdown can close `store.db` while this run is
+        // orphaned on the pipeline lock (stopProject proceeds past a
+        // timed-out drain) — anywhere from before this call to inside
+        // enableFts5TriggersAsync's own internal yield. Treat the
+        // closed-DB signature as the expected cancellation it is, not a
+        // bug: the FTS_REBUILD_PENDING_KEY marker set above survives the
+        // close, and the leading check at the top of this function repairs
+        // the backlog the next time this project is indexed.
+        if (store.db.open && !isClosedDbError(err)) throw err;
+      }
+    }
   }
 
   // Phase 4 phantom-rebind: expose the persister's diff maps so the caller can
