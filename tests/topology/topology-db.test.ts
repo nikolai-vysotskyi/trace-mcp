@@ -301,6 +301,37 @@ describe('TopologyStore', () => {
   });
 
   describe('dangerous-subproject pruning (TRA-232)', () => {
+    it('revisits legacy service-only discoveries on a database that already ran v1', () => {
+      const stateRoot = path.join(os.homedir(), '.trace', 'import-resolution-bench', 'go');
+      store.upsertService({
+        name: 'legacy-fixture',
+        repoRoot: stateRoot,
+        detectionSource: 'workspace',
+        dbPath: '/missing/fixture.db',
+      });
+      store.upsertService({
+        name: 'project-service',
+        repoRoot: '/project/api',
+        detectionSource: 'workspace',
+        dbPath: '/missing/project.db',
+      });
+      store.close();
+
+      // Simulate a database created by the released version: v1 ran, but the
+      // new migration key did not yet exist when this discovery was recorded.
+      const raw = new Database(dbPath);
+      raw
+        .prepare(
+          "INSERT OR REPLACE INTO topology_meta (key, value) VALUES ('prune_dangerous_subprojects_v1', 'complete')",
+        )
+        .run();
+      raw.prepare("DELETE FROM topology_meta WHERE key = 'prune_dangerous_subprojects_v2'").run();
+      raw.close();
+
+      store = new TopologyStore(dbPath);
+      expect(store.getAllServices().map((s) => s.name)).toEqual(['project-service']);
+    });
+
     it('removes legacy service-only discoveries under trace state without touching project services', () => {
       const stateRoot = path.join(os.homedir(), '.trace', 'import-resolution-bench', 'go');
       store.upsertService({
