@@ -5,6 +5,7 @@
  *   - live                  → project root still registered AND directory exists
  *   - orphan_missing_root   → project root no longer on disk
  *   - orphan_unregistered   → DB exists but root isn't in registry (non-session)
+ *   - stale_registration    → old implicit scratch/noise registration (>24h)
  *   - session_active        → session DB younger than --session-ttl-days
  *   - session_expired       → session DB older than the TTL
  *   - stray_small           → tiny (<5 indexed files) + cold (>30d) project DB
@@ -65,6 +66,7 @@ export type PruneCategory =
   | 'live'
   | 'orphan_missing_root'
   | 'orphan_unregistered'
+  | 'stale_registration'
   | 'session_active'
   | 'session_expired'
   | 'stray_small';
@@ -96,6 +98,8 @@ export interface PruneOptions {
   /** Categories to act on when apply=true.
    *  When set, restricts deletion to this set. */
   onlyCategories?: PruneCategory[];
+  /** Registered roots eligible for the CLI's age-gated legacy cleanup. */
+  staleRegisteredRoots?: string[];
 }
 
 export interface PruneSummary {
@@ -122,6 +126,7 @@ function emptyTotals(): Record<PruneCategory, { count: number; bytes: number }> 
     live: { count: 0, bytes: 0 },
     orphan_missing_root: { count: 0, bytes: 0 },
     orphan_unregistered: { count: 0, bytes: 0 },
+    stale_registration: { count: 0, bytes: 0 },
     session_active: { count: 0, bytes: 0 },
     session_expired: { count: 0, bytes: 0 },
     stray_small: { count: 0, bytes: 0 },
@@ -262,6 +267,7 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
   }
 
   const registry = buildRegistryIndex();
+  const staleRoots = new Set(options.staleRegisteredRoots?.map((root) => path.resolve(root)));
   const candidates: DbCandidate[] = [];
 
   for (const file of files) {
@@ -305,6 +311,10 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
       category = 'orphan_unregistered';
     } else if (!liveAnchor) {
       category = 'orphan_missing_root';
+    } else if (staleRoots.has(liveAnchor.root) && anchors!.every((a) => staleRoots.has(a.root))) {
+      // Only the legacy registration(s) own this DB. A shared canonical DB
+      // stays live when any other registered checkout still anchors it.
+      category = 'stale_registration';
     } else {
       // Live project — check stray_small heuristic for very small + old DBs.
       // We only flag stray when the user actually opts into aggressive mode;
@@ -363,6 +373,7 @@ export function pruneIndexDir(options: PruneOptions = {}): PruneSummary {
   const defaultDeletable: PruneCategory[] = [
     'orphan_missing_root',
     'orphan_unregistered',
+    'stale_registration',
     'session_expired',
   ];
   const allowed = new Set<PruneCategory>(options.onlyCategories ?? defaultDeletable);
@@ -599,6 +610,7 @@ const CATEGORY_ORDER: PruneCategory[] = [
   'session_expired',
   'orphan_missing_root',
   'orphan_unregistered',
+  'stale_registration',
   'stray_small',
 ];
 
@@ -608,6 +620,7 @@ const CATEGORY_DESCRIPTIONS: Record<PruneCategory, string> = {
   session_expired: 'session_expired (older than TTL — would delete)',
   orphan_missing_root: 'orphan_missing_root (project root deleted — would delete)',
   orphan_unregistered: 'orphan_unregistered (DB exists, not in registry — would delete)',
+  stale_registration: 'stale_registration (old implicit scratch registration — would delete)',
   stray_small: 'stray_small (tiny + cold — would delete with --aggressive)',
 };
 
@@ -837,7 +850,13 @@ export const pruneCommand = new Command('prune')
 
       if (!opts.json) p.intro('trace-mcp prune');
 
-      const summary = pruneIndexDir({ apply, aggressive, sessionTtlDays });
+      const staleEphemeralRoots = findEphemeralProjects().map((e) => e.root);
+      const summary = pruneIndexDir({
+        apply,
+        aggressive,
+        sessionTtlDays,
+        staleRegisteredRoots: staleEphemeralRoots,
+      });
 
       // Stale registry rows (folder deleted) cause "Project not found" at runtime
       // (#168). The DB-file sweep above doesn't touch registry.json, so prune
@@ -858,8 +877,7 @@ export const pruneCommand = new Command('prune')
         }
       }
 
-      // Ephemeral projects left over from past agent runs (>24h old)
-      const staleEphemeralRoots = findEphemeralProjects().map((e) => e.root);
+      // Legacy implicit scratch/noise registrations (>24h old).
       const removedEphemeralRoots: string[] = [];
       if (apply) {
         for (const root of staleEphemeralRoots) {
@@ -993,8 +1011,8 @@ export const pruneCommand = new Command('prune')
       }
       if (staleEphemeralRoots.length > 0) {
         const heading = apply
-          ? `Removed ${removedEphemeralRoots.length} stale ephemeral workdir registration(s):`
-          : `${staleEphemeralRoots.length} stale ephemeral workdir registration(s) — would remove:`;
+          ? `Removed ${removedEphemeralRoots.length} stale implicit registration(s):`
+          : `${staleEphemeralRoots.length} stale implicit registration(s) — would remove:`;
         p.note(
           [heading, ...staleEphemeralRoots.map((r) => `  ${shortPath(r)}`)].join('\n'),
           'Ephemeral Projects',
