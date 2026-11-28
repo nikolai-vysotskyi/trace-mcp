@@ -432,16 +432,14 @@ export class TopologyStore {
       }
     });
 
-    // Migration (TRA-232): drop subprojects registered under a dangerous root.
-    // `upsertSubproject` now refuses these, but registries created before the
-    // guard hold hundreds of them (a Claude session started in /tmp made
-    // discoverAndRegisterSubprojects walk /private/tmp and register every
-    // scratch folder). Runs after fix_client_calls_fk_v1 so the FK detach
-    // below targets the rebuilt table.
-    this.runOnce('prune_dangerous_subprojects_v1', () => {
+    // Migration (TRA-232, TRA-3248): v2 also removes service-only discoveries
+    // under dangerous roots. Existing installs already recorded the v1 key,
+    // so this needs its own runOnce key. Runs after fix_client_calls_fk_v1 so
+    // the FK detach below targets the rebuilt table.
+    this.runOnce('prune_dangerous_subprojects_v2', () => {
       const pruned = pruneDangerousSubprojects(this.db);
-      if (pruned.subprojects > 0) {
-        logger.info(pruned, 'Migration: pruned subprojects registered under dangerous roots');
+      if (pruned.subprojects > 0 || pruned.services > 0) {
+        logger.info(pruned, 'Migration: pruned topology under dangerous roots');
       }
     });
   }

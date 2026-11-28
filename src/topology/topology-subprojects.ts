@@ -54,21 +54,30 @@ export function pruneDangerousSubprojects(db: Database.Database): {
     project_root: string;
   }>;
   const bad = rows.filter((r) => dangerousSubprojectRoot(r.repo_root, r.project_root) !== null);
-  if (bad.length === 0) return { subprojects: 0, services: 0 };
 
   const badIds = bad.map((r) => r.id);
   const badIdSet = new Set(badIds);
   // A repo_root can be shared with a still-valid subproject; only drop services
   // whose root belongs exclusively to pruned rows.
   const survivingRoots = new Set(rows.filter((r) => !badIdSet.has(r.id)).map((r) => r.repo_root));
-  const orphanRoots = [...new Set(bad.map((r) => r.repo_root))].filter(
-    (root) => !survivingRoots.has(root),
+  const orphanRoots = new Set(
+    bad.map((r) => r.repo_root).filter((root) => !survivingRoots.has(root)),
   );
+  // Early auto-discovery could leave a service without any subproject row.
+  // The subproject guard cannot find those legacy trace-state fixtures.
+  const serviceRows = db.prepare('SELECT repo_root FROM services').all() as Array<{
+    repo_root: string;
+  }>;
+  for (const { repo_root } of serviceRows) {
+    if (isDangerousProjectRoot(path.resolve(repo_root))) orphanRoots.add(repo_root);
+  }
+  if (bad.length === 0 && orphanRoots.size === 0) return { subprojects: 0, services: 0 };
 
   let services = 0;
   db.transaction(() => {
-    if (orphanRoots.length > 0) {
-      const rootPlaceholders = orphanRoots.map(() => '?').join(',');
+    if (orphanRoots.size > 0) {
+      const roots = [...orphanRoots];
+      const rootPlaceholders = roots.map(() => '?').join(',');
       // Same FK dance as removeByRepoRoot(): client_calls.matched_endpoint_id
       // has no ON DELETE, so detach before the service cascade drops endpoints.
       db.prepare(
@@ -78,18 +87,20 @@ export function pruneDangerousSubprojects(db: Database.Database): {
            JOIN services s ON s.id = e.service_id
            WHERE s.repo_root IN (${rootPlaceholders})
          )`,
-      ).run(...orphanRoots);
+      ).run(...roots);
       services = db
         .prepare(`DELETE FROM services WHERE repo_root IN (${rootPlaceholders})`)
-        .run(...orphanRoots).changes;
+        .run(...roots).changes;
     }
 
-    const idPlaceholders = badIds.map(() => '?').join(',');
-    // client_calls.target_repo_id has no ON DELETE either — detach first.
-    db.prepare(
-      `UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id IN (${idPlaceholders})`,
-    ).run(...badIds);
-    db.prepare(`DELETE FROM subprojects WHERE id IN (${idPlaceholders})`).run(...badIds);
+    if (badIds.length > 0) {
+      const idPlaceholders = badIds.map(() => '?').join(',');
+      // client_calls.target_repo_id has no ON DELETE either — detach first.
+      db.prepare(
+        `UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id IN (${idPlaceholders})`,
+      ).run(...badIds);
+      db.prepare(`DELETE FROM subprojects WHERE id IN (${idPlaceholders})`).run(...badIds);
+    }
   })();
 
   return { subprojects: badIds.length, services };

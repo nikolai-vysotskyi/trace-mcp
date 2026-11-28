@@ -1143,7 +1143,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">GUIDES</span>
-<time class="article-card-date">2026-11-08</time>
+<time class="article-card-date">2026-11-27</time>
 </div>
 <h3 class="article-card-title"><a href="/configuration.html">trace-mcp Configuration Guide — .trace.json Reference</a></h3>
 <p class="article-card-desc">Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional.</p>
@@ -5189,6 +5189,16 @@ Both topology and subprojects are **enabled by default** — every indexed proje
 | `topology.contract_globs` | — | Explicit paths to API contract files (relative to project root) |
 
 ### Auto-discovery flow
+
+Auto-discovery records services for topology and contract linking. It does not
+index every discovered service as a separate project. An index of a registered
+parent can cover its child services; otherwise `doctor` reports them as
+unindexed candidates without failing its exit code. To index a candidate you
+actually work on, run `trace-mcp add <path>` with that service's repository root
+(`--allow-overlap` may be needed if a registered parent covers it).
+`trace-mcp subproject sync` refreshes contracts and client calls but does not
+create an index. Trace state directories are excluded from new discovery and
+legacy entries under them are removed when the topology database opens.
 
 When a project is indexed (via `serve`, `serve-http`, or `index`):
 

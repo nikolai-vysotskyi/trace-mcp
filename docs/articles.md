@@ -632,7 +632,7 @@ and head-to-head comparisons against other tools in the code-intelligence ecosys
 <div class="article-card">
 <div class="article-card-meta">
 <span class="article-card-category">GUIDES</span>
-<time class="article-card-date">2026-11-08</time>
+<time class="article-card-date">2026-11-27</time>
 </div>
 <h3 class="article-card-title"><a href="/configuration.html">trace-mcp Configuration Guide — .trace.json Reference</a></h3>
 <p class="article-card-desc">Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional.</p>

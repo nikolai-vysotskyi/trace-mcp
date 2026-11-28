@@ -1052,10 +1052,19 @@ export const pruneCommand = new Command('prune')
         p.note(lines.join('\n'), 'Topology');
       }
       if (topoSummary.unindexedServices.length > 0) {
-        p.note(
-          `${topoSummary.unindexedServices.length} discovered service(s) have no registered index (informational; see --json for paths).`,
-          'Topology',
+        const lines = [
+          `${topoSummary.unindexedServices.length} discovered service(s) have no index:`,
+          ...topoSummary.unindexedServices
+            .slice(0, 20)
+            .map((s) => `  [service] ${s.name} (${shortPath(s.repo_root)})`),
+        ];
+        if (topoSummary.unindexedServices.length > 20) {
+          lines.push(`  ...and ${topoSummary.unindexedServices.length - 20} more (see --json)`);
+        }
+        lines.push(
+          'Discovery does not index folders. A registered parent may already cover them. To index one separately, run trace-mcp add <path> for its repo root (add --allow-overlap if prompted). trace-mcp subproject sync only refreshes topology; it does not create an index.',
         );
+        p.note(lines.join('\n'), 'Topology');
       }
       if (topoSummary.staleDbPathServices.length > 0) {
         const lines = [
