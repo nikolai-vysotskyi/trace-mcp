@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-11-27T06:30:36.745Z"
+updated: "2026-11-28T06:27:43.837Z"
 active_users:
-  day: 72
-  week: 171
-  month: 498
+  day: 63
+  week: 169
+  month: 497
   first_ping_date: "2026-08-29"
-  days_observed: 91
+  days_observed: 92
   month_window_full: true
-events_28d: 3013
+events_28d: 3056
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,16 +50,16 @@ events_28d: 3013
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 262078695
-  tokens_saved_raw: 323818381
-  usd_saved: 262.08
+  tokens_saved: 274111239
+  tokens_saved_raw: 665946630
+  usd_saved: 274.11
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 83
-  capped_days: 3
-  raw_ratio: 1.24
-  inflation_suspected: false
+  days: 84
+  capped_days: 4
+  raw_ratio: 2.43
+  inflation_suspected: true
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
 # SEO, outreach or design change can be graded against something instead of
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 375
+  new_installs_28d: 382
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 14
+  retention_dau_mau_pct: 13
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,42 +159,42 @@ usage:
 # against `the internal arrivals ledger` in the private repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1788
-  "upgrade": 774
-  "new": 375
+  "active": 1817
+  "upgrade": 778
+  "new": 382
   "(not set)": 44
-  "downgrade": 29
+  "downgrade": 30
   "unknown": 3
 by_version:
   "3.38.0": 243
   "3.42.7": 78
   "3.44.0": 75
   "3.43.1": 65
-  "3.44.10": 60
+  "3.44.10": 61
   "3.44.6": 56
+  "3.44.11": 53
   "3.44.2": 48
   "3.42.10": 46
   "3.44.3": 46
+  "3.44.9": 42
   "3.44.1": 41
-  "3.44.9": 41
   "3.42.11": 40
-  "3.44.11": 37
-  "3.42.4": 35
   "3.43.0": 33
   "3.42.9": 32
-  "3.44.7": 31
-  "3.42.6": 21
+  "3.44.7": 32
+  "3.44.12": 22
   "3.44.5": 21
-  "3.42.1": 12
+  "3.42.4": 20
+  "3.42.6": 19
   "3.42.8": 11
   "3.34.6": 9
-  "3.41.0": 6
-  "3.42.0": 6
+  "3.44.13": 6
   "3.25.0": 5
+  "3.27.1": 4
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 1098
+  at_or_above: 1108
   below: 0
   unknown: 0
   pct: 100
@@ -258,22 +258,22 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 279
+  "(not set)": 277
+  "United Arab Emirates": 31
   "United States": 28
-  "United Arab Emirates": 26
-  "Russia": 22
-  "China": 13
-  "Thailand": 12
+  "Russia": 23
+  "China": 12
+  "Thailand": 11
   "Brazil": 10
   "Germany": 9
   "Türkiye": 7
   "France": 5
-  "Indonesia": 5
-  "Italy": 5
   "South Korea": 5
   "Australia": 4
   "Austria": 4
   "Chile": 4
+  "Indonesia": 4
+  "Italy": 4
   "Kenya": 4
   "Netherlands": 4
   "Poland": 4
@@ -284,15 +284,15 @@ by_country:
   "Iran": 2
 by_client:
   "unknown": 354
-  "claude-code": 100
-  "codex-mcp-client": 36
+  "claude-code": 97
+  "codex-mcp-client": 39
   "antigravity-client": 30
   "opencode": 23
   "mcp": 7
   "hermes-agent": 6
   "rmcp": 5
+  "cursor-vscode": 4
   "Trae": 3
-  "cursor-vscode": 3
   "zcode": 3
   "Cline": 2
   "Cursor": 2
